@@ -1,0 +1,31 @@
+{
+  "name": "@reliability-lab/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/apps/api/src/server.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@fastify/swagger": "^9.0.0",
+    "@fastify/swagger-ui": "^6.1.0",
+    "@fastify/type-provider-typebox": "^6.0.0",
+    "@reliability-lab/contracts": "workspace:*",
+    "@reliability-lab/core": "workspace:*",
+    "@reliability-lab/db": "workspace:*",
+    "@reliability-lab/observability": "workspace:*",
+    "@reliability-lab/providers": "workspace:*",
+    "@sinclair/typebox": "^0.34.0",
+    "fastify": "^5.0.0",
+    "redis": "^5.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

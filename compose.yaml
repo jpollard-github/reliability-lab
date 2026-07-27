@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: reliability_lab
+      POSTGRES_USER: reliability
+      POSTGRES_PASSWORD: reliability
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reliability -d reliability_lab"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - reliability-postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - reliability-redis:/data
+
+volumes:
+  reliability-postgres:
+  reliability-redis:

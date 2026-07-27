@@ -1,0 +1,19 @@
+{
+  "include": [],
+  "exclude": [
+    "**/*.key",
+    "**/*.pem",
+    "**/.env*",
+    "**/*credential*",
+    "**/*secret*",
+    "**/*token*",
+    "**/Cookies",
+    "**/Login Data"
+  ],
+  "maxTotalBytes": 262144000,
+  "_examples": [
+    "artifacts/traces/sanitized-*.json",
+    "apps/web/test-results/**/*.png",
+    "artifacts/benchmarks/*.json"
+  ]
+}
