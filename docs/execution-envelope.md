@@ -7,6 +7,12 @@ normalized output/error, replay linkage, and replay capability.
 Worker mode initially uses `queued`, then moves to `running` when a worker claims the command.
 Terminal statuses remain `succeeded`, `degraded`, `failed`, or the reserved `cancelled`.
 
+Lease owner, claim version, and lease expiry belong to the private durable job boundary, not the
+public execution envelope. `claimCount` is used there as a fencing token. A stale worker does not
+append a terminal lease-loss claim because it is no longer authorized to write execution evidence;
+the newer owner projects persisted `attempt.started` activity into recovery and
+`provider_call_outcome_unknown` evidence.
+
 `replayCapability` is current store metadata, not historical evidence. Its state can be `available`,
 `retention_disabled`, `expired`, `deleted`, `missing`, `key_unavailable`, or `unreadable`, with safe
 reason text and expiry/deletion timestamps when relevant. `replayable` remains a compatibility
@@ -35,6 +41,12 @@ structured-output validation, budget/circuit decisions, terminal state, and repl
 start/completion. A failed-attempt payload records category, code, retryability, and observed
 latency. Provider-response evidence identifies the provider/model route; budget rejection records
 both observed and configured values. Events are inserted; they are not updated to rewrite history.
+
+A provider result becomes evidence only after the worker guard observes that the exact claim remains
+current. Lease cancellation is therefore distinct from the execution events produced by a latency
+budget abort. Aborting a request is best effort and cannot establish that a remote provider did not
+already process it, which is why the new owner preserves ambiguity rather than automatically calling
+the provider again.
 
 `GET /v1/executions/:executionId/events` is a read projection over this same record, not a second
 event model. SSE `id` is the decimal event sequence, `event` is `execution`, and `data` is the typed
@@ -69,3 +81,27 @@ fallback changes are tradeoffs; token differences are factual/mixed unless an ev
 budget exists; lower estimated cost remains better for that dimension. Exact output match is
 factual and does not imply semantic quality.
 The projection deliberately has no aggregate score or universal winner.
+
+## Investigation projections
+
+Investigation summaries are deliberately not `ExecutionEnvelope` variants. A compact execution row
+contains identity, trace, status, route, timestamps, duration, attempt/retry counts, normalized
+terminal error identity, replay lineage, inexpensive comparison count, and boolean/typed
+investigation signals. It never contains prompt/messages, output bodies, full attempts/events,
+capsules, commands, keys, or raw provider data.
+
+Signal definitions are shared pure domain projections:
+
+- retry recovery means a scheduled retry (or multiple attempts with prior non-success evidence)
+  later reached `succeeded` or `degraded`;
+- fallback dependence means `fallback.selected` was recorded and the execution later reached
+  `succeeded` or `degraded`;
+- structured-output rejection and latency-budget failure come from their explicit events, with
+  narrow normalized terminal-code fallbacks;
+- provider ambiguity comes from `attempt.outcome_ambiguous` or
+  `provider_call_outcome_unknown`;
+- replay-derived means `replayOfExecutionId` is present.
+
+PostgreSQL implements equivalent predicates without reconstructing envelopes. Provider/model rows
+aggregate attempt evidence, not the envelope's initial route. Missing latency and cost remain
+missing evidence; rates are null when their terminal denominator is zero.

@@ -151,7 +151,7 @@ describe("PostgreSQL durable execution", () => {
     ).rejects.toBeInstanceOf(IdempotencyConflictError);
   });
 
-  it("claims exclusively and reclaims an expired untouched lease", async () => {
+  it("versions claims and fences stale heartbeats, finishes, and payload deletion", async () => {
     if (!connection) return;
     const tenantId = `durable-lease-${randomUUID()}`;
     let now = new Date("2026-07-28T12:00:00.000Z");
@@ -167,10 +167,46 @@ describe("PostgreSQL durable execution", () => {
       store.claimNext({ workerId: "worker-b", leaseDurationMs: 1_000 }),
     ]);
     expect([first, competing].filter(Boolean)).toHaveLength(1);
+    const originalClaim = first ?? competing;
+    expect(originalClaim).toMatchObject({ claimVersion: 1, reclaimed: false });
     expect(await store.claimNext({ workerId: "worker-c", leaseDurationMs: 1_000 })).toBeNull();
     now = new Date(now.getTime() + 1_001);
-    const reclaimed = await store.claimNext({ workerId: "worker-c", leaseDurationMs: 1_000 });
-    expect(reclaimed).toMatchObject({ tenantId, reclaimed: true });
+    const reclaimed = await store.claimNext({
+      workerId: originalClaim!.workerId,
+      leaseDurationMs: 1_000,
+    });
+    expect(reclaimed).toMatchObject({ tenantId, reclaimed: true, claimVersion: 2 });
+
+    await expect(
+      store.heartbeat({ claim: originalClaim!, leaseDurationMs: 1_000 }),
+    ).resolves.toEqual({ kind: "ownership_lost" });
+    await expect(store.finish({ claim: originalClaim!, status: "completed" })).resolves.toEqual({
+      kind: "ownership_lost",
+    });
+    const [stillLeased] = await connection.db
+      .select()
+      .from(executionJobs)
+      .where(eq(executionJobs.executionId, reclaimed!.executionId));
+    expect(stillLeased).toMatchObject({
+      status: "leased",
+      claimCount: 2,
+      leaseOwner: reclaimed!.workerId,
+    });
+    expect(stillLeased?.ciphertext).toBeInstanceOf(Buffer);
+
+    await expect(store.finish({ claim: reclaimed!, status: "completed" })).resolves.toEqual({
+      kind: "finished",
+    });
+    const [finished] = await connection.db
+      .select()
+      .from(executionJobs)
+      .where(eq(executionJobs.executionId, reclaimed!.executionId));
+    expect(finished).toMatchObject({
+      status: "completed",
+      ciphertext: null,
+      nonce: null,
+      authenticationTag: null,
+    });
   });
 
   it("reconciles terminal jobs without rerunning and cleans the transient command only", async () => {
@@ -248,7 +284,7 @@ describe("PostgreSQL durable execution", () => {
     await repository.update(execution);
     now = new Date(now.getTime() + 1_001);
 
-    await worker(store, service, "recovery-worker").runOnce();
+    await worker(store, service, "recovery-worker", () => now).runOnce();
     const recovered = await repository.findById(tenantId, execution.executionId);
     expect(recovered?.error).toMatchObject({
       code: "provider_call_outcome_unknown",
@@ -263,6 +299,88 @@ describe("PostgreSQL durable execution", () => {
       .from(executionJobs)
       .where(eq(executionJobs.executionId, execution.executionId));
     expect(job).toMatchObject({ status: "ambiguous", ciphertext: null });
+  });
+
+  it("fences a stale worker after a provider call and lets the new claim record ambiguity", async () => {
+    if (!connection) return;
+    const tenantId = `durable-split-brain-${randomUUID()}`;
+    let now = new Date();
+    let providerCalls = 0;
+    const providerStarted = deferred<void>();
+    const providerRelease = deferred<void>();
+    const provider: LlmProvider = {
+      id: "fake-primary",
+      kind: "fake",
+      execute: async (request) => {
+        providerCalls += 1;
+        providerStarted.resolve();
+        await providerRelease.promise;
+        return {
+          ok: true,
+          response: {
+            provider: "fake-primary",
+            model: request.model,
+            outputText: "stale success must not persist",
+            usage: { inputTokens: 1, outputTokens: 1, estimatedCostUsd: 0 },
+            latencyMs: 1,
+          },
+        };
+      },
+    };
+    const store = durableStore(connection.db, { now: () => now });
+    const service = durableService(connection.db, store, [provider]);
+    const accepted = await service.submit({
+      tenantId,
+      body: { provider: "fake-primary", model: "v1", input: "controlled split brain" },
+    });
+    const workerA = new DurableExecutionWorker({
+      jobs: store,
+      service,
+      workerId: "worker-a",
+      leaseDurationMs: 1_000,
+      heartbeatIntervalMs: 10_000,
+      now: () => now,
+    });
+    const workerARun = workerA.runOnce();
+    await providerStarted.promise;
+
+    now = new Date(now.getTime() + 1_001);
+    const workerB = new DurableExecutionWorker({
+      jobs: store,
+      service,
+      workerId: "worker-b",
+      leaseDurationMs: 1_000,
+      heartbeatIntervalMs: 10_000,
+      now: () => now,
+    });
+    await expect(workerB.runOnce()).resolves.toBe(true);
+    providerRelease.resolve();
+    await expect(workerARun).resolves.toBe(true);
+
+    const repository = new PostgresExecutionRepository(connection.db);
+    const recovered = await repository.findById(tenantId, accepted.execution.executionId);
+    expect(recovered).toMatchObject({
+      status: "failed",
+      error: { code: "provider_call_outcome_unknown" },
+    });
+    expect(recovered?.events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        "attempt.started",
+        "execution.recovery_detected",
+        "attempt.outcome_ambiguous",
+        "execution.failed",
+      ]),
+    );
+    expect(recovered?.events.map((event) => event.type)).not.toContain(
+      "provider.response_received",
+    );
+    expect(recovered?.events.map((event) => event.type)).not.toContain("execution.succeeded");
+    expect(providerCalls).toBe(1);
+    const [job] = await connection.db
+      .select()
+      .from(executionJobs)
+      .where(eq(executionJobs.executionId, accepted.execution.executionId));
+    expect(job).toMatchObject({ status: "ambiguous", claimCount: 2, ciphertext: null });
   });
 
   it("completes through the worker, rotates command keys, and keeps replay lifecycle independent", async () => {
@@ -481,13 +599,19 @@ function inProcessService(database: Database) {
   });
 }
 
-function worker(store: PostgresDurableExecutionStore, service: ExecutionService, workerId: string) {
+function worker(
+  store: PostgresDurableExecutionStore,
+  service: ExecutionService,
+  workerId: string,
+  now?: () => Date,
+) {
   return new DurableExecutionWorker({
     jobs: store,
     service,
     workerId,
     leaseDurationMs: 30_000,
     heartbeatIntervalMs: 10_000,
+    ...(now ? { now } : {}),
   });
 }
 
@@ -509,6 +633,16 @@ function countingProvider(onCall: () => void): LlmProvider {
       };
     },
   };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }
 
 async function clearDurableFixtures(database: Database) {

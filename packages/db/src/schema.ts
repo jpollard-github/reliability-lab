@@ -53,6 +53,17 @@ export const executions = pgTable(
   (table) => [
     uniqueIndex("executions_tenant_id_id_idx").on(table.tenantId, table.id),
     uniqueIndex("executions_trace_id_idx").on(table.traceId),
+    index("executions_investigation_time_idx").on(
+      table.tenantId,
+      table.createdAt.desc(),
+      table.id.desc(),
+    ),
+    index("executions_investigation_status_idx").on(
+      table.tenantId,
+      table.status,
+      table.createdAt.desc(),
+      table.id.desc(),
+    ),
   ],
 );
 
@@ -83,6 +94,7 @@ export const executionEvents = pgTable(
   },
   (table) => [
     uniqueIndex("execution_events_execution_sequence_idx").on(table.executionId, table.sequence),
+    index("execution_events_execution_type_idx").on(table.executionId, table.type),
   ],
 );
 

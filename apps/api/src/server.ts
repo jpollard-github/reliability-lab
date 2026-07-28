@@ -4,6 +4,7 @@ import {
   MapProviderRegistry,
   MemoryComparisonExperimentRepository,
   MemoryExecutionRepository,
+  MemoryInvestigationReadRepository,
   MemoryReplayCapsuleStore,
   type ComparisonExperimentRepository,
   type ExecutionRepository,
@@ -14,6 +15,7 @@ import {
   PostgresComparisonExperimentRepository,
   PostgresDurableExecutionStore,
   PostgresExecutionRepository,
+  PostgresInvestigationReadRepository,
   PostgresReplayCapsuleStore,
 } from "@reliability-lab/db";
 import { OpenTelemetryExecutionTracer, startTelemetry } from "@reliability-lab/observability";
@@ -112,6 +114,9 @@ const service = new ExecutionService({
 
 const app = await buildApp({
   service,
+  investigations: database
+    ? new PostgresInvestigationReadRepository(database)
+    : new MemoryInvestigationReadRepository(repository),
   enableFailureInjection: process.env.ENABLE_FAILURE_INJECTION === "true",
   readiness: async () => {
     const checks: Record<string, string> = {

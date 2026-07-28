@@ -3,6 +3,7 @@ import {
   ExecutionService,
   MapProviderRegistry,
   MemoryExecutionRepository,
+  MemoryInvestigationReadRepository,
   MemoryReplayCapsuleStore,
 } from "@reliability-lab/core";
 import { DeterministicFakeProvider, type LlmProvider } from "@reliability-lab/providers";
@@ -13,15 +14,21 @@ describe("Reliability Lab API", () => {
   let service: ExecutionService;
 
   beforeEach(async () => {
+    const repository = new MemoryExecutionRepository();
     service = new ExecutionService({
-      repository: new MemoryExecutionRepository(),
+      repository,
       replayCapsules: new MemoryReplayCapsuleStore(),
       providers: new MapProviderRegistry([
         new DeterministicFakeProvider({ id: "fake-primary" }),
         new DeterministicFakeProvider({ id: "fake-fallback" }),
       ]),
     });
-    app = await buildApp({ service, logger: false, enableFailureInjection: true });
+    app = await buildApp({
+      service,
+      investigations: new MemoryInvestigationReadRepository(repository),
+      logger: false,
+      enableFailureInjection: true,
+    });
   });
 
   afterEach(async () => app.close());
@@ -33,6 +40,131 @@ describe("Reliability Lab API", () => {
     expect(openapi.statusCode).toBe(200);
     expect(openapi.json().paths["/v1/executions"]).toBeDefined();
     expect(openapi.json().paths["/v1/executions/{executionId}/events"]).toBeDefined();
+    expect(openapi.json().paths["/v1/investigations/executions"]).toBeDefined();
+    expect(openapi.json().paths["/v1/investigations/summary"]).toBeDefined();
+    expect(openapi.json().paths["/v1/investigations/providers"]).toBeDefined();
+  });
+
+  it("serves tenant-scoped compact investigation projections", async () => {
+    const execution = await service.execute({
+      tenantId: "tenant-a",
+      body: {
+        provider: "fake-primary",
+        model: "deterministic-v1",
+        input: "Investigation fixture",
+      },
+    });
+    await service.execute({
+      tenantId: "tenant-b",
+      body: {
+        provider: "fake-primary",
+        model: "deterministic-v1",
+        input: "Other tenant",
+      },
+    });
+    const list = await app.inject({
+      method: "GET",
+      url: `/v1/investigations/executions?q=${execution.executionId.slice(0, 12)}`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toMatchObject({
+      total: 1,
+      data: [
+        {
+          executionId: execution.executionId,
+          status: "succeeded",
+          initialProvider: "fake-primary",
+          attemptCount: 1,
+        },
+      ],
+    });
+    expect(list.body).not.toContain("Investigation fixture");
+    expect(list.body).not.toContain("outputText");
+    const resolvedRange = list.json().range as { from: string; to: string };
+    expect(Date.parse(resolvedRange.to) - Date.parse(resolvedRange.from)).toBe(86_400_000);
+
+    const failedExecution = await service.execute({
+      tenantId: "tenant-a",
+      body: {
+        provider: "fake-primary",
+        model: "deterministic-v1",
+        input: "Failed investigation fixture",
+        failureMode: "provider_error",
+        policy: { maxAttempts: 1 },
+      },
+    });
+    expect(failedExecution.status).toBe("failed");
+    const filterFrom = encodeURIComponent(new Date(Date.now() - 60_000).toISOString());
+    const filterTo = encodeURIComponent(new Date(Date.now() + 60_000).toISOString());
+    const multiFilter = await app.inject({
+      method: "GET",
+      url:
+        `/v1/investigations/executions?from=${filterFrom}&to=${filterTo}` +
+        "&status=succeeded&status=failed&provider=fake-primary",
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(multiFilter.statusCode).toBe(200);
+    expect(multiFilter.json().total).toBe(2);
+
+    const summary = await app.inject({
+      method: "GET",
+      url: `/v1/investigations/summary?from=${filterFrom}&to=${filterTo}`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json().population).toMatchObject({ total: 2, terminal: 2 });
+    expect(summary.json().outcomes.successRate).toBe(0.5);
+
+    const providers = await app.inject({
+      method: "GET",
+      url: `/v1/investigations/providers?from=${filterFrom}&to=${filterTo}`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(providers.statusCode).toBe(200);
+    expect(providers.json().data[0]).toMatchObject({
+      provider: "fake-primary",
+      attemptCount: 2,
+      sampleAssessment: "insufficient_sample",
+    });
+
+    const empty = await app.inject({
+      method: "GET",
+      url: "/v1/investigations/executions?from=2030-01-01T00%3A00%3A00.000Z&to=2030-01-02T00%3A00%3A00.000Z",
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json()).toMatchObject({ data: [], total: 0 });
+  });
+
+  it("validates investigation ranges, limits, and cursors", async () => {
+    const missingRangePair = await app.inject({
+      method: "GET",
+      url: "/v1/investigations/summary?from=2026-01-01T00%3A00%3A00.000Z",
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(missingRangePair.statusCode).toBe(400);
+
+    const tooWide = await app.inject({
+      method: "GET",
+      url: "/v1/investigations/summary?from=2025-01-01T00%3A00%3A00.000Z&to=2026-01-01T00%3A00%3A00.000Z",
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(tooWide.statusCode).toBe(400);
+
+    const malformedCursor = await app.inject({
+      method: "GET",
+      url: "/v1/investigations/executions?cursor=not-opaque",
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(malformedCursor.statusCode).toBe(400);
+
+    const oversizedPage = await app.inject({
+      method: "GET",
+      url: "/v1/investigations/executions?limit=101",
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(oversizedPage.statusCode).toBe(400);
   });
 
   it("validates tenant and request body", async () => {
@@ -291,13 +423,15 @@ describe("Reliability Lab API", () => {
         };
       },
     };
+    const gatedRepository = new MemoryExecutionRepository();
     const gatedService = new ExecutionService({
-      repository: new MemoryExecutionRepository(),
+      repository: gatedRepository,
       replayCapsules: new MemoryReplayCapsuleStore(),
       providers: new MapProviderRegistry([provider]),
     });
     const gatedApp = await buildApp({
       service: gatedService,
+      investigations: new MemoryInvestigationReadRepository(gatedRepository),
       logger: false,
       enableFailureInjection: true,
       eventStreamPollMs: 1,

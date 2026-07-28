@@ -1,18 +1,30 @@
-import type { ComparisonView, ExecutionEnvelope } from "@reliability-lab/contracts";
+import type {
+  ComparisonView,
+  ExecutionEnvelope,
+  ExecutionSummaryPage,
+  ProviderObservationPage,
+  ReliabilitySummary,
+} from "@reliability-lab/contracts";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 const tenantId = process.env.DEMO_TENANT_ID ?? "demo-tenant";
 
-export async function listExecutions(): Promise<ExecutionEnvelope[]> {
-  const response = await fetch(`${apiUrl}/v1/executions`, {
-    headers: { "x-tenant-id": tenantId },
-    cache: "no-store",
-  });
-  if (!response.ok) throw new Error(`Execution list failed with HTTP ${response.status}`);
-  const body: unknown = await response.json();
-  if (!isRecord(body) || !Array.isArray(body.data))
-    throw new Error("Execution list response is invalid");
-  return body.data as ExecutionEnvelope[];
+export async function searchInvestigationExecutions(
+  params: URLSearchParams = new URLSearchParams(),
+): Promise<ExecutionSummaryPage> {
+  return getInvestigationResponse<ExecutionSummaryPage>("executions", params);
+}
+
+export async function getInvestigationSummary(
+  params: URLSearchParams = new URLSearchParams(),
+): Promise<ReliabilitySummary> {
+  return getInvestigationResponse<ReliabilitySummary>("summary", params);
+}
+
+export async function getProviderObservations(
+  params: URLSearchParams = new URLSearchParams(),
+): Promise<ProviderObservationPage> {
+  return getInvestigationResponse<ProviderObservationPage>("providers", params);
 }
 
 export async function getExecution(executionId: string): Promise<ExecutionEnvelope | null> {
@@ -35,6 +47,16 @@ export async function getComparison(experimentId: string): Promise<ComparisonVie
   return (await response.json()) as ComparisonView;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+async function getInvestigationResponse<T>(
+  resource: "executions" | "summary" | "providers",
+  params: URLSearchParams,
+): Promise<T> {
+  const query = params.size ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiUrl}/v1/investigations/${resource}${query}`, {
+    headers: { "x-tenant-id": tenantId },
+    cache: "no-store",
+  });
+  if (!response.ok)
+    throw new Error(`Investigation ${resource} failed with HTTP ${response.status}`);
+  return (await response.json()) as T;
 }

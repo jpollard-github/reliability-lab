@@ -288,7 +288,7 @@ describe("ExecutionService policy", () => {
       body: baseBody,
     });
     expect(duplicate.execution.executionId).toBe(submission.execution.executionId);
-    expect(duplicate.execution.events.at(-1)?.type).toBe("idempotency.hit");
+    expect(duplicate.execution.events.map((event) => event.type)).toContain("idempotency.hit");
     expect(await repository.list("tenant-a")).toHaveLength(1);
     releaseProvider();
     await expect(submission.completion).resolves.toMatchObject({ status: "succeeded" });
@@ -618,6 +618,9 @@ class MemoryDurableAcceptance implements DurableAcceptancePort, DurableJobStore 
     this.#jobs.push({
       tenantId: input.execution.tenantId,
       executionId: input.execution.executionId,
+      workerId: "worker-a",
+      claimVersion: 1,
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
       command: structuredClone(input.command),
       reclaimed: false,
     });
@@ -635,16 +638,21 @@ class MemoryDurableAcceptance implements DurableAcceptancePort, DurableJobStore 
   }
 
   async heartbeat() {
-    return true;
+    return {
+      kind: "owned" as const,
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
   }
 
-  async finish(input: {
-    tenantId: string;
-    executionId: string;
-    workerId: string;
-    status: "completed" | "failed" | "ambiguous";
-    safeErrorCode?: string;
-  }) {
+  async assertOwned() {
+    return {
+      kind: "owned" as const,
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+  }
+
+  async finish(input: { status: "completed" | "failed" | "ambiguous" }) {
     this.finished.push({ status: input.status });
+    return { kind: "finished" as const };
   }
 }

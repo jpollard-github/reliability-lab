@@ -30,6 +30,26 @@ terminal evidence. The browser uses fetch streaming rather than native `EventSou
 prototype tenant boundary is a request header. Worker-produced queue, claim, attempt, terminal, and
 recovery events use this same path.
 
+## Investigation read boundary
+
+`InvestigationReadRepository` is a framework-independent read port beside, not inside, execution
+mutation policy. The memory adapter projects small local data sets from envelopes. The PostgreSQL
+adapter selects compact execution fields, uses event `EXISTS` projections for derived signals,
+aggregates attempt JSONB by provider/model, and calculates p50/p95 with PostgreSQL percentile
+functions. Search uses an opaque cursor ordered by `created_at DESC, id DESC`; every query includes
+tenant and half-open time predicates.
+
+The focused `/v1/investigations/executions`, `/summary`, and `/providers` endpoints return the exact
+resolved range. The list query is one bounded SQL statement, summary uses two fixed statements
+(aggregate plus trend), and provider observations use one statement. None inspects replay
+capability or selects prompts, outputs, event arrays, attempt arrays, command ciphertext, or replay
+capsules. Full envelopes remain the detail-page contract.
+
+Outcome rates divide succeeded, degraded, and failed counts by all terminal outcomes, including the
+reserved cancelled status when present. Queued and running are reported as in flight. Provider/model
+observations use attempts, exclude running attempts from their observed success denominator, expose
+sample size, and deliberately assign no health score.
+
 ## Durable job boundary
 
 The durable job row is a scheduling record, not replay retention. It stores safe lease metadata and
@@ -37,11 +57,26 @@ AES-256-GCM ciphertext under AAD containing purpose `execution_command`, tenant,
 version, and command-key version. A fresh 12-byte nonce is used per write. The command keyring is
 independent from Replay Vault configuration.
 
-Pending and expired jobs are claimed transactionally. A valid lease is exclusive, heartbeats extend
-it, and claim count records delivery. An expired lease with no attempt can be reclaimed. A terminal
-execution is reconciled without rerun. Any reclaimed nonterminal execution with prior attempt
-activity is conservatively failed as `provider_call_outcome_unknown`, with recovery and ambiguity
-events, instead of risking a duplicate provider call.
+Pending and expired jobs are claimed transactionally. `claimCount` is the monotonically increasing
+claim version and fencing token, not just a delivery statistic. The worker ID says who owns a claim;
+the version says which claim is current. Heartbeat, ownership assertion, terminal finish, and command
+cleanup match tenant, execution, leased status, owner, and exact version. They also require an
+unexpired lease. A zero-row mutation is explicit ownership loss, never success.
+
+The worker observes serialized heartbeat outcomes and tracks the most recently confirmed lease
+deadline. Heartbeats never overlap. A transient database failure may be retried only while that
+deadline remains valid; explicit ownership loss or inability to confirm by the deadline aborts the
+generic continuation guard. The policy engine checks that guard before attempts, provider calls,
+outcome persistence, retry/backoff, fallback, validation, terminal transitions, and replay
+completion. Retry sleep and provider requests receive the cancellation signal. A latency-budget
+abort remains execution evidence; lease cancellation is runtime ownership evidence and is not
+normalized as a provider timeout.
+
+An expired lease with no attempt can be reclaimed. A terminal execution is reconciled without rerun.
+Any reclaimed nonterminal execution with prior attempt activity is conservatively failed as
+`provider_call_outcome_unknown`, with recovery and ambiguity events, instead of risking a duplicate
+provider call. The stale worker is not authorized to append lease-loss evidence; it stops locally,
+and the current owner records recovery evidence.
 
 Terminal handling clears command ciphertext, nonce, and tag and records a deletion time. Replay
 capsule expiry and deletion are independent.
@@ -77,16 +112,19 @@ share replay capabilities.
 ## Failure and consistency boundaries
 
 Worker mode makes acceptance durable, including comparison variants and concurrency-safe
-idempotency. It does not make provider calls exactly once: PostgreSQL and the remote provider share
-no transaction. The first recovery slice stops conservatively after ambiguous attempt activity and
-cannot resume midway through policy evaluation. Event inserts and mutable projection updates during
-continuation remain separate operations rather than a general transactional outbox.
+idempotency. Claim fencing prevents an older claim from extending, finishing, or deleting the
+current claim, and the post-provider ownership assertion prevents a known-stale worker from
+persisting the returned outcome. It does not make provider calls exactly once: PostgreSQL and the
+remote provider share no transaction, and aborting an HTTP request cannot prove the provider did
+nothing. The recovery slice stops conservatively after ambiguous attempt activity and cannot resume
+midway through policy evaluation. Event inserts and mutable projection updates during continuation
+remain separate operations rather than a general transactional outbox.
 
 In-process mode intentionally retains its simpler consistency boundary. Variant execution creation
 and experiment persistence are separate there, and accepted work can be lost with the API process.
 Distributed rate/circuit state, cancellation, dead-letter tools, and authenticated operator
 recovery remain on the [roadmap](roadmap.md).
 
-Execution-list replay-capability hydration is currently an N+1 query pattern. That is acceptable for
-the unpaginated prototype; a larger system should paginate and batch capability metadata without
-exposing encrypted bodies.
+The compatibility `/v1/executions` route still hydrates full envelopes and replay capability and is
+not an analytics path. The root page and Investigation Workbench use the bounded investigation read
+model, avoiding that route's unpaginated replay-capability hydration pattern.

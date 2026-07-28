@@ -23,6 +23,7 @@ import {
 } from "./comparison.js";
 
 export * from "./comparison.js";
+export * from "./investigation.js";
 
 export interface Clock {
   now(): Date;
@@ -150,32 +151,66 @@ export interface DurableAcceptancePort {
   acceptComparison(input: DurableComparisonAcceptanceInput): Promise<ExecutionId>;
 }
 
-export interface ClaimedExecutionJob {
+export interface JobClaim {
   tenantId: TenantId;
   executionId: ExecutionId;
+  workerId: string;
+  claimVersion: number;
+  leaseExpiresAt: string;
+}
+
+export interface ClaimedExecutionJob extends JobClaim {
   command?: CreateExecutionBody;
   reclaimed: boolean;
   safeErrorCode?: string;
 }
+
+export type LeaseOwnershipOutcome =
+  { kind: "owned"; leaseExpiresAt: string } | { kind: "ownership_lost" };
+
+export type FinishJobOutcome = { kind: "finished" } | { kind: "ownership_lost" };
 
 export interface DurableJobStore {
   claimNext(input: {
     workerId: string;
     leaseDurationMs: number;
   }): Promise<ClaimedExecutionJob | null>;
-  heartbeat(input: {
-    tenantId: TenantId;
-    executionId: ExecutionId;
-    workerId: string;
-    leaseDurationMs: number;
-  }): Promise<boolean>;
+  heartbeat(input: { claim: JobClaim; leaseDurationMs: number }): Promise<LeaseOwnershipOutcome>;
+  assertOwned(claim: JobClaim): Promise<LeaseOwnershipOutcome>;
   finish(input: {
-    tenantId: TenantId;
-    executionId: ExecutionId;
-    workerId: string;
+    claim: JobClaim;
     status: "completed" | "failed" | "ambiguous";
     safeErrorCode?: string;
-  }): Promise<void>;
+  }): Promise<FinishJobOutcome>;
+}
+
+export interface ExecutionContinuationGuard {
+  readonly signal: AbortSignal;
+  assertActive(): Promise<void>;
+}
+
+export class ExecutionContinuationStoppedError extends Error {
+  constructor(message = "Execution continuation was stopped by the worker runtime") {
+    super(message);
+    this.name = "ExecutionContinuationStoppedError";
+  }
+}
+
+export class LeaseOwnershipLostError extends ExecutionContinuationStoppedError {
+  constructor() {
+    super("Execution continuation stopped because lease ownership was lost");
+    this.name = "LeaseOwnershipLostError";
+  }
+}
+
+export function isExecutionContinuationStoppedError(
+  error: unknown,
+): error is ExecutionContinuationStoppedError {
+  return error instanceof ExecutionContinuationStoppedError;
+}
+
+export function isLeaseOwnershipLostError(error: unknown): error is LeaseOwnershipLostError {
+  return error instanceof LeaseOwnershipLostError;
 }
 
 export interface ExecutionServiceOptions {
@@ -208,6 +243,30 @@ const systemClock: Clock = {
     await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
   },
 };
+
+const unrestrictedContinuationController = new AbortController();
+const unrestrictedContinuationGuard: ExecutionContinuationGuard = {
+  signal: unrestrictedContinuationController.signal,
+  assertActive: async () => undefined,
+};
+
+export async function abortableSleep(
+  clock: Clock,
+  milliseconds: number,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) throw abortReason(signal);
+  let onAbort: (() => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    onAbort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    await Promise.race([clock.sleep(milliseconds), aborted]);
+  } finally {
+    if (onAbort) signal.removeEventListener("abort", onAbort);
+  }
+}
 
 const systemIds: IdSource = {
   executionId: randomUUID,
@@ -392,29 +451,35 @@ export class ExecutionService {
     tenantId: TenantId,
     executionId: ExecutionId,
     body: CreateExecutionBody,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
   ): Promise<{
     kind: "completed" | "already_terminal" | "ambiguous";
     execution: ExecutionEnvelope;
   }> {
+    await guard.assertActive();
     const execution = await this.#repository.findById(tenantId, executionId);
     if (!execution) throw new ExecutionNotFoundError();
     if (isTerminalStatus(execution.status)) {
       return { kind: "already_terminal", execution };
     }
     if (hasAmbiguousProviderAttempt(execution)) {
-      const ambiguous = await this.#markAmbiguousRecovery(execution);
+      const ambiguous = await this.#markAmbiguousRecovery(execution, guard);
       return { kind: "ambiguous", execution: ambiguous };
     }
+    await guard.assertActive();
     execution.status = "running";
     execution.updatedAt = this.#clock.now().toISOString();
     await this.#append(execution, { type: "worker.claimed" });
     await this.#repository.update(execution);
-    const completed = await this.#continueSafely(execution, body);
-    await this.#appendDurableReplayCompletion(completed);
+    const completed = await this.#continueSafely(execution, body, guard);
+    await this.#appendDurableReplayCompletion(completed, guard);
     return { kind: "completed", execution: completed };
   }
 
-  async #appendDurableReplayCompletion(execution: ExecutionEnvelope): Promise<void> {
+  async #appendDurableReplayCompletion(
+    execution: ExecutionEnvelope,
+    guard: ExecutionContinuationGuard,
+  ): Promise<void> {
     if (
       !execution.replayOfExecutionId ||
       !isTerminalStatus(execution.status) ||
@@ -431,6 +496,7 @@ export class ExecutionService {
       original.status === execution.status &&
       original.outputText === execution.outputText &&
       original.error?.category === execution.error?.category;
+    await guard.assertActive();
     await this.#append(execution, {
       type: "replay.completed",
       originalExecutionId: original.executionId,
@@ -444,20 +510,30 @@ export class ExecutionService {
     tenantId: TenantId,
     executionId: ExecutionId,
     code: string,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
   ): Promise<ExecutionEnvelope> {
+    await guard.assertActive();
     const execution = await this.#repository.findById(tenantId, executionId);
     if (!execution) throw new ExecutionNotFoundError();
     if (isTerminalStatus(execution.status)) return execution;
-    return this.#fail(execution, {
-      category: "unknown",
-      code,
-      message: "Durable execution could not be safely continued",
-      retryable: false,
-    });
+    return this.#fail(
+      execution,
+      {
+        category: "unknown",
+        code,
+        message: "Durable execution could not be safely continued",
+        retryable: false,
+      },
+      guard,
+    );
   }
 
-  async #markAmbiguousRecovery(execution: ExecutionEnvelope): Promise<ExecutionEnvelope> {
+  async #markAmbiguousRecovery(
+    execution: ExecutionEnvelope,
+    guard: ExecutionContinuationGuard,
+  ): Promise<ExecutionEnvelope> {
     const attempt = latestUnresolvedAttempt(execution);
+    await guard.assertActive();
     await this.#append(execution, {
       type: "execution.recovery_detected",
       reason: "expired_lease_with_provider_activity",
@@ -470,23 +546,30 @@ export class ExecutionService {
         model: attempt.model,
       });
     }
-    return this.#fail(execution, {
-      category: "provider_unavailable",
-      code: "provider_call_outcome_unknown",
-      message:
-        "The provider may have received the request; automatic duplication was avoided because no durable outcome was recorded",
-      retryable: false,
-    });
+    return this.#fail(
+      execution,
+      {
+        category: "provider_unavailable",
+        code: "provider_call_outcome_unknown",
+        message:
+          "The provider may have received the request; automatic duplication was avoided because no durable outcome was recorded",
+        retryable: false,
+      },
+      guard,
+    );
   }
 
   async #continueSafely(
     execution: ExecutionEnvelope,
     body: CreateExecutionBody,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
   ): Promise<ExecutionEnvelope> {
     try {
-      return await this.#continueExecution(execution, body);
-    } catch {
+      return await this.#continueExecution(execution, body, guard);
+    } catch (error) {
+      if (isExecutionContinuationStoppedError(error)) throw error;
       if (execution.status === "succeeded" || execution.status === "degraded") return execution;
+      await guard.assertActive();
       const internalError: ProviderError = {
         category: "unknown",
         code: "execution_internal_failure",
@@ -512,22 +595,28 @@ export class ExecutionService {
           error: internalError,
         });
       }
-      return this.#fail(execution, internalError);
+      return this.#fail(execution, internalError, guard);
     }
   }
 
   async #continueExecution(
     execution: ExecutionEnvelope,
     body: CreateExecutionBody,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
   ): Promise<ExecutionEnvelope> {
+    await guard.assertActive();
     const primary = this.#providers.resolve(body.provider);
     if (!primary) {
-      return this.#fail(execution, {
-        category: "invalid_request",
-        code: "provider_not_configured",
-        message: `Provider '${body.provider}' is not configured`,
-        retryable: false,
-      });
+      return this.#fail(
+        execution,
+        {
+          category: "invalid_request",
+          code: "provider_not_configured",
+          message: `Provider '${body.provider}' is not configured`,
+          retryable: false,
+        },
+        guard,
+      );
     }
 
     const capsule: ReplayCapsule = {
@@ -562,12 +651,16 @@ export class ExecutionService {
           unavailableCapability("missing", "Replay capsule persistence failed"),
         );
         if (primary.kind === "live") {
-          return this.#fail(execution, {
-            category: "provider_unavailable",
-            code: "replay_retention_failed",
-            message: "Required replay retention could not be established",
-            retryable: true,
-          });
+          return this.#fail(
+            execution,
+            {
+              category: "provider_unavailable",
+              code: "replay_retention_failed",
+              message: "Required replay retention could not be established",
+              retryable: true,
+            },
+            guard,
+          );
         }
       }
     } else {
@@ -576,6 +669,7 @@ export class ExecutionService {
         unavailableCapability("retention_disabled", "Live-provider request retention is disabled"),
       );
     }
+    await guard.assertActive();
     await this.#repository.update(execution);
 
     return this.#tracer.withSpan(
@@ -585,7 +679,7 @@ export class ExecutionService {
         "execution.trace_id": execution.traceId,
         "provider.id": primary.id,
       },
-      async () => this.#runPolicy(execution, body, primary, false),
+      async () => this.#runPolicy(execution, body, primary, false, guard),
     );
   }
 
@@ -804,7 +898,9 @@ export class ExecutionService {
     body: CreateExecutionBody,
     primary: LlmProvider,
     fallbackUsed: boolean,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
   ): Promise<ExecutionEnvelope> {
+    await guard.assertActive();
     const startedAtMs = this.#clock.now().getTime();
     let provider = primary;
     let model = body.model;
@@ -814,9 +910,11 @@ export class ExecutionService {
     const maxAttempts = fallbackUsed ? 1 : execution.policy.maxAttempts;
 
     while (attemptsForProvider < maxAttempts) {
+      await guard.assertActive();
       attemptNumber += 1;
       attemptsForProvider += 1;
       if (!this.#circuitBreaker.allow(provider.id)) {
+        await guard.assertActive();
         await this.#append(execution, { type: "circuit.rejected", provider: provider.id });
         lastError = {
           category: "provider_unavailable",
@@ -830,9 +928,10 @@ export class ExecutionService {
       const elapsed = this.#clock.now().getTime() - startedAtMs;
       const remainingBudget = execution.budget.maxLatencyMs - elapsed;
       if (remainingBudget <= 0) {
-        return this.#budgetFailure(execution);
+        return this.#budgetFailure(execution, guard);
       }
 
+      await guard.assertActive();
       const attemptStarted = this.#clock.now();
       execution.attempts.push({
         attemptNumber,
@@ -848,8 +947,10 @@ export class ExecutionService {
         model,
       });
       await this.#repository.update(execution);
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), remainingBudget);
+      await guard.assertActive();
+      const latencyController = new AbortController();
+      const timeout = setTimeout(() => latencyController.abort(), remainingBudget);
+      const providerSignal = AbortSignal.any([latencyController.signal, guard.signal]);
       const result = await this.#tracer
         .withSpan(
           "provider.attempt",
@@ -874,10 +975,11 @@ export class ExecutionService {
                 ...(fallbackUsed ? {} : body.failureMode ? { failureMode: body.failureMode } : {}),
                 attempt: attemptNumber,
               },
-              { signal: controller.signal, timeoutMs: remainingBudget },
+              { signal: providerSignal, timeoutMs: remainingBudget },
             ),
         )
         .finally(() => clearTimeout(timeout));
+      await guard.assertActive();
       const attempt = execution.attempts.at(-1);
       if (!attempt) throw new Error("Attempt invariant violated");
 
@@ -896,6 +998,7 @@ export class ExecutionService {
         this.#circuitBreaker.recordSuccess(provider.id);
 
         if (body.structuredOutputSchema) {
+          await guard.assertActive();
           const validation = await this.#tracer.withSpan(
             "structured_output.validate",
             {
@@ -906,19 +1009,25 @@ export class ExecutionService {
           );
           attempt.validation = validation;
           if (!validation.valid) {
+            await guard.assertActive();
             attempt.status = "rejected";
             await this.#append(execution, {
               type: "structured_output.rejected",
               attemptNumber,
               errors: validation.errors ?? ["Structured output is invalid"],
             });
-            return this.#fail(execution, {
-              category: "malformed_response",
-              code: "structured_output_invalid",
-              message: "Structured output failed JSON Schema validation",
-              retryable: false,
-            });
+            return this.#fail(
+              execution,
+              {
+                category: "malformed_response",
+                code: "structured_output_invalid",
+                message: "Structured output failed JSON Schema validation",
+                retryable: false,
+              },
+              guard,
+            );
           }
+          await guard.assertActive();
           await this.#append(execution, {
             type: "structured_output.validated",
             attemptNumber,
@@ -931,6 +1040,7 @@ export class ExecutionService {
           execution.outputJson = result.response.outputJson;
         execution.durationMs = this.#clock.now().getTime() - startedAtMs;
         execution.updatedAt = this.#clock.now().toISOString();
+        await guard.assertActive();
         await this.#append(execution, {
           type: "execution.succeeded",
           status: execution.status,
@@ -956,9 +1066,10 @@ export class ExecutionService {
       await this.#repository.update(execution);
 
       if (result.error.retryable && attemptsForProvider < maxAttempts) {
+        await guard.assertActive();
         const delayMs = this.#backoff(execution.policy, attemptsForProvider);
         if (this.#clock.now().getTime() - startedAtMs + delayMs >= execution.budget.maxLatencyMs) {
-          return this.#budgetFailure(execution);
+          return this.#budgetFailure(execution, guard);
         }
         await this.#append(execution, {
           type: "retry.scheduled",
@@ -966,13 +1077,15 @@ export class ExecutionService {
           delayMs,
           reason: result.error.category,
         });
-        await this.#clock.sleep(delayMs);
+        await abortableSleep(this.#clock, delayMs, guard.signal);
+        await guard.assertActive();
         continue;
       }
       break;
     }
 
     if (execution.policy.fallbackProvider && !fallbackUsed) {
+      await guard.assertActive();
       const fallback = this.#providers.resolve(execution.policy.fallbackProvider);
       if (fallback) {
         provider = fallback;
@@ -986,7 +1099,7 @@ export class ExecutionService {
           reason: lastError?.category ?? "primary_failed",
         });
         const { failureMode: _failureMode, ...fallbackBody } = body;
-        return this.#runPolicy(execution, fallbackBody, provider, true);
+        return this.#runPolicy(execution, fallbackBody, provider, true, guard);
       }
     }
 
@@ -998,6 +1111,7 @@ export class ExecutionService {
         message: "Execution failed without a normalized provider error",
         retryable: false,
       },
+      guard,
     );
   }
 
@@ -1022,7 +1136,11 @@ export class ExecutionService {
     return Math.max(0, Math.round(base + jitter));
   }
 
-  async #budgetFailure(execution: ExecutionEnvelope): Promise<ExecutionEnvelope> {
+  async #budgetFailure(
+    execution: ExecutionEnvelope,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
+  ): Promise<ExecutionEnvelope> {
+    await guard.assertActive();
     const observed = Math.max(
       0,
       this.#clock.now().getTime() - new Date(execution.createdAt).getTime(),
@@ -1033,15 +1151,24 @@ export class ExecutionService {
       limit: execution.budget.maxLatencyMs,
       observed,
     });
-    return this.#fail(execution, {
-      category: "budget_exceeded",
-      code: "latency_budget_exceeded",
-      message: "Execution latency budget was exceeded",
-      retryable: false,
-    });
+    return this.#fail(
+      execution,
+      {
+        category: "budget_exceeded",
+        code: "latency_budget_exceeded",
+        message: "Execution latency budget was exceeded",
+        retryable: false,
+      },
+      guard,
+    );
   }
 
-  async #fail(execution: ExecutionEnvelope, error: ProviderError): Promise<ExecutionEnvelope> {
+  async #fail(
+    execution: ExecutionEnvelope,
+    error: ProviderError,
+    guard: ExecutionContinuationGuard = unrestrictedContinuationGuard,
+  ): Promise<ExecutionEnvelope> {
+    await guard.assertActive();
     execution.status = "failed";
     execution.error = error;
     execution.updatedAt = this.#clock.now().toISOString();
@@ -1089,12 +1216,232 @@ export class ExecutionService {
   }
 }
 
+export interface LeaseHeartbeatTimers {
+  setTimeout(callback: () => void, milliseconds: number): ReturnType<typeof setTimeout>;
+  clearTimeout(timer: ReturnType<typeof setTimeout>): void;
+}
+
+const systemLeaseHeartbeatTimers: LeaseHeartbeatTimers = {
+  setTimeout: (callback, milliseconds) => setTimeout(callback, milliseconds),
+  clearTimeout: (timer) => clearTimeout(timer),
+};
+
+export class LeaseHeartbeatController implements ExecutionContinuationGuard {
+  readonly #jobs: DurableJobStore;
+  readonly #claim: JobClaim;
+  readonly #leaseDurationMs: number;
+  readonly #heartbeatIntervalMs: number;
+  readonly #now: () => Date;
+  readonly #timers: LeaseHeartbeatTimers;
+  readonly #abortController = new AbortController();
+  #confirmedLeaseExpiresAtMs: number;
+  #heartbeatTimer: ReturnType<typeof setTimeout> | undefined;
+  #deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+  #heartbeatInFlight: Promise<void> | undefined;
+  #started = false;
+  #stopped = false;
+
+  constructor(options: {
+    jobs: DurableJobStore;
+    claim: JobClaim;
+    leaseDurationMs: number;
+    heartbeatIntervalMs: number;
+    now?: () => Date;
+    timers?: LeaseHeartbeatTimers;
+  }) {
+    this.#jobs = options.jobs;
+    this.#claim = { ...options.claim };
+    this.#leaseDurationMs = options.leaseDurationMs;
+    this.#heartbeatIntervalMs = options.heartbeatIntervalMs;
+    this.#now = options.now ?? (() => new Date());
+    this.#timers = options.timers ?? systemLeaseHeartbeatTimers;
+    this.#confirmedLeaseExpiresAtMs = parseLeaseDeadline(options.claim.leaseExpiresAt);
+  }
+
+  get signal(): AbortSignal {
+    return this.#abortController.signal;
+  }
+
+  get confirmedLeaseExpiresAt(): string {
+    return new Date(this.#confirmedLeaseExpiresAtMs).toISOString();
+  }
+
+  start(): void {
+    if (this.#started || this.#stopped) return;
+    this.#started = true;
+    if (!this.#deadlineStillValid()) {
+      this.#loseOwnership();
+      return;
+    }
+    this.#scheduleDeadline();
+    this.#scheduleHeartbeat(this.#heartbeatIntervalMs);
+  }
+
+  cancel(reason = new ExecutionContinuationStoppedError()): void {
+    if (!this.signal.aborted) this.#abortController.abort(reason);
+    this.#clearTimers();
+  }
+
+  async assertActive(): Promise<void> {
+    while (true) {
+      this.#throwIfInactive();
+      if (!this.#deadlineStillValid()) {
+        this.#loseOwnership();
+        this.#throwIfInactive();
+      }
+      try {
+        const outcome = await this.#jobs.assertOwned(this.#claim);
+        if (outcome.kind === "ownership_lost") {
+          this.#loseOwnership();
+          throw abortReason(this.signal);
+        }
+        this.#confirmLease(outcome.leaseExpiresAt);
+        return;
+      } catch (error) {
+        if (isLeaseOwnershipLostError(error)) throw error;
+        this.#throwIfInactive();
+        const remainingMs = this.#confirmedLeaseExpiresAtMs - this.#now().getTime();
+        if (remainingMs <= 0) {
+          this.#loseOwnership();
+          this.#throwIfInactive();
+        }
+        await this.#wait(Math.min(this.#heartbeatIntervalMs, remainingMs));
+      }
+    }
+  }
+
+  async stop(): Promise<void> {
+    if (this.#stopped) return;
+    this.#stopped = true;
+    this.#clearTimers();
+    await this.#heartbeatInFlight;
+  }
+
+  #scheduleHeartbeat(milliseconds: number): void {
+    if (this.#stopped || this.signal.aborted || this.#heartbeatTimer) return;
+    this.#heartbeatTimer = this.#timers.setTimeout(
+      () => {
+        this.#heartbeatTimer = undefined;
+        const heartbeat = this.#renewLease();
+        this.#heartbeatInFlight = heartbeat;
+        void heartbeat.finally(() => {
+          if (this.#heartbeatInFlight === heartbeat) this.#heartbeatInFlight = undefined;
+        });
+      },
+      Math.max(0, milliseconds),
+    );
+    unrefTimer(this.#heartbeatTimer);
+  }
+
+  #scheduleDeadline(): void {
+    if (this.#stopped || this.signal.aborted) return;
+    if (this.#deadlineTimer) this.#timers.clearTimeout(this.#deadlineTimer);
+    const remainingMs = Math.max(0, this.#confirmedLeaseExpiresAtMs - this.#now().getTime());
+    this.#deadlineTimer = this.#timers.setTimeout(() => {
+      this.#deadlineTimer = undefined;
+      if (this.#deadlineStillValid()) {
+        this.#scheduleDeadline();
+      } else {
+        this.#loseOwnership();
+      }
+    }, remainingMs);
+    unrefTimer(this.#deadlineTimer);
+  }
+
+  async #renewLease(): Promise<void> {
+    if (this.#stopped || this.signal.aborted) return;
+    if (!this.#deadlineStillValid()) {
+      this.#loseOwnership();
+      return;
+    }
+    try {
+      const outcome = await this.#jobs.heartbeat({
+        claim: this.#claim,
+        leaseDurationMs: this.#leaseDurationMs,
+      });
+      if (outcome.kind === "ownership_lost") {
+        this.#loseOwnership();
+        return;
+      }
+      this.#confirmLease(outcome.leaseExpiresAt);
+    } catch {
+      if (!this.#deadlineStillValid()) {
+        this.#loseOwnership();
+        return;
+      }
+    }
+    this.#scheduleHeartbeat(this.#heartbeatIntervalMs);
+  }
+
+  #confirmLease(leaseExpiresAt: string): void {
+    const leaseExpiresAtMs = parseLeaseDeadline(leaseExpiresAt);
+    if (leaseExpiresAtMs <= this.#now().getTime()) {
+      this.#loseOwnership();
+      this.#throwIfInactive();
+    }
+    this.#confirmedLeaseExpiresAtMs = leaseExpiresAtMs;
+    this.#scheduleDeadline();
+  }
+
+  #deadlineStillValid(): boolean {
+    return this.#now().getTime() < this.#confirmedLeaseExpiresAtMs;
+  }
+
+  #loseOwnership(): void {
+    if (!this.signal.aborted) this.#abortController.abort(new LeaseOwnershipLostError());
+    this.#clearTimers();
+  }
+
+  #throwIfInactive(): void {
+    if (this.signal.aborted) throw abortReason(this.signal);
+  }
+
+  async #wait(milliseconds: number): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      if (this.signal.aborted) {
+        reject(abortReason(this.signal));
+        return;
+      }
+      const onAbort = () => {
+        this.#timers.clearTimeout(timer);
+        reject(abortReason(this.signal));
+      };
+      const timer = this.#timers.setTimeout(
+        () => {
+          this.signal.removeEventListener("abort", onAbort);
+          resolve();
+        },
+        Math.max(0, milliseconds),
+      );
+      unrefTimer(timer);
+      this.signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
+  #clearTimers(): void {
+    if (this.#heartbeatTimer) {
+      this.#timers.clearTimeout(this.#heartbeatTimer);
+      this.#heartbeatTimer = undefined;
+    }
+    if (this.#deadlineTimer) {
+      this.#timers.clearTimeout(this.#deadlineTimer);
+      this.#deadlineTimer = undefined;
+    }
+  }
+}
+
 export class DurableExecutionWorker {
   readonly #jobs: DurableJobStore;
   readonly #service: ExecutionService;
   readonly #workerId: string;
   readonly #leaseDurationMs: number;
   readonly #heartbeatIntervalMs: number;
+  readonly #now: (() => Date) | undefined;
+  readonly #timers: LeaseHeartbeatTimers | undefined;
+  readonly #activeHeartbeats = new Set<LeaseHeartbeatController>();
+  readonly #idleWaiters = new Set<() => void>();
+  #acceptingClaims = true;
+  #activeRuns = 0;
 
   constructor(options: {
     jobs: DurableJobStore;
@@ -1102,58 +1449,83 @@ export class DurableExecutionWorker {
     workerId: string;
     leaseDurationMs: number;
     heartbeatIntervalMs: number;
+    now?: () => Date;
+    timers?: LeaseHeartbeatTimers;
   }) {
     this.#jobs = options.jobs;
     this.#service = options.service;
     this.#workerId = options.workerId;
     this.#leaseDurationMs = options.leaseDurationMs;
     this.#heartbeatIntervalMs = options.heartbeatIntervalMs;
+    this.#now = options.now;
+    this.#timers = options.timers;
   }
 
   async runOnce(): Promise<boolean> {
+    if (!this.#acceptingClaims) return false;
+    this.#activeRuns += 1;
+    try {
+      return await this.#runOnceClaim();
+    } finally {
+      this.#activeRuns -= 1;
+      if (this.#activeRuns === 0) {
+        for (const resolve of this.#idleWaiters) resolve();
+        this.#idleWaiters.clear();
+      }
+    }
+  }
+
+  async #runOnceClaim(): Promise<boolean> {
     const job = await this.#jobs.claimNext({
       workerId: this.#workerId,
       leaseDurationMs: this.#leaseDurationMs,
     });
     if (!job) return false;
-    if (!job.command) {
-      await this.#service.failAcceptedExecution(
-        job.tenantId,
-        job.executionId,
-        job.safeErrorCode ?? "execution_command_unavailable",
-      );
-      await this.#jobs.finish({
-        tenantId: job.tenantId,
-        executionId: job.executionId,
-        workerId: this.#workerId,
-        status: "failed",
-        safeErrorCode: job.safeErrorCode ?? "execution_command_unavailable",
-      });
-      return true;
-    }
-
-    const heartbeat = setInterval(() => {
-      void this.#jobs.heartbeat({
-        tenantId: job.tenantId,
-        executionId: job.executionId,
-        workerId: this.#workerId,
-        leaseDurationMs: this.#leaseDurationMs,
-      });
-    }, this.#heartbeatIntervalMs);
-    heartbeat.unref();
+    const claim: JobClaim = {
+      tenantId: job.tenantId,
+      executionId: job.executionId,
+      workerId: job.workerId,
+      claimVersion: job.claimVersion,
+      leaseExpiresAt: job.leaseExpiresAt,
+    };
+    const heartbeat = new LeaseHeartbeatController({
+      jobs: this.#jobs,
+      claim,
+      leaseDurationMs: this.#leaseDurationMs,
+      heartbeatIntervalMs: this.#heartbeatIntervalMs,
+      ...(this.#now ? { now: this.#now } : {}),
+      ...(this.#timers ? { timers: this.#timers } : {}),
+    });
+    this.#activeHeartbeats.add(heartbeat);
+    heartbeat.start();
     try {
+      if (!job.command) {
+        const safeErrorCode = job.safeErrorCode ?? "execution_command_unavailable";
+        await this.#service.failAcceptedExecution(
+          job.tenantId,
+          job.executionId,
+          safeErrorCode,
+          heartbeat,
+        );
+        await this.#jobs.finish({
+          claim,
+          status: "failed",
+          safeErrorCode,
+        });
+        return true;
+      }
+
       const result = await this.#service.continueAcceptedExecution(
         job.tenantId,
         job.executionId,
         job.command,
+        heartbeat,
       );
       const ambiguous =
         result.kind === "ambiguous" ||
         result.execution.error?.code === "provider_call_outcome_unknown";
       await this.#jobs.finish({
-        tenantId: job.tenantId,
-        executionId: job.executionId,
-        workerId: this.#workerId,
+        claim,
         status: ambiguous
           ? "ambiguous"
           : result.execution.status === "failed"
@@ -1161,23 +1533,53 @@ export class DurableExecutionWorker {
             : "completed",
         ...(result.execution.error ? { safeErrorCode: result.execution.error.code } : {}),
       });
-    } catch {
-      await this.#service.failAcceptedExecution(
-        job.tenantId,
-        job.executionId,
-        "worker_internal_failure",
-      );
-      await this.#jobs.finish({
-        tenantId: job.tenantId,
-        executionId: job.executionId,
-        workerId: this.#workerId,
-        status: "failed",
-        safeErrorCode: "worker_internal_failure",
-      });
+    } catch (error) {
+      if (isExecutionContinuationStoppedError(error)) return true;
+      try {
+        await heartbeat.assertActive();
+        await this.#service.failAcceptedExecution(
+          job.tenantId,
+          job.executionId,
+          "worker_internal_failure",
+          heartbeat,
+        );
+        await this.#jobs.finish({
+          claim,
+          status: "failed",
+          safeErrorCode: "worker_internal_failure",
+        });
+      } catch (failureError) {
+        if (!isExecutionContinuationStoppedError(failureError)) throw failureError;
+      }
     } finally {
-      clearInterval(heartbeat);
+      await heartbeat.stop();
+      this.#activeHeartbeats.delete(heartbeat);
     }
     return true;
+  }
+
+  async shutdown(gracePeriodMs: number): Promise<boolean> {
+    this.#acceptingClaims = false;
+    if (this.#activeRuns === 0) return true;
+    if (await this.#waitForIdle(gracePeriodMs)) return true;
+    for (const heartbeat of this.#activeHeartbeats) heartbeat.cancel();
+    return this.#waitForIdle(Math.min(1_000, gracePeriodMs));
+  }
+
+  async #waitForIdle(timeoutMs: number): Promise<boolean> {
+    if (this.#activeRuns === 0) return true;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const idle = new Promise<true>((resolve) => {
+      const onIdle = () => resolve(true);
+      this.#idleWaiters.add(onIdle);
+    });
+    const timedOut = new Promise<false>((resolve) => {
+      timeout = setTimeout(() => resolve(false), Math.max(0, timeoutMs));
+      unrefTimer(timeout);
+    });
+    const result = await Promise.race([idle, timedOut]);
+    if (timeout) clearTimeout(timeout);
+    return result;
   }
 }
 
@@ -1495,6 +1897,22 @@ function stableStringify(value: unknown): string {
 
 function isTerminalStatus(status: ExecutionEnvelope["status"]): boolean {
   return ["succeeded", "degraded", "failed", "cancelled"].includes(status);
+}
+
+function parseLeaseDeadline(value: string): number {
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds)) throw new Error("Lease deadline is invalid");
+  return milliseconds;
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException("The operation was aborted", "AbortError");
+}
+
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  if (typeof timer === "object" && "unref" in timer) timer.unref();
 }
 
 export function hasAmbiguousProviderAttempt(execution: ExecutionEnvelope): boolean {

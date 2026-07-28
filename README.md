@@ -29,12 +29,16 @@ Implemented now:
 - Next.js operator console with a live evidence-driven machine view, incremental event timeline,
   recorded-history playback, replay control, guided comparative replay variants, side-by-side
   machines, and dimension-level evidence comparisons
+- Investigation Workbench with explicit bounded time windows, aggregate outcome and recovery
+  signals, attempt-level provider/model observations, URL-backed drill-down filters, stable cursor
+  pagination, trace correlation, and compact execution summaries
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
   overrides, resolved non-sensitive conditions, linked variant executions, and read-time projections
 - explicit `in_process` and `postgres_worker` execution modes; durable mode atomically accepts
   executions, idempotency records, encrypted transient commands, and comparison variants
-- separate PostgreSQL worker with exclusive leases, heartbeats, bounded concurrency, safe reclaim,
-  terminal reconciliation, conservative provider-call ambiguity, and command-payload cleanup
+- separate PostgreSQL worker with versioned exclusive leases, serialized observed heartbeats,
+  lease-aware continuation, fenced terminal cleanup, bounded concurrency, safe reclaim, terminal
+  reconciliation, and conservative provider-call ambiguity
 - guarded repository and working-file export tools
 
 Not implemented as production infrastructure: managed KMS/envelope encryption, authenticated replay
@@ -78,6 +82,8 @@ Plain-language guides:
 - [Reliability Lab basics](docs/reliability-lab-basics.md)
 - [Comparative Replay basics](docs/reliability-lab-comparative-replay-basics.md)
 - [Durable Execution basics](docs/reliability-lab-durable-execution-basics.md)
+- [Lease Safety and Fencing basics](docs/reliability-lab-lease-safety-basics.md)
+- [Investigation Workbench basics](docs/reliability-lab-investigation-workbench-basics.md)
 
 ## Execution lifecycle
 
@@ -87,17 +93,20 @@ Plain-language guides:
    process.
 3. In `postgres_worker` mode, one transaction persists the queued envelope, accepted/queued events,
    encrypted transient command, and optional concurrency-safe idempotency record before `202`.
-4. A separate worker claims the job under an exclusive lease, heartbeats it, decrypts the command,
-   and invokes the same core continuation engine.
+4. A separate worker claims the job under an exclusive lease and monotonically increasing claim
+   version, decrypts the command, and invokes the same core continuation engine. Serialized,
+   observed heartbeats maintain a confirmed lease deadline.
 5. The engine retains replay material independently when policy permits, resolves the provider, and
    records `attempt.started` before provider work. Failed attempts record normalized evidence before
-   retry, fallback, or stop.
+   retry, fallback, or stop. In worker mode a generic lease guard checks ownership at meaningful
+   continuation boundaries, including immediately after a provider returns.
 6. A configured fallback runs once after primary policy exhaustion and makes a successful outcome
    `degraded`.
 7. Structured output is validated with Ajv. Requested validation records either success or
    rejection; invalid output fails the execution.
-8. Terminal state, attempts, and normalized metadata are persisted; events remain append-only. The
-   worker marks safe terminal job metadata and clears command ciphertext, nonce, and tag.
+8. Terminal state, attempts, and normalized metadata are persisted; events remain append-only. Only
+   the exact current claim version may mark terminal job metadata and clear command ciphertext,
+   nonce, and tag. A stale worker stops locally without writing a competing terminal failure.
 9. Eligible requests retain a tenant-scoped capsule with explicit expiry. Memory mode is
    process-local; PostgreSQL mode encrypts before persistence and appends lifecycle audit metadata.
 10. Tenant-scoped SSE reads events after a sequence cursor from persisted evidence, backfills
@@ -106,6 +115,9 @@ Plain-language guides:
     disable replay. Replay creates a linked execution and records replay start/completion events.
 12. Comparative replay resolves a bounded variation against retained input. Durable mode atomically
     commits the variant, linkage events, job, and experiment, then compares the terminal envelopes.
+13. Investigation reads use separate memory/PostgreSQL adapters. Focused tenant-scoped endpoints
+    return compact rows, bounded aggregates, and provider/model attempt observations without
+    hydrating full envelopes or replay capability.
 
 ## Repository layout
 
@@ -269,6 +281,7 @@ or full envelope encryption.
 | `WORKER_POLL_INTERVAL_MS`              | Bounded idle polling interval; defaults to 250 ms        |
 | `WORKER_LEASE_DURATION_MS`             | Lease duration; defaults to 30 seconds                   |
 | `WORKER_HEARTBEAT_INTERVAL_MS`         | Heartbeat interval, which must be shorter than the lease |
+| `WORKER_SHUTDOWN_GRACE_MS`             | Bounded active-work drain; defaults to 15 seconds        |
 | `WORKER_HEALTH_PORT`                   | Local worker process-health port; defaults to 4001       |
 
 Worker mode also requires `DATABASE_URL`, a migrated schema, and PostgreSQL Replay Vault

@@ -11,6 +11,7 @@ import {
   createDatabase,
   PostgresComparisonExperimentRepository,
   PostgresExecutionRepository,
+  PostgresInvestigationReadRepository,
   PostgresReplayCapsuleStore,
   replayCapsuleAudits,
   replayCapsules,
@@ -63,6 +64,165 @@ describe("PostgresExecutionRepository", () => {
     );
     expect(await repository.eventsAfter("different-tenant", first.executionId, 0)).toBeNull();
     expect(await service.list("different-tenant")).toEqual([]);
+  });
+
+  it("serves bounded investigation projections with a fixed query count", async () => {
+    if (!connection) return;
+    const tenantId = `investigation-${randomUUID()}`;
+    const repository = new PostgresExecutionRepository(connection.db);
+    const service = new ExecutionService({
+      repository,
+      replayCapsules: new MemoryReplayCapsuleStore(),
+      providers: new MapProviderRegistry([
+        new DeterministicFakeProvider({ id: "fake-primary" }),
+        new DeterministicFakeProvider({ id: "fake-fallback" }),
+      ]),
+    });
+    const retry = await service.execute({
+      tenantId,
+      body: {
+        provider: "fake-primary",
+        model: "v1",
+        input: "investigation retry",
+        failureMode: "rate_limit",
+        policy: { maxAttempts: 2, baseBackoffMs: 0, maxBackoffMs: 0, jitterRatio: 0 },
+      },
+    });
+    const fallback = await service.execute({
+      tenantId,
+      body: {
+        provider: "fake-primary",
+        model: "v1",
+        input: "investigation fallback",
+        failureMode: "provider_error",
+        policy: {
+          maxAttempts: 1,
+          fallbackProvider: "fake-fallback",
+          fallbackModel: "fallback-v1",
+        },
+      },
+    });
+    const structuredRejection = await service.execute({
+      tenantId,
+      body: {
+        provider: "fake-primary",
+        model: "v1",
+        input: "investigation structured rejection",
+        failureMode: "malformed_json",
+        structuredOutputSchema: {
+          type: "object",
+          required: ["result"],
+          properties: { result: { type: "string" } },
+        },
+        policy: { maxAttempts: 1 },
+      },
+    });
+    await service.execute({
+      tenantId,
+      body: {
+        provider: "fake-primary",
+        model: "v1",
+        input: "investigation latency budget",
+        failureMode: "latency",
+        budget: { maxLatencyMs: 1 },
+        policy: { maxAttempts: 2, baseBackoffMs: 0, maxBackoffMs: 0, jitterRatio: 0 },
+      },
+    });
+    await service.execute({
+      tenantId: `${tenantId}-other`,
+      body: { provider: "fake-primary", model: "v1", input: "tenant isolation" },
+    });
+    const operations: string[] = [];
+    const investigations = new PostgresInvestigationReadRepository(connection.db, {
+      onQuery: (operation) => operations.push(operation),
+    });
+    const range = {
+      from: new Date(Date.now() - 60_000).toISOString(),
+      to: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const page = await investigations.searchExecutions(tenantId, {
+      range,
+      limit: 1,
+      query: retry.executionId.slice(0, 12),
+      signal: "retry_recovered",
+    });
+    expect(page).toMatchObject({
+      total: 1,
+      data: [
+        {
+          executionId: retry.executionId,
+          attemptCount: 2,
+          retryCount: 1,
+          signals: ["retry_recovered"],
+        },
+      ],
+    });
+    const fallbackPage = await investigations.searchExecutions(tenantId, {
+      range,
+      limit: 25,
+      providers: ["fake-fallback"],
+      models: ["v1"],
+      signal: "fallback_used",
+    });
+    expect(fallbackPage.data.map((item) => item.executionId)).toEqual([fallback.executionId]);
+    const rejectionPage = await investigations.searchExecutions(tenantId, {
+      range,
+      limit: 25,
+      query: structuredRejection.traceId,
+      statuses: ["failed", "degraded"],
+      errorCategory: "malformed_response",
+      errorCode: structuredRejection.error!.code,
+      signal: "structured_output_rejected",
+    });
+    expect(rejectionPage.data.map((item) => item.executionId)).toEqual([
+      structuredRejection.executionId,
+    ]);
+    const firstPage = await investigations.searchExecutions(tenantId, {
+      range,
+      limit: 1,
+    });
+    expect(firstPage.nextCursor).toBeDefined();
+    const secondPage = await investigations.searchExecutions(tenantId, {
+      range,
+      limit: 1,
+      cursor: firstPage.nextCursor!,
+    });
+    expect(secondPage.data[0]?.executionId).not.toBe(firstPage.data[0]?.executionId);
+    const [summary, providerPage] = await Promise.all([
+      investigations.summarize(tenantId, range),
+      investigations.observeProviders(tenantId, { range, limit: 50 }),
+    ]);
+    expect(summary.population).toMatchObject({ total: 4, terminal: 4 });
+    expect(summary.signals.retryRecovered).toBe(2);
+    expect(summary.signals).toMatchObject({
+      fallbackUsed: 1,
+      structuredOutputRejected: 1,
+      latencyBudgetExceeded: 1,
+      rateLimitFailures: 1,
+    });
+    expect(summary.latency.sampleSize).toBe(4);
+    expect(providerPage.data.find((item) => item.provider === "fake-primary")).toMatchObject({
+      provider: "fake-primary",
+      attemptCount: 5,
+      rateLimitedAttempts: 1,
+      sampleAssessment: "observed",
+    });
+    expect(providerPage.data.find((item) => item.provider === "fake-fallback")).toMatchObject({
+      model: "v1",
+      attemptCount: 1,
+      fallbackSelectedToRoute: 0,
+      sampleAssessment: "insufficient_sample",
+    });
+    expect(operations).toEqual([
+      "search",
+      "search",
+      "search",
+      "search",
+      "search",
+      "summary",
+      "trend",
+      "providers",
+    ]);
   });
 
   it("persists comparative replay definitions and reconstructs their evidence", async () => {

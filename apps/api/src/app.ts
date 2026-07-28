@@ -7,7 +7,12 @@ import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   CreateComparisonBodySchema,
   CreateExecutionBodySchema,
+  ExecutionSummaryPageSchema,
   ExecutionStatusSchema,
+  InvestigationSignalSchema,
+  ProviderErrorCategorySchema,
+  ProviderObservationPageSchema,
+  ReliabilitySummarySchema,
   ReplayCapabilityStateSchema,
   type ComparisonView,
   type ExecutionEnvelope,
@@ -16,7 +21,10 @@ import {
   ComparisonNotFoundError,
   ExecutionNotFoundError,
   IdempotencyConflictError,
+  InvestigationQueryError,
   RateLimitRejectedError,
+  resolveInvestigationRange,
+  type InvestigationReadRepository,
   type ExecutionService,
 } from "@reliability-lab/core";
 import { pinoRedactionPaths } from "@reliability-lab/observability";
@@ -41,6 +49,45 @@ const ComparisonParamsSchema = Type.Object({
 });
 const ExecutionEventQuerySchema = Type.Object({
   after: Type.Optional(Type.Integer({ minimum: 0 })),
+});
+const StringArrayQuerySchema = Type.Array(Type.String({ minLength: 1, maxLength: 256 }), {
+  minItems: 1,
+  maxItems: 20,
+});
+const StatusArrayQuerySchema = Type.Array(ExecutionStatusSchema, {
+  minItems: 1,
+  maxItems: 6,
+});
+const InvestigationRangeQueryProperties = {
+  from: Type.Optional(Type.String({ format: "date-time" })),
+  to: Type.Optional(Type.String({ format: "date-time" })),
+};
+const InvestigationExecutionQuerySchema = Type.Object(
+  {
+    ...InvestigationRangeQueryProperties,
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 25 })),
+    cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 2_048 })),
+    q: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    status: Type.Optional(StatusArrayQuerySchema),
+    provider: Type.Optional(StringArrayQuerySchema),
+    model: Type.Optional(StringArrayQuerySchema),
+    errorCategory: Type.Optional(ProviderErrorCategorySchema),
+    errorCode: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    signal: Type.Optional(InvestigationSignalSchema),
+  },
+  { additionalProperties: false },
+);
+const InvestigationProviderQuerySchema = Type.Object(
+  {
+    ...InvestigationRangeQueryProperties,
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 50 })),
+    provider: Type.Optional(StringArrayQuerySchema),
+    model: Type.Optional(StringArrayQuerySchema),
+  },
+  { additionalProperties: false },
+);
+const InvestigationSummaryQuerySchema = Type.Object(InvestigationRangeQueryProperties, {
+  additionalProperties: false,
 });
 const ExecutionEventHeadersSchema = Type.Object({
   "x-tenant-id": Type.String({ minLength: 1, maxLength: 128 }),
@@ -176,6 +223,7 @@ const ComparisonViewSchema = Type.Unsafe<ComparisonView>({
 
 interface AppOptions {
   service: ExecutionService;
+  investigations: InvestigationReadRepository;
   readiness?: () => Promise<{ ready: boolean; checks: Record<string, string> }>;
   logger?: FastifyBaseLogger | boolean;
   enableFailureInjection?: boolean;
@@ -345,6 +393,74 @@ export async function buildApp(options: AppOptions) {
         deleted: result.deleted,
         replayCapability: result.capability,
       };
+    },
+  );
+
+  app.get(
+    "/v1/investigations/executions",
+    {
+      schema: {
+        tags: ["investigations"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        querystring: InvestigationExecutionQuerySchema,
+        response: { 200: ExecutionSummaryPageSchema, 400: ErrorSchema },
+      },
+    },
+    async (request) => {
+      const range = investigationRange(request.query);
+      return options.investigations.searchExecutions(request.headers["x-tenant-id"], {
+        range,
+        limit: request.query.limit ?? 25,
+        ...(request.query.cursor ? { cursor: request.query.cursor } : {}),
+        ...(request.query.q ? { query: request.query.q } : {}),
+        ...(request.query.status ? { statuses: arrayValue(request.query.status) } : {}),
+        ...(request.query.provider ? { providers: arrayValue(request.query.provider) } : {}),
+        ...(request.query.model ? { models: arrayValue(request.query.model) } : {}),
+        ...(request.query.errorCategory ? { errorCategory: request.query.errorCategory } : {}),
+        ...(request.query.errorCode ? { errorCode: request.query.errorCode } : {}),
+        ...(request.query.signal ? { signal: request.query.signal } : {}),
+      });
+    },
+  );
+
+  app.get(
+    "/v1/investigations/summary",
+    {
+      schema: {
+        tags: ["investigations"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        querystring: InvestigationSummaryQuerySchema,
+        response: { 200: ReliabilitySummarySchema, 400: ErrorSchema },
+      },
+    },
+    async (request) =>
+      options.investigations.summarize(
+        request.headers["x-tenant-id"],
+        investigationRange(request.query),
+      ),
+  );
+
+  app.get(
+    "/v1/investigations/providers",
+    {
+      schema: {
+        tags: ["investigations"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        querystring: InvestigationProviderQuerySchema,
+        response: { 200: ProviderObservationPageSchema, 400: ErrorSchema },
+      },
+    },
+    async (request) => {
+      const range = investigationRange(request.query);
+      return options.investigations.observeProviders(request.headers["x-tenant-id"], {
+        range,
+        limit: request.query.limit ?? 50,
+        ...(request.query.provider ? { providers: arrayValue(request.query.provider) } : {}),
+        ...(request.query.model ? { models: arrayValue(request.query.model) } : {}),
+      });
     },
   );
 
@@ -568,6 +684,9 @@ function submissionResponse(execution: ExecutionEnvelope): Static<typeof Submiss
 }
 
 function mapError(error: unknown) {
+  if (error instanceof InvestigationQueryError) {
+    return { error: "invalid_investigation_query", message: error.message, statusCode: 400 };
+  }
   if (error instanceof ExecutionNotFoundError || error instanceof ComparisonNotFoundError) {
     return { error: "not_found", message: error.message, statusCode: 404 };
   }
@@ -598,4 +717,22 @@ function mapError(error: unknown) {
       validation && error instanceof Error ? error.message : "Request could not be completed",
     statusCode: validation ? 400 : 500,
   };
+}
+
+function investigationRange(query: { from?: string; to?: string }) {
+  if (Boolean(query.from) !== Boolean(query.to))
+    throw new InvestigationQueryError('"from" and "to" must be supplied together');
+  return resolveInvestigationRange(query);
+}
+
+function arrayValue<T>(value: T | T[]): T[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values.flatMap((item) =>
+    typeof item === "string"
+      ? (item
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean) as T[])
+      : [item],
+  );
 }

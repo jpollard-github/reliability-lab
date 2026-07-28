@@ -106,25 +106,37 @@ dimension-level explanations, and links to both execution details.
 
 ### Horizon 4: Execution that survives reality
 
-**Durable Execution Foundation implemented; horizon remains in progress.** In explicit PostgreSQL
-worker mode, accepted work is no longer tied to the API process.
+**Established foundation after its final bounded correctness pass.** In explicit PostgreSQL worker
+mode, accepted work is no longer tied to the API process.
 
 The foundation atomically accepts executions and comparison variants into PostgreSQL, encrypts
 transient commands, serializes idempotency by tenant/key, and uses a separate worker with exclusive
-leases, heartbeats, bounded concurrency, safe reclaim, terminal reconciliation, and conservative
-provider-call ambiguity. Existing persisted SSE carries worker-produced evidence.
+versioned leases, serialized observed heartbeats, claim fencing, lease-aware continuation, bounded
+concurrency, safe reclaim, terminal reconciliation, and conservative provider-call ambiguity.
+Existing persisted SSE carries worker-produced evidence.
 
-The full horizon is not complete. Continuation does not have a general transactional outbox;
-cancellation, operator recovery/dead-letter tools, distributed rate/circuit controls, and resumable
-mid-policy execution remain future work.
+This lease-safety work is the final correctness pass for the current Durable Execution Foundation,
+not a new horizon. Accepted work survives API loss, untouched jobs survive worker loss, and stale
+claims are fenced. Provider-call ambiguity remains explicit rather than exactly-once.
+
+Continuation still does not have a general transactional outbox, cancellation, operator
+recovery/dead-letter tools, distributed rate/circuit controls, or resumable mid-policy execution.
+Those remain possible future work, not prerequisites for Horizon 5.
 
 **Completion signal.** An API or worker restart does not silently lose accepted work, duplicate an execution, or erase the explanation of what happened.
 
 ### Horizon 5: An operator’s reliability lab
 
-**Desired outcome.** Investigation scales beyond opening one execution ID at a time.
+**Current movement.** Investigation is beginning to scale beyond opening one execution ID at a
+time.
 
 The console supports useful filtering and search, trace/log correlation, replay comparisons, scenario catalogs, policy experiments, provider health views, and aggregate reliability metrics. The system begins to expose service-level signals such as success, degraded success, retry recovery, fallback dependence, latency-budget failures, and replay reproducibility.
+
+The first movement, **Investigation Workbench Foundation**, is now implemented: bounded explicit
+time ranges, compact and stably paginated execution search, aggregate reliability signals,
+attempt-level provider/model observations, trace correlation, and evidence-grounded drill-down to
+existing detail/replay/comparison flows. It deliberately does not claim external log search,
+universal provider health, saved cases, alerting, or the full Horizon 5 outcome.
 
 **Completion signal.** A developer can move from an investigation case to a supported reliability conclusion without querying tables or reading application source.
 
@@ -159,10 +171,18 @@ A reference deployment includes migrations, telemetry, dashboards, backup and re
 The product sequence is:
 
 ```text
-Replay Vault → Live Machine View → Comparative Replay → Durable Execution
+Durable Execution Safety
+        ↓
+Investigation Workbench Foundation
+        ↓
+Saved investigation cases, scenario catalog, and external trace/log integrations when justified
 ```
 
 Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
-The **Horizon 4 Durable Execution Foundation** makes acceptance restart-durable in PostgreSQL worker
-mode. The next movement is to deepen recovery and distributed runtime controls without overstating
-exactly-once provider behavior.
+The **Horizon 4 Durable Execution Foundation** now makes acceptance restart-durable in PostgreSQL
+worker mode and fences stale claims without overstating exactly-once provider behavior. The current
+movement is the Horizon 5 Investigation Workbench Foundation described above. Saved cases, a
+scenario catalog, and explicitly configured trace/log integrations remain later Horizon 5 work.
+Cancellation, Redis
+coordination, generic outbox tooling, resumable workflow machinery, and cloud infrastructure are not
+prerequisites for that movement.

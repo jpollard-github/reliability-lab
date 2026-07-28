@@ -1,8 +1,14 @@
 import Link from "next/link";
-import type { ExecutionEnvelope } from "@reliability-lab/contracts";
+import type { ExecutionSummary } from "@reliability-lab/contracts";
 import { StatusBadge } from "./status-badge";
 
-export function ExecutionTable({ executions }: { executions: ExecutionEnvelope[] }) {
+export function ExecutionTable({
+  executions,
+  returnTo,
+}: {
+  executions: ExecutionSummary[];
+  returnTo?: string;
+}) {
   if (executions.length === 0) {
     return (
       <div className="empty-state">
@@ -18,9 +24,9 @@ export function ExecutionTable({ executions }: { executions: ExecutionEnvelope[]
           <tr>
             <th>Execution</th>
             <th>Status</th>
-            <th>Tenant</th>
             <th>Route</th>
             <th>Attempts</th>
+            <th>Signals</th>
             <th>Duration</th>
             <th>Created</th>
           </tr>
@@ -29,7 +35,13 @@ export function ExecutionTable({ executions }: { executions: ExecutionEnvelope[]
           {executions.map((execution) => (
             <tr key={execution.executionId}>
               <td>
-                <Link className="mono execution-link" href={`/executions/${execution.executionId}`}>
+                <Link
+                  className="mono execution-link"
+                  href={{
+                    pathname: `/executions/${execution.executionId}`,
+                    ...(returnTo ? { query: { returnTo } } : {}),
+                  }}
+                >
                   {execution.executionId.slice(0, 12)}
                 </Link>
                 {execution.replayOfExecutionId ? <span className="replay-mark">replay</span> : null}
@@ -37,12 +49,27 @@ export function ExecutionTable({ executions }: { executions: ExecutionEnvelope[]
               <td>
                 <StatusBadge status={execution.status} />
               </td>
-              <td>{execution.tenantId}</td>
               <td>
-                {execution.provider}
-                <span className="muted"> / {execution.model}</span>
+                {execution.finalProvider ?? execution.initialProvider}
+                <span className="muted"> / {execution.finalModel ?? execution.initialModel}</span>
               </td>
-              <td>{execution.attempts.length}</td>
+              <td>
+                {execution.attemptCount}
+                {execution.retryCount ? (
+                  <span className="muted"> · {execution.retryCount} retries</span>
+                ) : null}
+              </td>
+              <td>
+                <div className="signal-list">
+                  {execution.signals.length
+                    ? execution.signals.map((signal) => (
+                        <span className="signal-chip" key={signal}>
+                          {signal.replaceAll("_", " ")}
+                        </span>
+                      ))
+                    : "—"}
+                </div>
+              </td>
               <td>{execution.durationMs === undefined ? "—" : `${execution.durationMs} ms`}</td>
               <td>{new Date(execution.createdAt).toLocaleString()}</td>
             </tr>

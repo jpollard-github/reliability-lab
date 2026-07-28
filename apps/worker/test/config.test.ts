@@ -8,6 +8,7 @@ describe("worker runtime configuration", () => {
       pollIntervalMs: 250,
       leaseDurationMs: 30_000,
       heartbeatIntervalMs: 10_000,
+      shutdownGraceMs: 15_000,
       concurrency: 1,
     });
   });

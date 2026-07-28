@@ -215,6 +215,39 @@ A lease is not ownership forever. It is a renewable parking permit.
 
 ---
 
+## Lease owner versus claim version
+
+The owner identifies the worker process. The claim version identifies the particular claim that
+process received.
+
+```text
+Worker A claims version 1
+Lease expires
+Worker B claims version 2
+```
+
+Reliability Lab uses the increasing `claimCount` as a fencing token. Heartbeat, ownership check,
+terminal finish, and encrypted-command cleanup must match the tenant, execution, leased state,
+worker ID, and exact claim version. Even the same worker ID cannot use version 1 after version 2 has
+been issued.
+
+Heartbeats are serialized and observed. The worker remembers the latest confirmed lease deadline.
+A rejected heartbeat is contained and may retry while that deadline is still safely valid. An
+explicit lost-ownership result, or reaching the deadline without confirmation, stops continuation.
+The generic policy engine receives only a signal and an ownership assertion; it does not depend on
+PostgreSQL or worker implementation details.
+
+The guard is checked before and after provider-sensitive phases, before retries and abortable
+backoff, before fallback and structured-output decisions, and before terminal or replay-completion
+evidence. A stale worker exits quietly. It does not call terminal failure handling, finish the job,
+or delete the command payload.
+
+Stopping a request locally does not prove a remote provider did nothing. A request may already have
+arrived or completed, so the newer owner still treats a started attempt without trusted completion
+evidence as `provider_call_outcome_unknown`.
+
+---
+
 ## Why recovery is difficult around provider calls
 
 Suppose the worker records:
@@ -352,14 +385,21 @@ The bounded implementation and its tests prove:
 4. a job not yet started survives worker restart;
 5. concurrent idempotent submissions create one execution and one job;
 6. expired leases are reclaimed safely;
-7. ambiguous in-flight provider calls are made explicit rather than duplicated;
-8. transient command plaintext never appears in the database;
-9. encrypted command payload is removed after terminal completion;
-10. replay retention remains a separate decision;
-11. comparative variants use the same durable path;
-12. the Live Machine View still follows events across processes.
+7. every reclaim increments a fencing token;
+8. a stale heartbeat or terminal finish cannot mutate the newer claim or remove its command;
+9. heartbeats are serialized, rejected calls are contained, and unconfirmed deadline expiry stops
+   continuation;
+10. a stale worker cannot persist a provider result after the newer claim exists;
+11. ambiguous in-flight provider calls are made explicit rather than duplicated;
+12. transient command plaintext never appears in the database;
+13. encrypted command payload is removed only by the current claim after terminal completion;
+14. replay retention remains a separate decision;
+15. comparative variants use the same durable path;
+16. the Live Machine View still follows recovery evidence across processes.
 
-That is enough for a coherent foundation.
+The bounded completion signal is now met: accepted work survives API loss, untouched jobs survive
+worker loss, and stale claims are fenced. Provider-call ambiguity remains explicit rather than
+exactly-once.
 
 ---
 

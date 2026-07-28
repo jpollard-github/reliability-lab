@@ -4,6 +4,7 @@ interface WorkerRuntimeConfig {
   pollIntervalMs: number;
   leaseDurationMs: number;
   heartbeatIntervalMs: number;
+  shutdownGraceMs: number;
   concurrency: number;
 }
 
@@ -21,6 +22,7 @@ export function readWorkerRuntimeConfig(environment: NodeJS.ProcessEnv): WorkerR
     100,
     299_999,
   );
+  const shutdownGraceMs = readInteger(environment.WORKER_SHUTDOWN_GRACE_MS, 15_000, 0, 60_000);
   const concurrency = readInteger(environment.WORKER_CONCURRENCY, 1, 1, 16);
   if (heartbeatIntervalMs >= leaseDurationMs) {
     throw new Error("WORKER_HEARTBEAT_INTERVAL_MS must be less than WORKER_LEASE_DURATION_MS");
@@ -31,6 +33,7 @@ export function readWorkerRuntimeConfig(environment: NodeJS.ProcessEnv): WorkerR
     pollIntervalMs,
     leaseDurationMs,
     heartbeatIntervalMs,
+    shutdownGraceMs,
     concurrency,
   };
 }

@@ -95,8 +95,19 @@ await new Promise<void>((resolve, reject) => {
 });
 
 let stopping = false;
+let wakePoll: (() => void) | undefined;
 const delay = async (milliseconds: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+  new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      wakePoll = undefined;
+      resolve();
+    }, milliseconds);
+    wakePoll = () => {
+      clearTimeout(timeout);
+      wakePoll = undefined;
+      resolve();
+    };
+  });
 const loop = async () => {
   while (!stopping) {
     try {
@@ -115,7 +126,21 @@ const running = loop();
 const shutdown = async () => {
   if (stopping) return;
   stopping = true;
-  await running;
+  wakePoll?.();
+  const drained = await worker.shutdown(workerConfig.shutdownGraceMs);
+  await Promise.race([
+    running,
+    new Promise<void>((resolve) => {
+      const timeout = setTimeout(resolve, 1_000);
+      timeout.unref();
+    }),
+  ]);
+  if (!drained) {
+    process.exitCode = 1;
+    process.stderr.write(
+      "Durable worker shutdown grace expired; active continuation was stopped without releasing its claim\n",
+    );
+  }
   await new Promise<void>((resolve, reject) => {
     healthServer.close((error) => (error ? reject(error) : resolve()));
   });

@@ -22,6 +22,7 @@ import {
 
 export * from "./durable-execution.js";
 export * from "./execution-commands.js";
+export * from "./investigation.js";
 export * from "./replay-capsules.js";
 export * from "./replay-runtime-config.js";
 export {

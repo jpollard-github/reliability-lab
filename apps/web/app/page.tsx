@@ -1,14 +1,15 @@
+import Link from "next/link";
 import { ExecutionForm } from "@/components/execution-form";
 import { ExecutionTable } from "@/components/execution-table";
-import { listExecutions } from "@/lib/api";
+import { getInvestigationSummary, searchInvestigationExecutions } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const executions = await listExecutions();
-  const succeeded = executions.filter((execution) => execution.status === "succeeded").length;
-  const degraded = executions.filter((execution) => execution.status === "degraded").length;
-  const failed = executions.filter((execution) => execution.status === "failed").length;
+  const [executionPage, summary] = await Promise.all([
+    searchInvestigationExecutions(),
+    getInvestigationSummary(),
+  ]);
 
   return (
     <>
@@ -24,10 +25,10 @@ export default async function HomePage() {
         </div>
       </section>
       <section className="metrics" aria-label="Execution summary">
-        <Metric label="Total" value={executions.length} />
-        <Metric label="Succeeded" value={succeeded} tone="success" />
-        <Metric label="Degraded" value={degraded} tone="warning" />
-        <Metric label="Failed" value={failed} tone="danger" />
+        <Metric label="Total" value={summary.population.total} />
+        <Metric label="Succeeded" value={summary.outcomes.succeeded} tone="success" />
+        <Metric label="Degraded" value={summary.outcomes.degraded} tone="warning" />
+        <Metric label="Failed" value={summary.outcomes.failed} tone="danger" />
       </section>
       <section className="panel">
         <div className="panel-heading">
@@ -45,11 +46,13 @@ export default async function HomePage() {
         <div className="panel-heading">
           <div>
             <h2>Recent executions</h2>
-            <p>Tenant-isolated results, newest first.</p>
+            <p>Compact tenant-isolated results from the last 24 hours, newest first.</p>
           </div>
-          <span className="muted">{executions.length} records</span>
+          <Link className="workbench-link" href="/investigations">
+            Open investigation workbench
+          </Link>
         </div>
-        <ExecutionTable executions={executions} />
+        <ExecutionTable executions={executionPage.data} />
       </section>
     </>
   );

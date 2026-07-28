@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, lte, or, sql } from "drizzle-orm";
 import type {
   ComparisonExperiment,
   ExecutionEnvelope,
@@ -114,43 +114,46 @@ export class PostgresDurableExecutionStore implements DurableAcceptancePort, Dur
       if (!row) return null;
       const reclaimed = row.status === "leased";
       const leaseExpiresAt = new Date(now.getTime() + input.leaseDurationMs);
+      const claimVersion = row.claimCount + 1;
       await transaction
         .update(executionJobs)
         .set({
           status: "leased",
           leaseOwner: input.workerId,
           leaseExpiresAt,
-          claimCount: row.claimCount + 1,
+          claimCount: claimVersion,
           startedAt: row.startedAt ?? now,
           updatedAt: now,
         })
         .where(eq(executionJobs.executionId, row.executionId));
-      return { row, reclaimed };
+      return { row, reclaimed, claimVersion, leaseExpiresAt };
     });
     if (!claimed) return null;
-    const { row, reclaimed } = claimed;
+    const { row, reclaimed, claimVersion, leaseExpiresAt } = claimed;
+    const claim = {
+      tenantId: row.tenantId,
+      executionId: row.executionId,
+      workerId: input.workerId,
+      claimVersion,
+      leaseExpiresAt: leaseExpiresAt.toISOString(),
+      reclaimed,
+    };
     if (!row.ciphertext || !row.nonce || !row.authenticationTag) {
       return {
-        tenantId: row.tenantId,
-        executionId: row.executionId,
-        reclaimed,
+        ...claim,
         safeErrorCode: "execution_command_payload_missing",
       };
     }
     const key = this.#keyring.keys.get(row.keyVersion);
     if (!key) {
       return {
-        tenantId: row.tenantId,
-        executionId: row.executionId,
-        reclaimed,
+        ...claim,
         safeErrorCode: "execution_command_key_unavailable",
       };
     }
     try {
       return {
-        tenantId: row.tenantId,
-        executionId: row.executionId,
-        reclaimed,
+        ...claim,
         command: decryptExecutionCommand(
           {
             ciphertext: row.ciphertext,
@@ -169,48 +172,83 @@ export class PostgresDurableExecutionStore implements DurableAcceptancePort, Dur
       };
     } catch {
       return {
-        tenantId: row.tenantId,
-        executionId: row.executionId,
-        reclaimed,
+        ...claim,
         safeErrorCode: "execution_command_unreadable",
       };
     }
   }
 
   async heartbeat(input: {
-    tenantId: string;
-    executionId: string;
-    workerId: string;
+    claim: {
+      tenantId: string;
+      executionId: string;
+      workerId: string;
+      claimVersion: number;
+    };
     leaseDurationMs: number;
-  }): Promise<boolean> {
+  }) {
     const now = this.#now();
+    const leaseExpiresAt = new Date(now.getTime() + input.leaseDurationMs);
     const rows = await this.#db
       .update(executionJobs)
       .set({
-        leaseExpiresAt: new Date(now.getTime() + input.leaseDurationMs),
+        leaseExpiresAt,
         updatedAt: now,
       })
       .where(
         and(
-          eq(executionJobs.tenantId, input.tenantId),
-          eq(executionJobs.executionId, input.executionId),
+          eq(executionJobs.tenantId, input.claim.tenantId),
+          eq(executionJobs.executionId, input.claim.executionId),
           eq(executionJobs.status, "leased"),
-          eq(executionJobs.leaseOwner, input.workerId),
+          eq(executionJobs.leaseOwner, input.claim.workerId),
+          eq(executionJobs.claimCount, input.claim.claimVersion),
+          gt(executionJobs.leaseExpiresAt, now),
         ),
       )
       .returning({ executionId: executionJobs.executionId });
-    return rows.length === 1;
+    return rows.length === 1
+      ? { kind: "owned" as const, leaseExpiresAt: leaseExpiresAt.toISOString() }
+      : { kind: "ownership_lost" as const };
   }
 
-  async finish(input: {
+  async assertOwned(claim: {
     tenantId: string;
     executionId: string;
     workerId: string;
+    claimVersion: number;
+  }) {
+    const now = this.#now();
+    const [row] = await this.#db
+      .select({ leaseExpiresAt: executionJobs.leaseExpiresAt })
+      .from(executionJobs)
+      .where(
+        and(
+          eq(executionJobs.tenantId, claim.tenantId),
+          eq(executionJobs.executionId, claim.executionId),
+          eq(executionJobs.status, "leased"),
+          eq(executionJobs.leaseOwner, claim.workerId),
+          eq(executionJobs.claimCount, claim.claimVersion),
+          gt(executionJobs.leaseExpiresAt, now),
+        ),
+      )
+      .limit(1);
+    return row?.leaseExpiresAt
+      ? { kind: "owned" as const, leaseExpiresAt: row.leaseExpiresAt.toISOString() }
+      : { kind: "ownership_lost" as const };
+  }
+
+  async finish(input: {
+    claim: {
+      tenantId: string;
+      executionId: string;
+      workerId: string;
+      claimVersion: number;
+    };
     status: "completed" | "failed" | "ambiguous";
     safeErrorCode?: string;
-  }): Promise<void> {
+  }) {
     const now = this.#now();
-    await this.#db
+    const rows = await this.#db
       .update(executionJobs)
       .set({
         status: input.status,
@@ -226,11 +264,16 @@ export class PostgresDurableExecutionStore implements DurableAcceptancePort, Dur
       })
       .where(
         and(
-          eq(executionJobs.tenantId, input.tenantId),
-          eq(executionJobs.executionId, input.executionId),
-          eq(executionJobs.leaseOwner, input.workerId),
+          eq(executionJobs.tenantId, input.claim.tenantId),
+          eq(executionJobs.executionId, input.claim.executionId),
+          eq(executionJobs.status, "leased"),
+          eq(executionJobs.leaseOwner, input.claim.workerId),
+          eq(executionJobs.claimCount, input.claim.claimVersion),
+          gt(executionJobs.leaseExpiresAt, now),
         ),
-      );
+      )
+      .returning({ executionId: executionJobs.executionId });
+    return rows.length === 1 ? { kind: "finished" as const } : { kind: "ownership_lost" as const };
   }
 
   #encrypt(input: DurableAcceptanceInput) {
