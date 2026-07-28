@@ -49,3 +49,16 @@ A replay has a new execution ID and `replayOfExecutionId` pointing to the origin
 records `replay.started` and `replay.completed`; completion identifies both executions and whether
 terminal status, output text, and normalized error category matched. The original record is not
 mutated to impersonate the replay.
+
+## Comparison projection
+
+A comparison experiment references an original execution and, when vault evidence is available, a
+linked variant execution. Its versioned definition stores the exact requested configuration
+variation and the fully resolved provider, model, policy, budget, structured-output requirement,
+and other safe execution conditions. It does not store retained input.
+
+The comparison is computed from the two envelopes. Each dimension reports original value, variant
+value, one of `improved`, `worsened`, `unchanged`, `mixed`, or `unavailable`, and a focused
+explanation. Missing usage or cost stays unavailable rather than becoming zero. Provider-route and
+fallback changes are tradeoffs; exact output match is factual and does not imply semantic quality.
+The projection deliberately has no aggregate score or universal winner.

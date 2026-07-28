@@ -9,6 +9,7 @@ import {
 import { DeterministicFakeProvider } from "@reliability-lab/providers";
 import {
   createDatabase,
+  PostgresComparisonExperimentRepository,
   PostgresExecutionRepository,
   PostgresReplayCapsuleStore,
   replayCapsuleAudits,
@@ -62,6 +63,55 @@ describe("PostgresExecutionRepository", () => {
     );
     expect(await repository.eventsAfter("different-tenant", first.executionId, 0)).toBeNull();
     expect(await service.list("different-tenant")).toEqual([]);
+  });
+
+  it("persists comparative replay definitions and reconstructs their evidence", async () => {
+    if (!connection) return;
+    const tenantId = `comparison-${randomUUID()}`;
+    const replayCapsules = new MemoryReplayCapsuleStore();
+    const providers = new MapProviderRegistry([
+      new DeterministicFakeProvider({ id: "fake-primary" }),
+      new DeterministicFakeProvider({ id: "fake-fallback" }),
+    ]);
+    const service = new ExecutionService({
+      repository: new PostgresExecutionRepository(connection.db),
+      comparisons: new PostgresComparisonExperimentRepository(connection.db),
+      replayCapsules,
+      providers,
+    });
+    const original = await service.execute({
+      tenantId,
+      body: {
+        provider: "fake-primary",
+        model: "v1",
+        input: "durable comparison",
+        failureMode: "rate_limit",
+        policy: { maxAttempts: 2, baseBackoffMs: 0, maxBackoffMs: 0, jitterRatio: 0 },
+      },
+    });
+    const comparison = await service.createComparison(tenantId, original.executionId, {
+      policy: {
+        maxAttempts: 1,
+        fallbackProvider: "fake-fallback",
+        fallbackModel: "fallback-v1",
+      },
+    });
+    await comparison.completion;
+
+    const reconstructed = new ExecutionService({
+      repository: new PostgresExecutionRepository(connection.db),
+      comparisons: new PostgresComparisonExperimentRepository(connection.db),
+      replayCapsules,
+      providers,
+    });
+    const view = await reconstructed.getComparison(tenantId, comparison.experiment.experimentId);
+    expect(view).toMatchObject({
+      experiment: { status: "completed", originalExecutionId: original.executionId },
+      variantExecution: { replayOfExecutionId: original.executionId, status: "degraded" },
+    });
+    await expect(
+      reconstructed.getComparison("different-tenant", comparison.experiment.experimentId),
+    ).rejects.toThrow("Comparison experiment not found");
   });
 
   it("encrypts durable capsules, survives service reconstruction, and rotates write keys", async () => {

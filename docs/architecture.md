@@ -16,11 +16,22 @@ projection. Replay first asks the tenant-scoped capsule port for a current capab
 inside the PostgreSQL adapter when replay is actually requested, invokes the normal execution path,
 links the new envelope to the original, and compares normalized outcomes.
 
+Comparative replay also reads through the tenant-scoped vault, but accepts only provider, model,
+policy, and budget variation—not replacement input. It resolves omitted values against original
+conditions, submits the variant through the same execution service, and persists a versioned
+experiment definition. The original and variant remain ordinary execution envelopes with ordinary
+event streams. A pure projection compares them on read; it is not a second event system and does
+not persist a winner or mutable score.
+
 The live machine view uses a tenant-scoped SSE endpoint at the API boundary. It reads ordered events
 after a sequence cursor from the execution repository, backfills persisted history, polls for new
 persisted evidence, sends heartbeat comments, and closes after terminal evidence. The browser uses
 fetch streaming rather than native `EventSource` because the prototype tenant boundary is a request
 header. Core exposes only an event-cursor repository operation and has no SSE or browser concepts.
+
+The comparison page reuses the machine projection twice. Original evidence is recorded history;
+the variant follows its existing execution SSE stream until terminal evidence. Reconstruction
+hydrates the experiment and both envelopes from PostgreSQL, then recomputes the comparison.
 
 ## Replay vault boundary
 
@@ -49,6 +60,9 @@ sent to a provider if required capsule persistence fails.
   Keys and bodies do not appear in logs or spans.
 - **Service to persistence:** every replay-vault query includes tenant and execution identity;
   execution repositories also scope caller-facing reads by tenant.
+- **Comparison persistence:** experiments carry tenant, linked execution IDs, requested overrides,
+  resolved non-sensitive conditions, status, and timestamps. They never contain input, messages,
+  structured schema content, capsule ciphertext, or provider credentials.
 - **Replay storage:** plaintext exists transiently in the API process for execution and
   encryption/decryption. It is not a database column, API response, audit field, log, or span.
 - **Dashboard:** browser requests use a fixed development tenant. Production requires authenticated
@@ -77,3 +91,7 @@ log explains decisions while the execution row is a mutable query projection. Re
 audit/lifecycle operations are transactional inside the vault, but execution-event/projection
 writes are not a transactional outbox. Durable execution remains in the
 [roadmap](roadmap.md).
+
+Variant execution creation and experiment-row creation are also separate operations. The prototype
+persists the experiment before returning `202`, but does not claim atomic cross-repository
+acceptance. Durable execution needs reconciliation plus a transactional or workflow boundary.

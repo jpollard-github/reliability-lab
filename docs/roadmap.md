@@ -63,7 +63,7 @@ This horizon proves that an execution can be represented as an inspectable envel
 
 ### Horizon 1: Replay that can be trusted
 
-**Current state.** Replay survives a restart without turning retained prompts into an ungoverned
+**Established foundation.** Replay survives a restart without turning retained prompts into an ungoverned
 side database.
 
 A replay capsule is durably encrypted, scoped by tenant and execution, written under an explicit retention policy, and represented by a current capability state. Operators can see whether replay data is available, expired, deleted, or unavailable by policy. Deletion and access are auditable. Key versions support read-old/write-current rotation without pretending that local environment keys are a production KMS.
@@ -75,7 +75,7 @@ authenticated actor remain deliberate prototype limitations rather than producti
 
 ### Horizon 2: Watch the machine work
 
-**Current state.** The operator can observe a running execution as actual persisted events occur and
+**Established foundation.** The operator can observe a running execution as actual persisted events occur and
 can replay the recorded event history when the execution is too fast to watch live.
 
 The console visibly projects the active route through request acceptance, provider attempts,
@@ -91,11 +91,18 @@ process exits, a limitation reserved for the durable-execution horizon.
 
 ### Horizon 3: Compare, not merely repeat
 
-**Desired outcome.** An execution or investigation case can be replayed as an experiment.
+**Current state.** An execution or investigation case can be replayed as a controlled,
+tenant-scoped original-versus-variant experiment.
 
-Policy and provider configuration become explicit versioned inputs. An operator can replay under original conditions or choose a controlled variation, then compare terminal outcome, normalized failure, attempts, latency, token usage, estimated cost, structured-output validity, and event decisions. Scenario fixtures make important failure shapes repeatable without production data.
+The operator chooses bounded provider, model, retry, fallback, and budget overrides while retained
+input remains fixed. The service persists the requested variation and fully resolved safe
+conditions, submits the linked variant through the normal execution path, and derives comparison
+dimensions from the two ordinary envelopes. Missing evidence is unavailable rather than zero, and
+the product does not invent a weighted score, semantic judge, or universal winner.
 
-**Completion signal.** The dashboard can answer, “Did this policy or route improve the case, and what tradeoff did it introduce?” rather than only, “Did the same output happen again?”
+The dashboard now meets this horizon's completion signal with guided presets, inherited and
+overridden conditions, side-by-side recorded/live machines, playback on either envelope,
+dimension-level explanations, and links to both execution details.
 
 ### Horizon 4: Execution that survives reality
 
@@ -144,9 +151,9 @@ A reference deployment includes migrations, telemetry, dashboards, backup and re
 The product sequence is:
 
 ```text
-Replay Vault → Live Machine View → Comparative Replay
+Replay Vault → Live Machine View → Comparative Replay → Durable Execution
 ```
 
-The live machine view now turns durable execution evidence into an observable route. The next
-movement is **Horizon 3: Compare, not merely repeat**, using the vault and live evidence projection
-as the foundation for controlled original-versus-variant comparison.
+Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
+The next movement is **Horizon 4: Execution that survives reality**, strengthening acceptance,
+continuation, and cross-repository consistency without weakening the evidence model.

@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { ReplayCapability } from "@reliability-lab/contracts";
+import type { ExecutionEnvelope, ReplayCapability } from "@reliability-lab/contracts";
+import { ComparisonBuilder } from "@/components/comparison-builder";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export function ReplayButton({
   executionId,
+  execution,
   capability: initialCapability,
 }: {
   executionId: string;
+  execution: ExecutionEnvelope;
   capability: ReplayCapability;
 }) {
   const router = useRouter();
@@ -92,6 +95,7 @@ export function ReplayButton({
   return (
     <div className="replay-control">
       <div className="replay-actions">
+        <ComparisonBuilder execution={execution} capability={capability} />
         <button
           type="button"
           onClick={() => void replay()}

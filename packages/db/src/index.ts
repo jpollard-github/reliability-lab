@@ -2,13 +2,15 @@ import { and, asc, desc, eq, gt } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import type {
+  ComparisonExperiment,
   ExecutionEnvelope,
   ExecutionEvent,
   ExecutionId,
   TenantId,
 } from "@reliability-lab/contracts";
-import type { ExecutionRepository } from "@reliability-lab/core";
+import type { ComparisonExperimentRepository, ExecutionRepository } from "@reliability-lab/core";
 import {
+  comparisonExperiments,
   executionAttempts,
   executionEvents,
   executions,
@@ -18,9 +20,10 @@ import {
 } from "./schema.js";
 
 export * from "./replay-capsules.js";
-export { replayCapsuleAudits, replayCapsules } from "./schema.js";
+export { comparisonExperiments, replayCapsuleAudits, replayCapsules } from "./schema.js";
 
 type ReliabilityDatabase = NodePgDatabase<{
+  comparisonExperiments: typeof comparisonExperiments;
   executions: typeof executions;
   executionAttempts: typeof executionAttempts;
   executionEvents: typeof executionEvents;
@@ -34,6 +37,7 @@ export function createDatabase(databaseUrl: string) {
   const db = drizzle(pool, {
     schema: {
       executions,
+      comparisonExperiments,
       executionAttempts,
       executionEvents,
       idempotencyRecords,
@@ -202,6 +206,62 @@ export class PostgresExecutionRepository implements ExecutionRepository {
   }
 }
 
+export class PostgresComparisonExperimentRepository implements ComparisonExperimentRepository {
+  readonly #db: ReliabilityDatabase;
+
+  constructor(db: ReliabilityDatabase) {
+    this.#db = db;
+  }
+
+  async create(experiment: ComparisonExperiment) {
+    await this.#db.insert(comparisonExperiments).values(toComparisonRow(experiment));
+  }
+
+  async update(experiment: ComparisonExperiment) {
+    await this.#db
+      .update(comparisonExperiments)
+      .set({
+        variantExecutionId: experiment.variantExecutionId ?? null,
+        status: experiment.status,
+        unavailableReason: experiment.unavailableReason ?? null,
+        updatedAt: new Date(experiment.updatedAt),
+      })
+      .where(
+        and(
+          eq(comparisonExperiments.tenantId, experiment.tenantId),
+          eq(comparisonExperiments.id, experiment.experimentId),
+        ),
+      );
+  }
+
+  async findById(tenantId: TenantId, experimentId: string) {
+    const [row] = await this.#db
+      .select()
+      .from(comparisonExperiments)
+      .where(
+        and(
+          eq(comparisonExperiments.tenantId, tenantId),
+          eq(comparisonExperiments.id, experimentId),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return {
+      schemaVersion: 1 as const,
+      experimentId: row.id,
+      tenantId: row.tenantId,
+      originalExecutionId: row.originalExecutionId,
+      status: row.status,
+      requestedVariation: row.requestedVariation,
+      resolvedVariant: row.resolvedVariant,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+      ...(row.variantExecutionId ? { variantExecutionId: row.variantExecutionId } : {}),
+      ...(row.unavailableReason ? { unavailableReason: row.unavailableReason } : {}),
+    };
+  }
+}
+
 function toExecutionRow(execution: ExecutionEnvelope): typeof executions.$inferInsert {
   return {
     id: execution.executionId,
@@ -249,5 +309,22 @@ function toEventRow(event: ExecutionEvent): typeof executionEvents.$inferInsert 
     type: event.type,
     occurredAt: new Date(event.occurredAt),
     data: event,
+  };
+}
+
+function toComparisonRow(
+  experiment: ComparisonExperiment,
+): typeof comparisonExperiments.$inferInsert {
+  return {
+    id: experiment.experimentId,
+    tenantId: experiment.tenantId,
+    originalExecutionId: experiment.originalExecutionId,
+    variantExecutionId: experiment.variantExecutionId,
+    status: experiment.status,
+    requestedVariation: experiment.requestedVariation,
+    resolvedVariant: experiment.resolvedVariant,
+    unavailableReason: experiment.unavailableReason,
+    createdAt: new Date(experiment.createdAt),
+    updatedAt: new Date(experiment.updatedAt),
   };
 }

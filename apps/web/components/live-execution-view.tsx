@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExecutionEnvelope, ExecutionEvent } from "@reliability-lab/contracts";
 import { EventTimeline } from "@/components/event-timeline";
@@ -15,10 +15,25 @@ type StreamState = "connecting" | "live" | "reconnecting" | "complete" | "failed
 type PlaybackSpeed = (typeof playbackSpeeds)[number];
 
 export function LiveExecutionView({ initialExecution }: { initialExecution: ExecutionEnvelope }) {
+  return <ExecutionMachineView initialExecution={initialExecution} />;
+}
+
+export function ExecutionMachineView({
+  initialExecution,
+  title = "Live execution machine",
+  followLive = true,
+}: {
+  initialExecution: ExecutionEnvelope;
+  title?: string;
+  followLive?: boolean;
+}) {
   const router = useRouter();
+  const headingId = useId();
   const [execution, setExecution] = useState(initialExecution);
   const [events, setEvents] = useState(() => mergeEvents([], initialExecution.events));
-  const [streamState, setStreamState] = useState<StreamState>("connecting");
+  const [streamState, setStreamState] = useState<StreamState>(
+    followLive ? "connecting" : "complete",
+  );
   const [playbackActive, setPlaybackActive] = useState(false);
   const [playbackCount, setPlaybackCount] = useState(initialExecution.events.length);
   const [playing, setPlaying] = useState(false);
@@ -51,6 +66,7 @@ export function LiveExecutionView({ initialExecution }: { initialExecution: Exec
   }, [events.length, playbackActive, playbackCount, playing, speed]);
 
   useEffect(() => {
+    if (!followLive) return;
     const controller = new AbortController();
     let stopped = false;
     let connectedOnce = false;
@@ -142,7 +158,7 @@ export function LiveExecutionView({ initialExecution }: { initialExecution: Exec
       stopped = true;
       controller.abort();
     };
-  }, [initialExecution.executionId, router]);
+  }, [followLive, initialExecution.executionId, router]);
 
   const elapsedMs =
     execution.durationMs ??
@@ -164,17 +180,17 @@ export function LiveExecutionView({ initialExecution }: { initialExecution: Exec
   }
 
   return (
-    <section className="panel live-machine" aria-labelledby="live-machine-heading">
+    <section className="panel live-machine" aria-labelledby={headingId}>
       <div className="panel-heading live-machine-heading">
         <div>
           <p className="eyebrow">Persisted event stream</p>
-          <h2 id="live-machine-heading">Live execution machine</h2>
+          <h2 id={headingId}>{title}</h2>
           <p>Actual state follows append-only evidence. Playback changes presentation time only.</p>
         </div>
         <div className="live-status">
           <StatusBadge status={actualStatus} />
           <span className={`stream-state stream-${streamState}`} aria-live="polite">
-            {streamLabel(streamState)}
+            {followLive ? streamLabel(streamState) : "Recorded evidence"}
           </span>
         </div>
       </div>

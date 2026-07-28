@@ -12,12 +12,15 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type {
+  ComparisonExperimentStatus,
   ExecutionAttempt,
   ExecutionBudget,
   ExecutionEvent,
   ExecutionPolicy,
   ExecutionStatus,
   ProviderError,
+  ReplayVariation,
+  ResolvedReplayConfiguration,
 } from "@reliability-lab/contracts";
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -97,6 +100,29 @@ export const idempotencyRecords = pgTable(
     reservedBytes: bigint("reserved_bytes", { mode: "number" }).notNull().default(0),
   },
   (table) => [primaryKey({ columns: [table.tenantId, table.keyHash] })],
+);
+
+export const comparisonExperiments = pgTable(
+  "comparison_experiments",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    originalExecutionId: text("original_execution_id")
+      .notNull()
+      .references(() => executions.id),
+    variantExecutionId: text("variant_execution_id").references(() => executions.id),
+    status: text("status").$type<ComparisonExperimentStatus>().notNull(),
+    requestedVariation: jsonb("requested_variation").$type<ReplayVariation>().notNull(),
+    resolvedVariant: jsonb("resolved_variant").$type<ResolvedReplayConfiguration>().notNull(),
+    unavailableReason: text("unavailable_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex("comparison_experiments_tenant_id_id_idx").on(table.tenantId, table.id),
+    index("comparison_experiments_original_idx").on(table.tenantId, table.originalExecutionId),
+    index("comparison_experiments_variant_idx").on(table.tenantId, table.variantExecutionId),
+  ],
 );
 
 export const replayCapsules = pgTable(

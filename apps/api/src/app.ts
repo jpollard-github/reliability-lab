@@ -5,12 +5,15 @@ import { Type, type Static } from "@sinclair/typebox";
 import Fastify, { type FastifyBaseLogger } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
+  CreateComparisonBodySchema,
   CreateExecutionBodySchema,
   ExecutionStatusSchema,
   ReplayCapabilityStateSchema,
+  type ComparisonView,
   type ExecutionEnvelope,
 } from "@reliability-lab/contracts";
 import {
+  ComparisonNotFoundError,
   ExecutionNotFoundError,
   IdempotencyConflictError,
   RateLimitRejectedError,
@@ -32,6 +35,9 @@ const TenantOnlyHeadersSchema = Type.Object({
 });
 const ExecutionParamsSchema = Type.Object({
   executionId: Type.String({ minLength: 1 }),
+});
+const ComparisonParamsSchema = Type.Object({
+  experimentId: Type.String({ minLength: 1 }),
 });
 const ExecutionEventQuerySchema = Type.Object({
   after: Type.Optional(Type.Integer({ minimum: 0 })),
@@ -127,6 +133,45 @@ const DeleteReplayResponseSchema = Type.Object({
   executionId: Type.String(),
   deleted: Type.Boolean(),
   replayCapability: ReplayCapabilitySchema,
+});
+const ComparisonExperimentSchema = Type.Object(
+  {
+    schemaVersion: Type.Literal(1),
+    experimentId: Type.String(),
+    tenantId: Type.String(),
+    originalExecutionId: Type.String(),
+    variantExecutionId: Type.Optional(Type.String()),
+    status: Type.Union([
+      Type.Literal("running"),
+      Type.Literal("completed"),
+      Type.Literal("unavailable"),
+    ]),
+    requestedVariation: Type.Object({}, { additionalProperties: true }),
+    resolvedVariant: Type.Object({}, { additionalProperties: true }),
+    createdAt: Type.String(),
+    updatedAt: Type.String(),
+    unavailableReason: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+const ComparisonSubmissionResponseSchema = Type.Object({
+  experiment: ComparisonExperimentSchema,
+  links: Type.Object({
+    self: Type.String(),
+    originalExecution: Type.String(),
+    variantExecution: Type.Optional(Type.String()),
+  }),
+});
+const ComparisonViewSchema = Type.Unsafe<ComparisonView>({
+  type: "object",
+  required: ["experiment", "originalExecution", "projection"],
+  additionalProperties: false,
+  properties: {
+    experiment: ComparisonExperimentSchema,
+    originalExecution: ExecutionEnvelopeSchema,
+    variantExecution: ExecutionEnvelopeSchema,
+    projection: { type: "object", additionalProperties: true },
+  },
 });
 
 interface AppOptions {
@@ -438,6 +483,68 @@ export async function buildApp(options: AppOptions) {
     },
   );
 
+  app.post(
+    "/v1/executions/:executionId/comparisons",
+    {
+      schema: {
+        tags: ["comparisons"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: ExecutionParamsSchema,
+        body: CreateComparisonBodySchema,
+        response: {
+          202: ComparisonSubmissionResponseSchema,
+          400: ErrorSchema,
+          404: ErrorSchema,
+          409: ComparisonSubmissionResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const submission = await options.service.createComparison(
+        request.headers["x-tenant-id"],
+        request.params.executionId,
+        request.body.variation,
+      );
+      if (submission.completion) {
+        void submission.completion.catch(() => {
+          app.log.error(
+            { experimentId: submission.experiment.experimentId },
+            "comparison variant continuation could not persist completion",
+          );
+        });
+      }
+      const response = {
+        experiment: submission.experiment,
+        links: {
+          self: `/v1/comparisons/${submission.experiment.experimentId}`,
+          originalExecution: `/v1/executions/${submission.experiment.originalExecutionId}`,
+          ...(submission.experiment.variantExecutionId
+            ? {
+                variantExecution: `/v1/executions/${submission.experiment.variantExecutionId}`,
+              }
+            : {}),
+        },
+      };
+      return reply.code(submission.experiment.status === "unavailable" ? 409 : 202).send(response);
+    },
+  );
+
+  app.get(
+    "/v1/comparisons/:experimentId",
+    {
+      schema: {
+        tags: ["comparisons"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: ComparisonParamsSchema,
+        response: { 200: ComparisonViewSchema, 404: ErrorSchema },
+      },
+    },
+    async (request) =>
+      options.service.getComparison(request.headers["x-tenant-id"], request.params.experimentId),
+  );
+
   app.setErrorHandler((error, request, reply) => {
     const mapped = mapError(error);
     request.log.warn({ err: error, statusCode: mapped.statusCode }, mapped.message);
@@ -460,7 +567,7 @@ function submissionResponse(execution: ExecutionEnvelope): Static<typeof Submiss
 }
 
 function mapError(error: unknown) {
-  if (error instanceof ExecutionNotFoundError) {
+  if (error instanceof ExecutionNotFoundError || error instanceof ComparisonNotFoundError) {
     return { error: "not_found", message: error.message, statusCode: 404 };
   }
   if (error instanceof IdempotencyConflictError) {

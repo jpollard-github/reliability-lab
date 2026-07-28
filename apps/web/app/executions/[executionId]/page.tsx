@@ -42,7 +42,11 @@ export default async function ExecutionDetailPage({
             ) : null}
           </div>
         </div>
-        <ReplayButton executionId={execution.executionId} capability={execution.replayCapability} />
+        <ReplayButton
+          executionId={execution.executionId}
+          execution={execution}
+          capability={execution.replayCapability}
+        />
       </section>
       <LiveExecutionView
         key={`${execution.executionId}-${execution.status}-${execution.updatedAt}`}

@@ -27,7 +27,10 @@ Implemented now:
   metadata-only lifecycle audit, and read-old/write-current key versions
 - OpenTelemetry spans with console export by default and optional OTLP export
 - Next.js operator console with a live evidence-driven machine view, incremental event timeline,
-  recorded-history playback, replay control, and deterministic development scenarios
+  recorded-history playback, replay control, guided comparative replay variants, side-by-side
+  machines, and dimension-level evidence comparisons
+- tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
+  overrides, resolved non-sensitive conditions, linked variant executions, and read-time projections
 - guarded repository and working-file export tools
 
 Not implemented as production infrastructure: managed KMS/envelope encryption, authenticated replay
@@ -50,6 +53,8 @@ flowchart LR
   Service --> Capsule[Replay capsule port]
   Capsule --> Vault[(Encrypted PostgreSQL vault)]
   Capsule --> CapsuleMemory[Process-local memory]
+  Service --> Experiment[Comparison experiment port]
+  Experiment --> PG
   Service --> OTel[OpenTelemetry]
   API --> Pino[Redacted structured logs]
   Web[Next.js operator console] --> API
@@ -81,6 +86,8 @@ outcome-based [`docs/roadmap.md`](docs/roadmap.md) for what comes next.
    history, sends heartbeats while following, and closes after terminal evidence.
 9. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
    disable replay. Replay creates a linked execution and records replay start/completion events.
+10. Comparative replay resolves a bounded provider/model/policy/budget variation against the
+    retained request, submits it through the same execution path, and compares the two envelopes.
 
 ## Repository layout
 
@@ -168,6 +175,21 @@ curl -sS -X POST http://localhost:4000/v1/executions/EXECUTION_ID/replay \
   -H 'x-tenant-id: demo-tenant'
 ```
 
+Comparative replay with fewer primary attempts and immediate fallback:
+
+```bash
+curl -sS -X POST http://localhost:4000/v1/executions/EXECUTION_ID/comparisons \
+  -H 'content-type: application/json' -H 'x-tenant-id: demo-tenant' \
+  -d '{"variation":{"policy":{"maxAttempts":1,"fallbackProvider":"fake-fallback","fallbackModel":"deterministic-v1"}}}'
+
+curl -sS http://localhost:4000/v1/comparisons/EXPERIMENT_ID \
+  -H 'x-tenant-id: demo-tenant'
+```
+
+Comparison requests cannot replace input or messages. Omitted controls inherit original conditions;
+supported `null` values explicitly remove fallback or cost limits, and a no-op requires
+`reproducibilityCheck: true`.
+
 Delete retained replay data idempotently:
 
 ```bash
@@ -227,10 +249,12 @@ or full envelope encryption.
 Unit tests inject clocks, IDs, randomness, provider responses, and repositories; they do not require
 real delays. They cover encryption, nonces, authenticated context, expiry, deletion, tenant scope,
 key configuration, and live-retention failure. API and unit tests cover asynchronous acceptance,
-typed event ordering, SSE backfill/cursors/terminal close, and the pure machine projection.
-PostgreSQL integration proves ciphertext-only persistence, audit metadata, key rotation, tenant
-isolation, and replay after service reconstruction. Playwright observes a real retry while it is
-running and preserves replay deletion coverage. There are deliberately no broad snapshots.
+typed event ordering, SSE backfill/cursors/terminal close, machine projection, variation resolution,
+and conservative dimension-level comparison. PostgreSQL integration proves ciphertext-only
+persistence, audit metadata, key rotation, tenant isolation, replay after service reconstruction,
+and durable comparison definitions. Playwright observes a real retry while it is running, preserves
+replay deletion coverage, and exercises the original-to-variant comparison flow. There are
+deliberately no broad snapshots.
 
 ## Observability
 
@@ -264,6 +288,9 @@ The environment keyring is a prototype, not managed production key infrastructur
   state current for the small prototype but needs batching or a join before large pagination.
 - Capsule lifecycle/audit mutations are transactional inside the vault, but execution projection
   updates are a separate consistency boundary.
+- Variant acceptance and experiment persistence cross two repository operations. A persistence
+  failure after variant acceptance can leave a linked execution without an experiment row until
+  durable orchestration introduces a stronger boundary.
 
 ## Production-hardening direction
 
@@ -273,7 +300,8 @@ The environment keyring is a prototype, not managed production key infrastructur
   cancellation, leases, and recovery.
 - **Policy controls:** Redis-backed distributed rate limits and circuit state, model/provider health,
   cost budgets, and explicit policy versions.
-- **Replay experiments:** versioned policy/provider variants and normalized replay comparison.
+- **Replay experiments:** batch scenarios, saved policy versions, and aggregate analysis beyond the
+  current single-case, dimension-level comparison.
 - **Replay security:** managed envelope keys/KMS, authenticated actors, physical purge/backup
   semantics, residency controls, and isolated replay credentials.
 - **Observability:** sampled OTLP pipelines, metrics, baggage policy, log/trace joining, and SLOs.

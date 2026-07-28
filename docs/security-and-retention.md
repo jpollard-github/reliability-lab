@@ -52,6 +52,21 @@ policy metadata, not prompt content. Capsule bodies, ciphertext, nonces, tags, a
 from API contracts. `.env*` except `.env.example`, logs, exports, and local volumes are ignored or
 refused by export tooling.
 
+## Comparative replay
+
+The comparison API cannot accept messages, input, or a replacement prompt. It can only request
+bounded provider/model, retry/fallback, and budget changes. Omitted values inherit; explicit `null`
+removes supported fallback or cost settings. Provider identifiers are checked against the
+configured registry, numeric bounds are validated, and unchanged conditions require an explicit
+reproducibility check.
+
+Experiments persist tenant identity, linked execution IDs, requested variation, resolved
+non-sensitive conditions, status, and timestamps. The replay vault remains the only source of
+retained request material. API and UI responses expose the experiment definition and normalized
+envelopes, never the capsule, prompt, messages, structured schema content, or cryptographic fields.
+Deleting or expiring a capsule prevents creation of a new variant and produces an explicit
+unavailable experiment; existing normalized execution evidence remains.
+
 ## Remaining risks
 
 Plaintext must exist transiently to call a provider and to encrypt or replay a capsule, so host and

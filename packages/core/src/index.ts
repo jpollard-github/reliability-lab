@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Ajv, type ErrorObject } from "ajv/dist/ajv.js";
 import type {
+  ComparisonExperiment,
+  ComparisonView,
   CreateExecutionBody,
   ExecutionEnvelope,
   ExecutionEvent,
@@ -10,9 +12,17 @@ import type {
   ProviderRequest,
   ReplayCapability,
   ReplayResult,
+  ReplayVariation,
   TenantId,
 } from "@reliability-lab/contracts";
 import type { LlmProvider } from "@reliability-lab/providers";
+import {
+  inferSafeOriginalConfiguration,
+  projectComparison,
+  resolveReplayVariation,
+} from "./comparison.js";
+
+export * from "./comparison.js";
 
 export interface Clock {
   now(): Date;
@@ -25,6 +35,7 @@ export interface RandomSource {
 
 export interface IdSource {
   executionId(): ExecutionId;
+  experimentId(): string;
   eventId(): string;
   traceId(): string;
 }
@@ -57,6 +68,12 @@ export interface ExecutionRepository {
     requestHash: string,
     executionId: ExecutionId,
   ): Promise<void>;
+}
+
+export interface ComparisonExperimentRepository {
+  create(experiment: ComparisonExperiment): Promise<void>;
+  update(experiment: ComparisonExperiment): Promise<void>;
+  findById(tenantId: TenantId, experimentId: string): Promise<ComparisonExperiment | null>;
 }
 
 export interface ReplayCapsule {
@@ -111,8 +128,15 @@ export interface ExecutionSubmission {
   completion: Promise<ExecutionEnvelope>;
 }
 
+export interface ComparisonSubmission {
+  experiment: ComparisonExperiment;
+  variantExecution?: ExecutionEnvelope;
+  completion?: Promise<ExecutionEnvelope>;
+}
+
 export interface ExecutionServiceOptions {
   repository: ExecutionRepository;
+  comparisons?: ComparisonExperimentRepository;
   replayCapsules: ReplayCapsuleStore;
   providers: ProviderRegistry;
   clock?: Clock;
@@ -142,6 +166,7 @@ const systemClock: Clock = {
 
 const systemIds: IdSource = {
   executionId: randomUUID,
+  experimentId: randomUUID,
   eventId: randomUUID,
   traceId: () => randomBytes(16).toString("hex"),
 };
@@ -152,6 +177,7 @@ const noOpTracer: ExecutionTracer = {
 
 export class ExecutionService {
   readonly #repository: ExecutionRepository;
+  readonly #comparisons: ComparisonExperimentRepository;
   readonly #replayCapsules: ReplayCapsuleStore;
   readonly #providers: ProviderRegistry;
   readonly #clock: Clock;
@@ -170,6 +196,7 @@ export class ExecutionService {
 
   constructor(options: ExecutionServiceOptions) {
     this.#repository = options.repository;
+    this.#comparisons = options.comparisons ?? new MemoryComparisonExperimentRepository();
     this.#replayCapsules = options.replayCapsules;
     this.#providers = options.providers;
     this.#clock = options.clock ?? systemClock;
@@ -444,6 +471,103 @@ export class ExecutionService {
     });
     await this.#repository.update(replayExecution);
     return { replayable: true, originalExecutionId, replayExecution, outcomeMatches };
+  }
+
+  async createComparison(
+    tenantId: TenantId,
+    originalExecutionId: ExecutionId,
+    variation: ReplayVariation,
+  ): Promise<ComparisonSubmission> {
+    const original = await this.#repository.findById(tenantId, originalExecutionId);
+    if (!original) throw new ExecutionNotFoundError();
+    const createdAt = this.#clock.now().toISOString();
+    const capsuleResult: ReplayCapsuleReadResult =
+      original.replayCapability.state === "retention_disabled"
+        ? { available: false, capability: original.replayCapability }
+        : await this.#replayCapsules.getForReplay(tenantId, originalExecutionId);
+    const safeOriginal = inferSafeOriginalConfiguration(original);
+    const resolvedVariant = resolveReplayVariation({
+      original,
+      variation,
+      structuredOutputRequired: capsuleResult.available
+        ? capsuleResult.capsule.providerRequest.structuredOutputSchema !== undefined
+        : safeOriginal.structuredOutputRequired,
+      ...(capsuleResult.available && capsuleResult.capsule.providerRequest.failureMode
+        ? { failureMode: capsuleResult.capsule.providerRequest.failureMode }
+        : {}),
+      providerAvailable: (provider) => this.#providers.resolve(provider) !== null,
+    });
+    const experiment: ComparisonExperiment = {
+      schemaVersion: 1,
+      experimentId: this.#ids.experimentId(),
+      tenantId,
+      originalExecutionId,
+      status: capsuleResult.available ? "running" : "unavailable",
+      requestedVariation: structuredClone(variation),
+      resolvedVariant,
+      createdAt,
+      updatedAt: createdAt,
+      ...(!capsuleResult.available ? { unavailableReason: capsuleResult.capability.reason } : {}),
+    };
+
+    if (!capsuleResult.available) {
+      this.#setCapability(original, capsuleResult.capability);
+      await this.#repository.update(original);
+      await this.#comparisons.create(experiment);
+      return { experiment: structuredClone(experiment) };
+    }
+
+    const request = capsuleResult.capsule.providerRequest;
+    const submission = await this.submit({
+      tenantId,
+      replayOfExecutionId: originalExecutionId,
+      body: {
+        provider: resolvedVariant.provider,
+        model: resolvedVariant.model,
+        ...(request.messages ? { messages: request.messages } : {}),
+        ...(request.input ? { input: request.input } : {}),
+        ...(request.structuredOutputSchema
+          ? { structuredOutputSchema: request.structuredOutputSchema }
+          : {}),
+        ...(request.failureMode ? { failureMode: request.failureMode } : {}),
+        policy: resolvedVariant.policy,
+        budget: resolvedVariant.budget,
+      },
+    });
+    experiment.variantExecutionId = submission.execution.executionId;
+    await this.#comparisons.create(experiment);
+    const completion = submission.completion.then(async (execution) => {
+      experiment.status = "completed";
+      experiment.updatedAt = this.#clock.now().toISOString();
+      await this.#comparisons.update(experiment);
+      return execution;
+    });
+    return {
+      experiment: structuredClone(experiment),
+      variantExecution: submission.execution,
+      completion,
+    };
+  }
+
+  async getComparison(tenantId: TenantId, experimentId: string): Promise<ComparisonView> {
+    const experiment = await this.#comparisons.findById(tenantId, experimentId);
+    if (!experiment) throw new ComparisonNotFoundError();
+    const original = await this.#repository.findById(tenantId, experiment.originalExecutionId);
+    if (!original) throw new ExecutionNotFoundError();
+    const variant = experiment.variantExecutionId
+      ? await this.#repository.findById(tenantId, experiment.variantExecutionId)
+      : null;
+    if (variant && experiment.status === "running" && isTerminalStatus(variant.status)) {
+      experiment.status = "completed";
+      experiment.updatedAt = this.#clock.now().toISOString();
+      await this.#comparisons.update(experiment);
+    }
+    return {
+      experiment,
+      originalExecution: await this.#withCurrentCapability(original),
+      ...(variant ? { variantExecution: await this.#withCurrentCapability(variant) } : {}),
+      projection: projectComparison(original, variant ?? undefined),
+    };
   }
 
   async get(tenantId: TenantId, executionId: ExecutionId): Promise<ExecutionEnvelope> {
@@ -853,6 +977,23 @@ export class MemoryExecutionRepository implements ExecutionRepository {
   }
 }
 
+export class MemoryComparisonExperimentRepository implements ComparisonExperimentRepository {
+  readonly #experiments = new Map<string, ComparisonExperiment>();
+
+  async create(experiment: ComparisonExperiment) {
+    this.#experiments.set(experiment.experimentId, structuredClone(experiment));
+  }
+
+  async update(experiment: ComparisonExperiment) {
+    this.#experiments.set(experiment.experimentId, structuredClone(experiment));
+  }
+
+  async findById(tenantId: TenantId, experimentId: string) {
+    const experiment = this.#experiments.get(experimentId);
+    return experiment?.tenantId === tenantId ? structuredClone(experiment) : null;
+  }
+}
+
 export class MemoryReplayCapsuleStore implements ReplayCapsuleStore {
   readonly #capsules = new Map<
     string,
@@ -1038,6 +1179,11 @@ export class ExecutionNotFoundError extends Error {
     super("Execution not found");
   }
 }
+export class ComparisonNotFoundError extends Error {
+  constructor() {
+    super("Comparison experiment not found");
+  }
+}
 
 export function hashCanonical(value: unknown): string {
   return createHash("sha256").update(stableStringify(value)).digest("hex");
@@ -1053,4 +1199,8 @@ function stableStringify(value: unknown): string {
       .join(",")}}`;
   }
   return JSON.stringify(value) ?? "undefined";
+}
+
+function isTerminalStatus(status: ExecutionEnvelope["status"]): boolean {
+  return ["succeeded", "degraded", "failed", "cancelled"].includes(status);
 }

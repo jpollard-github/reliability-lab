@@ -266,3 +266,110 @@ export type ReplayResult =
       reason: string;
       capability: ReplayCapability;
     };
+
+export const ReplayVariationPolicySchema = Type.Object(
+  {
+    maxAttempts: Type.Optional(Type.Integer({ minimum: 1, maximum: 5 })),
+    baseBackoffMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 30_000 })),
+    maxBackoffMs: Type.Optional(Type.Integer({ minimum: 0, maximum: 60_000 })),
+    jitterRatio: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+    fallbackProvider: Type.Optional(
+      Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()]),
+    ),
+    fallbackModel: Type.Optional(
+      Type.Union([Type.String({ minLength: 1, maxLength: 256 }), Type.Null()]),
+    ),
+  },
+  { additionalProperties: false },
+);
+export type ReplayVariationPolicy = Static<typeof ReplayVariationPolicySchema>;
+
+export const ReplayVariationBudgetSchema = Type.Object(
+  {
+    maxLatencyMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 300_000 })),
+    maxCostUsd: Type.Optional(Type.Union([Type.Number({ minimum: 0 }), Type.Null()])),
+  },
+  { additionalProperties: false },
+);
+export type ReplayVariationBudget = Static<typeof ReplayVariationBudgetSchema>;
+
+export const ReplayVariationSchema = Type.Object(
+  {
+    provider: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
+    model: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    policy: Type.Optional(ReplayVariationPolicySchema),
+    budget: Type.Optional(ReplayVariationBudgetSchema),
+    reproducibilityCheck: Type.Optional(Type.Boolean({ default: false })),
+  },
+  { additionalProperties: false },
+);
+export type ReplayVariation = Static<typeof ReplayVariationSchema>;
+
+export const CreateComparisonBodySchema = Type.Object(
+  { variation: ReplayVariationSchema },
+  { additionalProperties: false },
+);
+export type CreateComparisonBody = Static<typeof CreateComparisonBodySchema>;
+
+export const ComparisonExperimentStatusSchema = Type.Union([
+  Type.Literal("running"),
+  Type.Literal("completed"),
+  Type.Literal("unavailable"),
+]);
+export type ComparisonExperimentStatus = Static<typeof ComparisonExperimentStatusSchema>;
+
+export interface ResolvedReplayConfiguration {
+  provider: string;
+  model: string;
+  policy: ExecutionPolicy;
+  budget: ExecutionBudget;
+  structuredOutputRequired: boolean;
+  failureMode?: FailureMode;
+}
+
+export interface ComparisonExperiment {
+  schemaVersion: 1;
+  experimentId: string;
+  tenantId: TenantId;
+  originalExecutionId: ExecutionId;
+  variantExecutionId?: ExecutionId;
+  status: ComparisonExperimentStatus;
+  requestedVariation: ReplayVariation;
+  resolvedVariant: ResolvedReplayConfiguration;
+  createdAt: string;
+  updatedAt: string;
+  unavailableReason?: string;
+}
+
+export const ComparisonChangeSchema = Type.Union([
+  Type.Literal("improved"),
+  Type.Literal("worsened"),
+  Type.Literal("unchanged"),
+  Type.Literal("mixed"),
+  Type.Literal("unavailable"),
+]);
+export type ComparisonChange = Static<typeof ComparisonChangeSchema>;
+
+export type ComparisonValue = string | number | boolean | null;
+
+export interface ComparisonDimension {
+  key: string;
+  label: string;
+  original: ComparisonValue;
+  variant: ComparisonValue;
+  change: ComparisonChange;
+  explanation: string;
+}
+
+export interface ComparisonProjection {
+  schemaVersion: 1;
+  summary: string;
+  dimensions: ComparisonDimension[];
+}
+
+export interface ComparisonView {
+  experiment: ComparisonExperiment;
+  originalExecution: ExecutionEnvelope;
+  variantExecution?: ExecutionEnvelope;
+  projection: ComparisonProjection;
+}

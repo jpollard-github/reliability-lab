@@ -18,11 +18,16 @@ export class FakeClock {
 
 export class SequenceIds {
   #execution = 0;
+  #experiment = 0;
   #event = 0;
   #trace = 0;
   executionId() {
     this.#execution += 1;
     return `execution-${this.#execution}`;
+  }
+  experimentId() {
+    this.#experiment += 1;
+    return `experiment-${this.#experiment}`;
   }
   eventId() {
     this.#event += 1;

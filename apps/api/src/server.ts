@@ -2,13 +2,16 @@ import { createClient, type RedisClientType } from "redis";
 import {
   ExecutionService,
   MapProviderRegistry,
+  MemoryComparisonExperimentRepository,
   MemoryExecutionRepository,
   MemoryReplayCapsuleStore,
+  type ComparisonExperimentRepository,
   type ExecutionRepository,
   type ReplayCapsuleStore,
 } from "@reliability-lab/core";
 import {
   createDatabase,
+  PostgresComparisonExperimentRepository,
   PostgresExecutionRepository,
   PostgresReplayCapsuleStore,
 } from "@reliability-lab/db";
@@ -50,11 +53,13 @@ let closeDatabase: (() => Promise<void>) | undefined;
 let databasePool: ReturnType<typeof createDatabase>["pool"] | undefined;
 let database: ReturnType<typeof createDatabase>["db"] | undefined;
 let repository: ExecutionRepository = new MemoryExecutionRepository();
+let comparisons: ComparisonExperimentRepository = new MemoryComparisonExperimentRepository();
 if (process.env.DATABASE_URL) {
   const { db, pool } = createDatabase(process.env.DATABASE_URL);
   database = db;
   databasePool = pool;
   repository = new PostgresExecutionRepository(db);
+  comparisons = new PostgresComparisonExperimentRepository(db);
   closeDatabase = async () => pool.end();
 }
 
@@ -79,6 +84,7 @@ if (process.env.REDIS_URL) {
 
 const service = new ExecutionService({
   repository,
+  comparisons,
   replayCapsules,
   providers: new MapProviderRegistry(providers),
   tracer: new OpenTelemetryExecutionTracer(),
@@ -101,6 +107,7 @@ const app = await buildApp({
         if (replayConfig.storeMode === "postgres") {
           await databasePool.query("select 1 from replay_capsules limit 0");
         }
+        await databasePool.query("select 1 from comparison_experiments limit 0");
       } catch {
         checks.repository = "postgres:unavailable";
         if (replayConfig.storeMode === "postgres") {
