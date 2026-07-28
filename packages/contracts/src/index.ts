@@ -167,7 +167,17 @@ export type ExecutionEvent =
   | (EventBase & {
       type: "provider.response_received";
       attemptNumber: number;
+      provider: string;
+      model: string;
       latencyMs: number;
+    })
+  | (EventBase & {
+      type: "attempt.failed";
+      attemptNumber: number;
+      provider: string;
+      model: string;
+      latencyMs: number;
+      error: ProviderError;
     })
   | (EventBase & {
       type: "retry.scheduled";
@@ -176,8 +186,14 @@ export type ExecutionEvent =
       reason: string;
     })
   | (EventBase & { type: "structured_output.rejected"; attemptNumber: number; errors: string[] })
+  | (EventBase & { type: "structured_output.validated"; attemptNumber: number })
   | (EventBase & { type: "fallback.selected"; provider: string; model: string; reason: string })
-  | (EventBase & { type: "budget.exceeded"; budget: "latency" | "cost"; limit: number })
+  | (EventBase & {
+      type: "budget.exceeded";
+      budget: "latency" | "cost";
+      limit: number;
+      observed: number;
+    })
   | (EventBase & { type: "circuit.opened"; provider: string })
   | (EventBase & { type: "circuit.rejected"; provider: string })
   | (EventBase & { type: "execution.succeeded"; status: "succeeded" | "degraded" })

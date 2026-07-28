@@ -1,12 +1,12 @@
 # Reliability Lab
 
-Reliability Lab is a serious prototype for putting policy, observability, and deterministic incident
-replay between an application and OpenAI-compatible LLM providers. Its working slice accepts a
+Reliability Lab is a serious prototype for putting policy, observability, and deterministic
+execution replay between an application and OpenAI-compatible LLM providers. Its working slice accepts a
 tenant-scoped execution, applies bounded retry and fallback policy, validates structured output,
 records versioned append-only events, and exposes the outcome through an API and operator dashboard.
 
-Replayable incidents matter because a provider failure is rarely explained by the final HTTP status
-alone. A safe execution envelope captures the route, attempts, normalized failures, policy
+Replayable investigation cases matter because a provider failure is rarely explained by the final
+HTTP status alone. A safe execution envelope captures the route, attempts, normalized failures, policy
 decisions, timing, trace correlation, and—only when retention permits—a canonical replay capsule.
 That lets engineers reproduce a production-shaped failure without pretending that every live prompt
 is safe to retain.
@@ -19,15 +19,15 @@ Implemented now:
 - injectable policy engine with bounded exponential backoff and jitter, retry, fallback, latency
   budgets, JSON Schema output validation, in-memory rate limiter, and in-memory circuit breaker
 - deterministic fake provider and a narrow OpenAI-compatible HTTP adapter
-- tenant-scoped Fastify API with TypeBox validation, idempotency, OpenAPI, Swagger UI, replay, and
-  redacted Pino logging
+- tenant-scoped Fastify API with immediate `202` acceptance, persisted-event SSE with cursor resume,
+  TypeBox validation, idempotency, OpenAPI, Swagger UI, replay, and redacted Pino logging
 - Drizzle PostgreSQL schema, migration, and repository for executions, attempts, events, and
   idempotency records
 - tenant-scoped PostgreSQL Replay Vault with AES-256-GCM encryption, expiry, deletion,
   metadata-only lifecycle audit, and read-old/write-current key versions
 - OpenTelemetry spans with console export by default and optional OTLP export
-- Next.js operator console with execution list/detail, attempt summaries, event timeline, replay
-  control, and development failure-injection form
+- Next.js operator console with a live evidence-driven machine view, incremental event timeline,
+  recorded-history playback, replay control, and deterministic development scenarios
 - guarded repository and working-file export tools
 
 Not implemented as production infrastructure: managed KMS/envelope encryption, authenticated replay
@@ -64,18 +64,22 @@ outcome-based [`docs/roadmap.md`](docs/roadmap.md) for what comes next.
 
 1. The API validates the body and `X-Tenant-Id`, hashes the canonical request, and checks the
    tenant/idempotency-key pair.
-2. The execution service records `execution.accepted`, creates the envelope, and chooses a provider
-   through the injected registry.
-3. Each call records `attempt.started`; retryable errors use bounded exponential backoff with
-   injected time and randomness.
+2. The execution service records `execution.accepted`, persists a running envelope, and returns a
+   stable execution and trace ID to the API. The API responds `202` while continuation remains
+   in-process.
+3. The service retains replay material when policy permits, resolves the provider, and continues
+   asynchronously. Each call records `attempt.started`; failed attempts record normalized failure
+   evidence before retry, fallback, or stop.
 4. A configured fallback runs once after primary policy exhaustion and makes a successful outcome
    `degraded`.
-5. Structured output is validated with Ajv. Invalid output records a rejection and fails the
-   execution.
+5. Structured output is validated with Ajv. Requested validation records either success or
+   rejection; invalid output fails the execution.
 6. Terminal state, attempts, and normalized metadata are persisted; events remain append-only.
 7. Eligible requests retain a tenant-scoped capsule with explicit expiry. Memory mode is
    process-local; PostgreSQL mode encrypts before persistence and appends lifecycle audit metadata.
-8. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
+8. Tenant-scoped SSE reads events after a sequence cursor from persisted evidence, backfills
+   history, sends heartbeats while following, and closes after terminal evidence.
+9. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
    disable replay. Replay creates a linked execution and records replay start/completion events.
 
 ## Repository layout
@@ -130,7 +134,7 @@ curl -sS http://localhost:4000/v1/executions \
   -H 'content-type: application/json' \
   -H 'x-tenant-id: demo-tenant' \
   -H 'idempotency-key: demo-success-1' \
-  -d '{"provider":"fake-primary","model":"deterministic-v1","input":"Summarize incident 42"}'
+  -d '{"provider":"fake-primary","model":"deterministic-v1","input":"Summarize execution 42"}'
 ```
 
 Retry once after a rate limit:
@@ -176,6 +180,17 @@ Inspect with `GET /v1/executions` or `GET /v1/executions/:executionId`, always w
 expiry/deletion timestamps when applicable; capsule content and cryptographic fields are never
 returned.
 
+Follow persisted events with a reconnectable cursor:
+
+```bash
+curl -N 'http://localhost:4000/v1/executions/EXECUTION_ID/events?after=0' \
+  -H 'accept: text/event-stream' \
+  -H 'x-tenant-id: demo-tenant'
+```
+
+The stream contains operator-safe typed events only: never prompt text, replay capsules,
+cryptographic material, provider credentials, authorization, or cookies.
+
 ## Replay configuration
 
 | Variable                            | Behavior                                                        |
@@ -211,10 +226,11 @@ or full envelope encryption.
 
 Unit tests inject clocks, IDs, randomness, provider responses, and repositories; they do not require
 real delays. They cover encryption, nonces, authenticated context, expiry, deletion, tenant scope,
-key configuration, and live-retention failure. Fastify injection covers capability and deletion
-contracts. PostgreSQL integration proves ciphertext-only persistence, audit metadata, key rotation,
-tenant isolation, and replay after service reconstruction. Playwright exercises dashboard detail
-and confirmed deletion. There are deliberately no broad snapshots.
+key configuration, and live-retention failure. API and unit tests cover asynchronous acceptance,
+typed event ordering, SSE backfill/cursors/terminal close, and the pure machine projection.
+PostgreSQL integration proves ciphertext-only persistence, audit metadata, key rotation, tenant
+isolation, and replay after service reconstruction. Playwright observes a real retry while it is
+running and preserves replay deletion coverage. There are deliberately no broad snapshots.
 
 ## Observability
 
@@ -236,8 +252,9 @@ The environment keyring is a prototype, not managed production key infrastructur
 
 ## Design tradeoffs
 
-- Execution is synchronous to keep the first slice inspectable; a queue would change submission and
-  cancellation semantics.
+- Submission and execution are separated only inside one API process. The persisted running record
+  makes `202` honest for this prototype, but it is not durable queue acceptance: process failure can
+  lose in-flight work before terminal evidence is written.
 - Events are append-only, while the execution row is a query projection updated to its latest state.
 - The memory repository keeps unit tests and an infrastructure-free demo honest, but is not shared
   or durable.

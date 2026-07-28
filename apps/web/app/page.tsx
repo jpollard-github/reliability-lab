@@ -15,8 +15,8 @@ export default async function HomePage() {
       <section className="page-heading">
         <div>
           <p className="eyebrow">Execution control plane</p>
-          <h1>Incident runs</h1>
-          <p>Inspect policy decisions, normalized failures, and deterministic replays.</p>
+          <h1>Reliability executions</h1>
+          <p>Watch policy decisions, normalized failures, and deterministic replays.</p>
         </div>
         <div className="environment-pill">
           <span />

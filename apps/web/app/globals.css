@@ -447,6 +447,178 @@ tbody tr:hover {
   color: var(--accent);
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
+.live-machine {
+  margin: 0 0 1rem;
+}
+.live-machine-heading {
+  gap: 1.5rem;
+}
+.live-machine-heading .eyebrow {
+  margin: 0 0 0.35rem;
+}
+.live-machine-heading h2 {
+  font-size: 1.25rem;
+}
+.live-status {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  white-space: nowrap;
+}
+.stream-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.stream-state::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.stream-live {
+  color: var(--success);
+}
+.stream-connecting,
+.stream-reconnecting {
+  color: #77a9e8;
+}
+.stream-failed {
+  color: var(--danger);
+}
+.machine-readout {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.machine-readout > div {
+  padding: 0.8rem 1.2rem;
+  border-right: 1px solid var(--border);
+}
+.machine-readout > div:last-child {
+  border-right: 0;
+}
+.machine-readout span,
+.machine-readout strong {
+  display: block;
+}
+.machine-readout span {
+  color: var(--muted);
+  font-size: 0.67rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.machine-readout strong {
+  margin-top: 0.3rem;
+  font-size: 0.9rem;
+}
+.playback-controls {
+  display: flex;
+  align-items: end;
+  gap: 0.45rem;
+  padding: 0.8rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  background: #11171e;
+}
+.playback-controls button {
+  padding: 0.45rem 0.65rem;
+  font-size: 0.76rem;
+}
+.playback-controls label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.playback-controls select {
+  min-width: 76px;
+  padding: 0.42rem;
+}
+.machine-route {
+  display: flex;
+  gap: 1.8rem;
+  margin: 0;
+  padding: 1.2rem;
+  overflow-x: auto;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+.machine-step {
+  position: relative;
+  flex: 0 0 225px;
+  min-height: 126px;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-top: 3px solid #526073;
+  border-radius: 6px;
+  background: var(--surface-raised);
+}
+.machine-step:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  right: -1.4rem;
+  top: 50%;
+  color: #526073;
+  font-size: 1rem;
+}
+.machine-step[aria-current="step"] {
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 20px rgba(101, 213, 197, 0.12);
+}
+.machine-step.tone-active {
+  border-top-color: #77a9e8;
+}
+.machine-step.tone-success {
+  border-top-color: var(--success);
+}
+.machine-step.tone-warning {
+  border-top-color: var(--warning);
+}
+.machine-step.tone-danger {
+  border-top-color: var(--danger);
+}
+.machine-step-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+.machine-step-heading strong {
+  flex-basis: 100%;
+  font-size: 0.84rem;
+}
+.step-sequence {
+  color: var(--accent);
+  font-size: 0.67rem;
+}
+.step-attempt {
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 0.1rem 0.35rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+.machine-step p {
+  margin: 0.55rem 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.machine-step time {
+  color: var(--muted);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.65rem;
+}
+.raw-timeline .panel-heading {
+  background: #11171e;
+}
 .timeline {
   list-style: none;
   margin: 0;
@@ -526,6 +698,30 @@ tbody tr:hover {
   }
   .attempts article {
     grid-template-columns: 1fr 1fr;
+  }
+  .live-machine-heading,
+  .playback-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .live-status {
+    align-self: stretch;
+    justify-content: space-between;
+  }
+  .machine-readout {
+    grid-template-columns: 1fr 1fr;
+  }
+  .machine-readout > div:nth-child(even) {
+    border-right: 0;
+  }
+  .machine-readout > div:nth-child(-n + 4) {
+    border-bottom: 1px solid var(--border);
+  }
+  .machine-readout > div:last-child {
+    grid-column: 1 / -1;
+  }
+  .playback-controls label {
+    margin-left: 0;
   }
   nav {
     display: none;

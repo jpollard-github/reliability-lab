@@ -8,7 +8,7 @@ Reliability Lab should let an engineer answer five questions about an LLM execut
 
 1. **What happened?**
 2. **Why did the reliability policy make those decisions?**
-3. **Can the incident be reproduced safely?**
+3. **Can this execution or investigation case be reproduced safely?**
 4. **What changes when the provider, model, budget, or policy changes?**
 5. **Can we investigate all of this without leaking or crossing tenant data?**
 
@@ -22,7 +22,7 @@ Execute → Explain → Preserve safely → Replay → Compare → Learn → Ope
 
 ### Evidence plane
 
-The execution envelope, attempts, normalized failures, policy decisions, timing, usage, trace correlation, and append-only events form the factual record. This plane explains an incident without requiring raw prompt retention.
+The execution envelope, attempts, normalized failures, policy decisions, timing, usage, trace correlation, and append-only events form the factual record. This plane explains an execution or investigation case without requiring raw prompt retention.
 
 ### Replay vault
 
@@ -73,15 +73,31 @@ tenant-scoped access, current capability states, expiry, deletion, metadata-only
 versions, restart-durable replay, and fail-closed live retention. Environment keys and the missing
 authenticated actor remain deliberate prototype limitations rather than production claims.
 
-### Horizon 2: Compare, not merely repeat
+### Horizon 2: Watch the machine work
 
-**Desired outcome.** An incident can be replayed as an experiment.
+**Current state.** The operator can observe a running execution as actual persisted events occur and
+can replay the recorded event history when the execution is too fast to watch live.
+
+The console visibly projects the active route through request acceptance, provider attempts,
+normalized observations, retry and real backoff, fallback, structured-output validation, budgets,
+circuit decisions, and terminal outcome. Attempt branches and route changes remain grounded in the
+append-only event record. The tenant-scoped SSE transport backfills persisted history, resumes from
+a sequence cursor, and closes after terminal evidence; playback changes presentation timing only.
+
+The prototype meets this horizon's completion signal with dashboard-started deterministic retry and
+fallback scenarios, a refresh-safe event stream, live incremental history, and pause, resume, step,
+restart, and speed controls. Accepted work still runs inside the API process and may be lost if that
+process exits, a limitation reserved for the durable-execution horizon.
+
+### Horizon 3: Compare, not merely repeat
+
+**Desired outcome.** An execution or investigation case can be replayed as an experiment.
 
 Policy and provider configuration become explicit versioned inputs. An operator can replay under original conditions or choose a controlled variation, then compare terminal outcome, normalized failure, attempts, latency, token usage, estimated cost, structured-output validity, and event decisions. Scenario fixtures make important failure shapes repeatable without production data.
 
-**Completion signal.** The dashboard can answer, “Did this policy or route improve the incident, and what tradeoff did it introduce?” rather than only, “Did the same output happen again?”
+**Completion signal.** The dashboard can answer, “Did this policy or route improve the case, and what tradeoff did it introduce?” rather than only, “Did the same output happen again?”
 
-### Horizon 3: Execution that survives reality
+### Horizon 4: Execution that survives reality
 
 **Desired outcome.** Work is no longer tied to one synchronous API process.
 
@@ -89,15 +105,15 @@ Submission and execution separate through a durable queue and worker. Event and 
 
 **Completion signal.** An API or worker restart does not silently lose accepted work, duplicate an execution, or erase the explanation of what happened.
 
-### Horizon 4: An operator’s reliability lab
+### Horizon 5: An operator’s reliability lab
 
 **Desired outcome.** Investigation scales beyond opening one execution ID at a time.
 
 The console supports useful filtering and search, trace/log correlation, replay comparisons, scenario catalogs, policy experiments, provider health views, and aggregate reliability metrics. The system begins to expose service-level signals such as success, degraded success, retry recovery, fallback dependence, latency-budget failures, and replay reproducibility.
 
-**Completion signal.** A developer can move from an incident to a supported reliability conclusion without querying tables or reading application source.
+**Completion signal.** A developer can move from an investigation case to a supported reliability conclusion without querying tables or reading application source.
 
-### Horizon 5: A tenant-safe service
+### Horizon 6: A tenant-safe service
 
 **Desired outcome.** Prototype routing context becomes an enforceable security model.
 
@@ -105,13 +121,13 @@ Authenticated principals, tenant membership, roles and permissions, service auth
 
 **Completion signal.** Tenant isolation and replay authorization are enforced at multiple layers and can be demonstrated by tests, not inferred from a header convention.
 
-### Horizon 6: A reference reliability system
+### Horizon 7: A reference reliability system
 
 **Desired outcome.** Reliability Lab is reproducible, demonstrable, and operationally honest.
 
 A reference deployment includes migrations, telemetry, dashboards, backup and restore procedures, dependency and image maintenance, incident runbooks, safe sample scenarios, and a compact demonstration narrative. The project can show both its capabilities and its deliberate limitations.
 
-**Completion signal.** Another engineer can deploy it, run representative incidents, understand the architecture, and evaluate the tradeoffs without private context from its author.
+**Completion signal.** Another engineer can deploy it, run representative execution scenarios, understand the architecture, and evaluate the tradeoffs without private context from its author.
 
 ## Ordering principles
 
@@ -125,6 +141,12 @@ A reference deployment includes migrations, telemetry, dashboards, backup and re
 
 ## Near-term direction
 
-The next movement is **Horizon 2: Compare, not merely repeat**. The durable vault now provides the
-safe foundation for versioned policy experiments and useful original-versus-variant outcome
-comparison.
+The product sequence is:
+
+```text
+Replay Vault → Live Machine View → Comparative Replay
+```
+
+The live machine view now turns durable execution evidence into an observable route. The next
+movement is **Horizon 3: Compare, not merely repeat**, using the vault and live evidence projection
+as the foundation for controlled original-versus-variant comparison.

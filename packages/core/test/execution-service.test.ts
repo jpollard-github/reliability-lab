@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CreateExecutionBody } from "@reliability-lab/contracts";
 import {
   ExecutionService,
+  InMemoryCircuitBreaker,
   MapProviderRegistry,
   MemoryExecutionRepository,
   MemoryReplayCapsuleStore,
@@ -13,7 +14,7 @@ import { FakeClock, FixedRandom, SequenceIds } from "@reliability-lab/testkit";
 const baseBody: CreateExecutionBody = {
   provider: "fake-primary",
   model: "deterministic-v1",
-  input: "A deterministic incident fixture",
+  input: "A deterministic execution fixture",
 };
 
 function harness(
@@ -68,7 +69,27 @@ describe("ExecutionService policy", () => {
     expect(execution.status).toBe("succeeded");
     expect(execution.attempts).toHaveLength(2);
     expect(clock.sleeps).toEqual([20]);
-    expect(execution.events.some((event) => event.type === "retry.scheduled")).toBe(true);
+    expect(execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "attempt.started",
+      "attempt.failed",
+      "retry.scheduled",
+      "attempt.started",
+      "provider.response_received",
+      "execution.succeeded",
+    ]);
+    const failedAttempt = execution.events.find((event) => event.type === "attempt.failed");
+    expect(failedAttempt).toMatchObject({
+      attemptNumber: 1,
+      provider: "fake-primary",
+      model: "deterministic-v1",
+      latencyMs: 1,
+      error: {
+        category: "rate_limit",
+        code: "fake_rate_limit",
+        retryable: true,
+      },
+    });
   });
 
   it("falls back after primary failure and marks the execution degraded", async () => {
@@ -88,7 +109,15 @@ describe("ExecutionService policy", () => {
     expect(execution.status).toBe("degraded");
     expect(execution.provider).toBe("fake-fallback");
     expect(execution.attempts.map((attempt) => attempt.attemptNumber)).toEqual([1, 2]);
-    expect(execution.events.some((event) => event.type === "fallback.selected")).toBe(true);
+    expect(execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "attempt.started",
+      "attempt.failed",
+      "fallback.selected",
+      "attempt.started",
+      "provider.response_received",
+      "execution.succeeded",
+    ]);
   });
 
   it("rejects malformed structured output against JSON Schema", async () => {
@@ -110,6 +139,35 @@ describe("ExecutionService policy", () => {
     expect(execution.events.some((event) => event.type === "structured_output.rejected")).toBe(
       true,
     );
+    expect(execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "attempt.started",
+      "provider.response_received",
+      "structured_output.rejected",
+      "execution.failed",
+    ]);
+  });
+
+  it("records successful structured-output validation", async () => {
+    const { service } = harness();
+    const execution = await service.execute({
+      tenantId: "tenant-a",
+      body: {
+        ...baseBody,
+        structuredOutputSchema: {
+          type: "object",
+          required: ["result"],
+          properties: { result: { type: "string" } },
+        },
+      },
+    });
+    expect(execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "attempt.started",
+      "provider.response_received",
+      "structured_output.validated",
+      "execution.succeeded",
+    ]);
   });
 
   it("rejects retry when it would exceed the latency budget", async () => {
@@ -125,7 +183,108 @@ describe("ExecutionService policy", () => {
     });
     expect(execution.status).toBe("failed");
     expect(execution.error?.category).toBe("budget_exceeded");
-    expect(execution.events.some((event) => event.type === "budget.exceeded")).toBe(true);
+    expect(execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "attempt.started",
+      "attempt.failed",
+      "budget.exceeded",
+      "execution.failed",
+    ]);
+    expect(execution.events.find((event) => event.type === "budget.exceeded")).toMatchObject({
+      budget: "latency",
+      limit: 10,
+      observed: 0,
+    });
+  });
+
+  it("records a circuit rejection before terminal failure", async () => {
+    const repository = new MemoryExecutionRepository();
+    const service = new ExecutionService({
+      repository,
+      replayCapsules: new MemoryReplayCapsuleStore(),
+      providers: new MapProviderRegistry([new DeterministicFakeProvider({ id: "fake-primary" })]),
+      circuitBreaker: new InMemoryCircuitBreaker(0),
+      ids: new SequenceIds(),
+      clock: new FakeClock(),
+    });
+    const execution = await service.execute({ tenantId: "tenant-a", body: baseBody });
+    expect(execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "circuit.rejected",
+      "execution.failed",
+    ]);
+    expect(execution.error).toMatchObject({
+      category: "provider_unavailable",
+      code: "circuit_open",
+    });
+  });
+
+  it("normalizes an unexpected continuation error into terminal evidence", async () => {
+    const provider: LlmProvider = {
+      id: "fake-primary",
+      kind: "fake",
+      execute: async () => {
+        throw new Error("unhandled adapter failure");
+      },
+    };
+    const { service, repository } = harness([provider]);
+    const execution = await service.execute({ tenantId: "tenant-a", body: baseBody });
+
+    expect(execution).toMatchObject({
+      status: "failed",
+      error: { code: "execution_internal_failure", retryable: false },
+    });
+    expect(execution.events.at(-1)?.type).toBe("execution.failed");
+    expect(
+      (await repository.findById("tenant-a", execution.executionId))?.events.at(-1)?.type,
+    ).toBe("execution.failed");
+  });
+
+  it("returns a persisted running envelope before provider completion", async () => {
+    let releaseProvider!: () => void;
+    const providerGate = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    const provider: LlmProvider = {
+      id: "fake-primary",
+      kind: "fake",
+      execute: async (request) => {
+        await providerGate;
+        return {
+          ok: true,
+          response: {
+            provider: "fake-primary",
+            model: request.model,
+            outputText: "complete",
+            usage: { inputTokens: 1, outputTokens: 1 },
+            latencyMs: 1,
+          },
+        };
+      },
+    };
+    const { service, repository } = harness([provider]);
+    const submission = await service.submit({
+      tenantId: "tenant-a",
+      idempotencyKey: "active-key",
+      body: baseBody,
+    });
+
+    expect(submission.execution.status).toBe("running");
+    expect(submission.execution.events.map((event) => event.type)).toEqual(["execution.accepted"]);
+    expect((await repository.findById("tenant-a", submission.execution.executionId))?.status).toBe(
+      "running",
+    );
+    const duplicate = await service.submit({
+      tenantId: "tenant-a",
+      idempotencyKey: "active-key",
+      body: baseBody,
+    });
+    expect(duplicate.execution.executionId).toBe(submission.execution.executionId);
+    expect(duplicate.execution.events.at(-1)?.type).toBe("idempotency.hit");
+    expect(await repository.list("tenant-a")).toHaveLength(1);
+    releaseProvider();
+    await expect(submission.completion).resolves.toMatchObject({ status: "succeeded" });
+    await expect(duplicate.completion).resolves.toMatchObject({ status: "succeeded" });
   });
 
   it("returns the original execution for an idempotent duplicate", async () => {

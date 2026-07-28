@@ -43,6 +43,11 @@ export interface ExecutionRepository {
   create(execution: ExecutionEnvelope): Promise<void>;
   update(execution: ExecutionEnvelope): Promise<void>;
   appendEvent(event: ExecutionEvent): Promise<void>;
+  eventsAfter(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+    afterSequence: number,
+  ): Promise<ExecutionEvent[] | null>;
   findById(tenantId: TenantId, executionId: ExecutionId): Promise<ExecutionEnvelope | null>;
   list(tenantId?: TenantId): Promise<ExecutionEnvelope[]>;
   findIdempotent(tenantId: TenantId, keyHash: string): Promise<ExecutionEnvelope | null>;
@@ -101,6 +106,11 @@ export interface ExecuteCommand {
   replayOfExecutionId?: ExecutionId;
 }
 
+export interface ExecutionSubmission {
+  execution: ExecutionEnvelope;
+  completion: Promise<ExecutionEnvelope>;
+}
+
 export interface ExecutionServiceOptions {
   repository: ExecutionRepository;
   replayCapsules: ReplayCapsuleStore;
@@ -152,6 +162,10 @@ export class ExecutionService {
   readonly #tracer: ExecutionTracer;
   readonly #allowLivePromptRetention: boolean;
   readonly #replayRetentionMs: number;
+  readonly #active = new Map<
+    ExecutionId,
+    { execution: ExecutionEnvelope; completion: Promise<ExecutionEnvelope> }
+  >();
   readonly #ajv = new Ajv({ allErrors: true, strict: false });
 
   constructor(options: ExecutionServiceOptions) {
@@ -169,6 +183,10 @@ export class ExecutionService {
   }
 
   async execute(command: ExecuteCommand): Promise<ExecutionEnvelope> {
+    return (await this.submit(command)).completion;
+  }
+
+  async submit(command: ExecuteCommand): Promise<ExecutionSubmission> {
     const requestHash = hashCanonical(command.body);
     const idempotencyKeyHash = command.idempotencyKey
       ? hashCanonical(command.idempotencyKey)
@@ -179,12 +197,17 @@ export class ExecutionService {
         if (existing.requestHash !== requestHash) {
           throw new IdempotencyConflictError();
         }
-        await this.#append(existing, {
+        const active = this.#active.get(existing.executionId);
+        const target = active?.execution ?? existing;
+        await this.#append(target, {
           type: "idempotency.hit",
           idempotencyKeyHash,
         });
-        await this.#repository.update(existing);
-        return existing;
+        await this.#repository.update(target);
+        return {
+          execution: structuredClone(target),
+          completion: active?.completion ?? Promise.resolve(structuredClone(target)),
+        };
       }
     }
 
@@ -242,27 +265,87 @@ export class ExecutionService {
       );
     }
 
-    const primary = this.#providers.resolve(command.body.provider);
+    const rawCompletion = this.#continueSafely(execution, command.body);
+    const completion: Promise<ExecutionEnvelope> = rawCompletion.then(
+      (result) => {
+        if (this.#active.get(execution.executionId)?.completion === completion) {
+          this.#active.delete(execution.executionId);
+        }
+        return result;
+      },
+      (error: unknown) => {
+        if (this.#active.get(execution.executionId)?.completion === completion) {
+          this.#active.delete(execution.executionId);
+        }
+        throw error;
+      },
+    );
+    this.#active.set(execution.executionId, { execution, completion });
+    return { execution: structuredClone(execution), completion };
+  }
+
+  async #continueSafely(
+    execution: ExecutionEnvelope,
+    body: CreateExecutionBody,
+  ): Promise<ExecutionEnvelope> {
+    try {
+      return await this.#continueExecution(execution, body);
+    } catch {
+      if (execution.status === "succeeded" || execution.status === "degraded") return execution;
+      const internalError: ProviderError = {
+        category: "unknown",
+        code: "execution_internal_failure",
+        message: "Execution could not be completed",
+        retryable: false,
+      };
+      const runningAttempt = execution.attempts.find((attempt) => attempt.status === "running");
+      if (runningAttempt) {
+        const completedAt = this.#clock.now();
+        runningAttempt.status = "failed";
+        runningAttempt.completedAt = completedAt.toISOString();
+        runningAttempt.durationMs = Math.max(
+          0,
+          completedAt.getTime() - new Date(runningAttempt.startedAt).getTime(),
+        );
+        runningAttempt.error = internalError;
+        await this.#append(execution, {
+          type: "attempt.failed",
+          attemptNumber: runningAttempt.attemptNumber,
+          provider: runningAttempt.provider,
+          model: runningAttempt.model,
+          latencyMs: runningAttempt.durationMs,
+          error: internalError,
+        });
+      }
+      return this.#fail(execution, internalError);
+    }
+  }
+
+  async #continueExecution(
+    execution: ExecutionEnvelope,
+    body: CreateExecutionBody,
+  ): Promise<ExecutionEnvelope> {
+    const primary = this.#providers.resolve(body.provider);
     if (!primary) {
       return this.#fail(execution, {
         category: "invalid_request",
         code: "provider_not_configured",
-        message: `Provider '${command.body.provider}' is not configured`,
+        message: `Provider '${body.provider}' is not configured`,
         retryable: false,
       });
     }
 
     const capsule: ReplayCapsule = {
       providerRequest: {
-        tenantId: command.tenantId,
-        provider: command.body.provider,
-        model: command.body.model,
-        ...(command.body.messages ? { messages: command.body.messages } : {}),
-        ...(command.body.input ? { input: command.body.input } : {}),
-        ...(command.body.structuredOutputSchema
-          ? { structuredOutputSchema: command.body.structuredOutputSchema }
+        tenantId: execution.tenantId,
+        provider: body.provider,
+        model: body.model,
+        ...(body.messages ? { messages: body.messages } : {}),
+        ...(body.input ? { input: body.input } : {}),
+        ...(body.structuredOutputSchema
+          ? { structuredOutputSchema: body.structuredOutputSchema }
           : {}),
-        ...(command.body.failureMode ? { failureMode: command.body.failureMode } : {}),
+        ...(body.failureMode ? { failureMode: body.failureMode } : {}),
       },
     };
     if (primary.kind === "fake" || this.#allowLivePromptRetention) {
@@ -271,7 +354,7 @@ export class ExecutionService {
       ).toISOString();
       try {
         const capability = await this.#replayCapsules.put({
-          tenantId: command.tenantId,
+          tenantId: execution.tenantId,
           executionId: execution.executionId,
           capsule,
           payloadSchemaVersion: 1,
@@ -298,6 +381,7 @@ export class ExecutionService {
         unavailableCapability("retention_disabled", "Live-provider request retention is disabled"),
       );
     }
+    await this.#repository.update(execution);
 
     return this.#tracer.withSpan(
       "policy.evaluate",
@@ -306,7 +390,7 @@ export class ExecutionService {
         "execution.trace_id": execution.traceId,
         "provider.id": primary.id,
       },
-      async () => this.#runPolicy(execution, command.body, primary, false),
+      async () => this.#runPolicy(execution, body, primary, false),
     );
   }
 
@@ -373,6 +457,14 @@ export class ExecutionService {
     return Promise.all(executions.map((execution) => this.#withCurrentCapability(execution)));
   }
 
+  eventsAfter(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+    afterSequence: number,
+  ): Promise<ExecutionEvent[] | null> {
+    return this.#repository.eventsAfter(tenantId, executionId, afterSequence);
+  }
+
   async deleteReplayCapsule(
     tenantId: TenantId,
     executionId: ExecutionId,
@@ -435,33 +527,34 @@ export class ExecutionService {
       });
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), remainingBudget);
-      const result = await this.#tracer.withSpan(
-        "provider.attempt",
-        {
-          "execution.id": execution.executionId,
-          "execution.trace_id": execution.traceId,
-          "attempt.number": attemptNumber,
-          "provider.id": provider.id,
-        },
-        async () =>
-          provider.execute(
-            {
-              executionId: execution.executionId,
-              tenantId: execution.tenantId,
-              provider: provider.id,
-              model,
-              ...(body.messages ? { messages: body.messages } : {}),
-              ...(body.input ? { input: body.input } : {}),
-              ...(body.structuredOutputSchema
-                ? { structuredOutputSchema: body.structuredOutputSchema }
-                : {}),
-              ...(fallbackUsed ? {} : body.failureMode ? { failureMode: body.failureMode } : {}),
-              attempt: attemptNumber,
-            },
-            { signal: controller.signal, timeoutMs: remainingBudget },
-          ),
-      );
-      clearTimeout(timeout);
+      const result = await this.#tracer
+        .withSpan(
+          "provider.attempt",
+          {
+            "execution.id": execution.executionId,
+            "execution.trace_id": execution.traceId,
+            "attempt.number": attemptNumber,
+            "provider.id": provider.id,
+          },
+          async () =>
+            provider.execute(
+              {
+                executionId: execution.executionId,
+                tenantId: execution.tenantId,
+                provider: provider.id,
+                model,
+                ...(body.messages ? { messages: body.messages } : {}),
+                ...(body.input ? { input: body.input } : {}),
+                ...(body.structuredOutputSchema
+                  ? { structuredOutputSchema: body.structuredOutputSchema }
+                  : {}),
+                ...(fallbackUsed ? {} : body.failureMode ? { failureMode: body.failureMode } : {}),
+                attempt: attemptNumber,
+              },
+              { signal: controller.signal, timeoutMs: remainingBudget },
+            ),
+        )
+        .finally(() => clearTimeout(timeout));
       const attempt = execution.attempts.at(-1);
       if (!attempt) throw new Error("Attempt invariant violated");
 
@@ -473,6 +566,8 @@ export class ExecutionService {
         await this.#append(execution, {
           type: "provider.response_received",
           attemptNumber,
+          provider: provider.id,
+          model,
           latencyMs: result.response.latencyMs,
         });
         this.#circuitBreaker.recordSuccess(provider.id);
@@ -501,6 +596,10 @@ export class ExecutionService {
               retryable: false,
             });
           }
+          await this.#append(execution, {
+            type: "structured_output.validated",
+            attemptNumber,
+          });
         }
 
         execution.status = fallbackUsed ? "degraded" : "succeeded";
@@ -523,6 +622,14 @@ export class ExecutionService {
       attempt.error = result.error;
       lastError = result.error;
       this.#circuitBreaker.recordFailure(provider.id);
+      await this.#append(execution, {
+        type: "attempt.failed",
+        attemptNumber,
+        provider: provider.id,
+        model,
+        latencyMs: result.latencyMs,
+        error: result.error,
+      });
 
       if (result.error.retryable && attemptsForProvider < maxAttempts) {
         const delayMs = this.#backoff(execution.policy, attemptsForProvider);
@@ -591,11 +698,16 @@ export class ExecutionService {
     return Math.max(0, Math.round(base + jitter));
   }
 
-  #budgetFailure(execution: ExecutionEnvelope): Promise<ExecutionEnvelope> {
-    this.#addEvent(execution, {
+  async #budgetFailure(execution: ExecutionEnvelope): Promise<ExecutionEnvelope> {
+    const observed = Math.max(
+      0,
+      this.#clock.now().getTime() - new Date(execution.createdAt).getTime(),
+    );
+    await this.#append(execution, {
       type: "budget.exceeded",
       budget: "latency",
       limit: execution.budget.maxLatencyMs,
+      observed,
     });
     return this.#fail(execution, {
       category: "budget_exceeded",
@@ -707,6 +819,14 @@ export class MemoryExecutionRepository implements ExecutionRepository {
     if (execution && !execution.events.some((item) => item.eventId === event.eventId)) {
       execution.events.push(structuredClone(event));
     }
+  }
+  async eventsAfter(tenantId: TenantId, executionId: ExecutionId, afterSequence: number) {
+    const execution = this.#executions.get(executionId);
+    if (execution?.tenantId !== tenantId) return null;
+    return execution.events
+      .filter((event) => event.sequence > afterSequence)
+      .sort((left, right) => left.sequence - right.sequence)
+      .map((event) => structuredClone(event));
   }
   async findById(tenantId: TenantId, executionId: ExecutionId) {
     const execution = this.#executions.get(executionId);

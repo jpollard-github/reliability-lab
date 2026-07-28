@@ -25,9 +25,19 @@ not attempt metadata.
 ## Events
 
 Every event has `schemaVersion`, `eventId`, `executionId`, sequence, occurrence time, and a
-discriminating `type`. Version 1 represents acceptance, idempotency hits, attempts, responses,
-retries, validation rejection, fallback, budget/circuit decisions, terminal state, and replay
-start/completion. Events are inserted; they are not updated to rewrite history.
+discriminating `type`. Version 1 represents acceptance, idempotency hits, attempt starts, successful
+provider observations, normalized attempt failures, retries, fallback, successful or rejected
+structured-output validation, budget/circuit decisions, terminal state, and replay
+start/completion. A failed-attempt payload records category, code, retryability, and observed
+latency. Provider-response evidence identifies the provider/model route; budget rejection records
+both observed and configured values. Events are inserted; they are not updated to rewrite history.
+
+`GET /v1/executions/:executionId/events` is a read projection over this same record, not a second
+event model. SSE `id` is the decimal event sequence, `event` is `execution`, and `data` is the typed
+event JSON. `after` and `Last-Event-ID` are cursors; the greater value wins. History is backfilled in
+ascending order, heartbeat comments keep an active stream open, and a terminal event closes it. A
+client already caught up to a terminal execution receives a safe `complete` control frame and the
+connection closes. Tenant-not-found is resolved before stream headers are opened.
 
 Schema evolution should add optional fields compatibly or introduce event schema version 2 with an
 upcaster at read boundaries. Consumers must switch on `type` and tolerate versions they explicitly

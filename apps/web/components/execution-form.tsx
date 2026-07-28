@@ -4,18 +4,18 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const modes = [
-  "none",
-  "rate_limit",
-  "provider_error",
-  "malformed_json",
-  "timeout",
-  "latency",
+const scenarios = [
+  { value: "success", label: "Successful structured output" },
+  { value: "retry", label: "Retry after rate limit" },
+  { value: "fallback", label: "Fallback provider" },
+  { value: "structured-reject", label: "Structured output rejection" },
+  { value: "budget", label: "Latency budget rejection" },
 ] as const;
+type Scenario = (typeof scenarios)[number]["value"];
 
 export function ExecutionForm() {
   const router = useRouter();
-  const [mode, setMode] = useState<(typeof modes)[number]>("none");
+  const [scenario, setScenario] = useState<Scenario>("success");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,8 +23,6 @@ export function ExecutionForm() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    const fallback = mode === "provider_error";
-    const structured = mode === "malformed_json";
     try {
       const response = await fetch(`${apiUrl}/v1/executions`, {
         method: "POST",
@@ -36,28 +34,8 @@ export function ExecutionForm() {
         body: JSON.stringify({
           provider: "fake-primary",
           model: "deterministic-v1",
-          input: "Classify this synthetic reliability incident.",
-          ...(mode === "none" ? {} : { failureMode: mode }),
-          ...(fallback
-            ? {
-                policy: {
-                  maxAttempts: 1,
-                  fallbackProvider: "fake-fallback",
-                  fallbackModel: "deterministic-v1",
-                },
-              }
-            : {}),
-          ...(structured
-            ? {
-                structuredOutputSchema: {
-                  type: "object",
-                  required: ["result"],
-                  properties: { result: { type: "string" } },
-                  additionalProperties: false,
-                },
-              }
-            : {}),
-          ...(mode === "latency" ? { budget: { maxLatencyMs: 10 } } : {}),
+          input: `Run deterministic ${scenario} evidence.`,
+          ...scenarioConfiguration(scenario),
         }),
       });
       const body: unknown = await response.json();
@@ -77,21 +55,21 @@ export function ExecutionForm() {
   return (
     <form className="dev-form" onSubmit={(event) => void submit(event)}>
       <div>
-        <label htmlFor="failure-mode">Forced failure mode</label>
+        <label htmlFor="scenario">Deterministic scenario</label>
         <select
-          id="failure-mode"
-          value={mode}
-          onChange={(event) => setMode(event.target.value as typeof mode)}
+          id="scenario"
+          value={scenario}
+          onChange={(event) => setScenario(event.target.value as Scenario)}
         >
-          {modes.map((item) => (
-            <option key={item} value={item}>
-              {item.replace("_", " ")}
+          {scenarios.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
             </option>
           ))}
         </select>
       </div>
       <button type="submit" disabled={submitting}>
-        {submitting ? "Running…" : "Run deterministic execution"}
+        {submitting ? "Starting…" : "Start and watch execution"}
       </button>
       {error ? (
         <p className="form-error" role="alert">
@@ -100,6 +78,51 @@ export function ExecutionForm() {
       ) : null}
     </form>
   );
+}
+
+function scenarioConfiguration(scenario: Scenario): Record<string, unknown> {
+  const structuredOutputSchema = {
+    type: "object",
+    required: ["result"],
+    properties: { result: { type: "string" } },
+    additionalProperties: false,
+  };
+  switch (scenario) {
+    case "success":
+      return { structuredOutputSchema };
+    case "retry":
+      return {
+        failureMode: "rate_limit",
+        policy: {
+          maxAttempts: 2,
+          baseBackoffMs: 1_500,
+          maxBackoffMs: 1_500,
+          jitterRatio: 0,
+        },
+      };
+    case "fallback":
+      return {
+        failureMode: "provider_error",
+        policy: {
+          maxAttempts: 1,
+          fallbackProvider: "fake-fallback",
+          fallbackModel: "deterministic-v1",
+        },
+      };
+    case "structured-reject":
+      return { failureMode: "malformed_json", structuredOutputSchema };
+    case "budget":
+      return {
+        failureMode: "latency",
+        policy: {
+          maxAttempts: 2,
+          baseBackoffMs: 100,
+          maxBackoffMs: 100,
+          jitterRatio: 0,
+        },
+        budget: { maxLatencyMs: 10 },
+      };
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

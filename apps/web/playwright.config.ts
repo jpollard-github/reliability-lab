@@ -12,7 +12,7 @@ export default defineConfig({
     : {
         webServer: [
           {
-            command: "pnpm --dir ../.. dev:api",
+            command: "ENABLE_FAILURE_INJECTION=true pnpm --dir ../.. dev:api",
             url: "http://127.0.0.1:4000/healthz",
             reuseExistingServer: true,
             timeout: 60_000,

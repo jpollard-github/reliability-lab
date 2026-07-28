@@ -17,6 +17,11 @@ import {
   type ExecutionService,
 } from "@reliability-lab/core";
 import { pinoRedactionPaths } from "@reliability-lab/observability";
+import {
+  followExecutionEvents,
+  formatExecutionSse,
+  isTerminalExecutionEvent,
+} from "./event-stream.js";
 
 const TenantHeadersSchema = Type.Object({
   "x-tenant-id": Type.String({ minLength: 1, maxLength: 128 }),
@@ -27,6 +32,13 @@ const TenantOnlyHeadersSchema = Type.Object({
 });
 const ExecutionParamsSchema = Type.Object({
   executionId: Type.String({ minLength: 1 }),
+});
+const ExecutionEventQuerySchema = Type.Object({
+  after: Type.Optional(Type.Integer({ minimum: 0 })),
+});
+const ExecutionEventHeadersSchema = Type.Object({
+  "x-tenant-id": Type.String({ minLength: 1, maxLength: 128 }),
+  "last-event-id": Type.Optional(Type.String({ pattern: "^[0-9]+$" })),
 });
 const LinkSchema = Type.Object({
   self: Type.String(),
@@ -122,6 +134,8 @@ interface AppOptions {
   readiness?: () => Promise<{ ready: boolean; checks: Record<string, string> }>;
   logger?: FastifyBaseLogger | boolean;
   enableFailureInjection?: boolean;
+  eventStreamPollMs?: number;
+  eventStreamHeartbeatMs?: number;
 }
 
 export async function buildApp(options: AppOptions) {
@@ -218,7 +232,7 @@ export async function buildApp(options: AppOptions) {
           statusCode: 400,
         });
       }
-      const execution = await options.service.execute({
+      const submission = await options.service.submit({
         tenantId: request.headers["x-tenant-id"],
         ...(request.headers["idempotency-key"]
           ? { idempotencyKey: request.headers["idempotency-key"] }
@@ -227,14 +241,37 @@ export async function buildApp(options: AppOptions) {
       });
       request.log.info(
         {
-          executionId: execution.executionId,
-          tenantId: execution.tenantId,
-          traceId: execution.traceId,
-          status: execution.status,
+          executionId: submission.execution.executionId,
+          tenantId: submission.execution.tenantId,
+          traceId: submission.execution.traceId,
+          status: submission.execution.status,
         },
-        "execution completed",
+        "execution accepted",
       );
-      return reply.code(202).send(submission(execution));
+      void submission.completion.then(
+        (execution) => {
+          app.log.info(
+            {
+              executionId: execution.executionId,
+              tenantId: execution.tenantId,
+              traceId: execution.traceId,
+              status: execution.status,
+            },
+            "execution completed",
+          );
+        },
+        () => {
+          app.log.error(
+            {
+              executionId: submission.execution.executionId,
+              tenantId: submission.execution.tenantId,
+              traceId: submission.execution.traceId,
+            },
+            "execution continuation could not persist a terminal result",
+          );
+        },
+      );
+      return reply.code(202).send(submissionResponse(submission.execution));
     },
   );
 
@@ -296,6 +333,91 @@ export async function buildApp(options: AppOptions) {
       options.service.get(request.headers["x-tenant-id"], request.params.executionId),
   );
 
+  app.get(
+    "/v1/executions/:executionId/events",
+    {
+      schema: {
+        tags: ["executions"],
+        security: [{ tenant: [] }],
+        headers: ExecutionEventHeadersSchema,
+        params: ExecutionParamsSchema,
+        querystring: ExecutionEventQuerySchema,
+        response: { 404: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const headerCursor = Number(request.headers["last-event-id"] ?? 0);
+      const cursor = Math.max(request.query.after ?? 0, headerCursor);
+      const initialEvents = await options.service.eventsAfter(
+        request.headers["x-tenant-id"],
+        request.params.executionId,
+        cursor,
+      );
+      if (!initialEvents) {
+        return reply.code(404).send({
+          error: "not_found",
+          message: "Execution not found",
+          statusCode: 404,
+        });
+      }
+      const terminalSnapshot = !initialEvents.some(isTerminalExecutionEvent)
+        ? await options.service.get(request.headers["x-tenant-id"], request.params.executionId)
+        : null;
+      const caughtUpTerminalStatus =
+        terminalSnapshot?.status === "succeeded" ||
+        terminalSnapshot?.status === "degraded" ||
+        terminalSnapshot?.status === "failed" ||
+        terminalSnapshot?.status === "cancelled"
+          ? terminalSnapshot.status
+          : null;
+
+      reply.hijack();
+      reply.raw.statusCode = 200;
+      reply.raw.setHeader("content-type", "text/event-stream; charset=utf-8");
+      reply.raw.setHeader("cache-control", "no-cache, no-transform");
+      reply.raw.setHeader("connection", "keep-alive");
+      reply.raw.setHeader("x-accel-buffering", "no");
+      if (process.env.NODE_ENV !== "production" && request.headers.origin) {
+        reply.raw.setHeader("access-control-allow-origin", request.headers.origin);
+        reply.raw.setHeader("vary", "Origin");
+      }
+      reply.raw.flushHeaders();
+
+      const controller = new AbortController();
+      reply.raw.on("close", () => controller.abort());
+      try {
+        if (caughtUpTerminalStatus) {
+          reply.raw.write(
+            `event: complete\ndata: ${JSON.stringify({ status: caughtUpTerminalStatus })}\n\n`,
+          );
+          return reply;
+        }
+        for await (const item of followExecutionEvents({
+          initialEvents,
+          afterSequence: cursor,
+          readAfter: async (afterSequence) =>
+            options.service.eventsAfter(
+              request.headers["x-tenant-id"],
+              request.params.executionId,
+              afterSequence,
+            ),
+          signal: controller.signal,
+          ...(options.eventStreamPollMs === undefined ? {} : { pollMs: options.eventStreamPollMs }),
+          ...(options.eventStreamHeartbeatMs === undefined
+            ? {}
+            : { heartbeatMs: options.eventStreamHeartbeatMs }),
+        })) {
+          reply.raw.write(
+            item.type === "event" ? formatExecutionSse(item.event) : ": heartbeat\n\n",
+          );
+        }
+      } finally {
+        if (!reply.raw.writableEnded) reply.raw.end();
+      }
+      return reply;
+    },
+  );
+
   app.post(
     "/v1/executions/:executionId/replay",
     {
@@ -325,7 +447,7 @@ export async function buildApp(options: AppOptions) {
   return app;
 }
 
-function submission(execution: ExecutionEnvelope): Static<typeof SubmissionResponseSchema> {
+function submissionResponse(execution: ExecutionEnvelope): Static<typeof SubmissionResponseSchema> {
   return {
     executionId: execution.executionId,
     status: execution.status,

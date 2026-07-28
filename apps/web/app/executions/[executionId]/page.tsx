@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EventTimeline } from "@/components/event-timeline";
+import { LiveExecutionView } from "@/components/live-execution-view";
 import { ReplayButton } from "@/components/replay-button";
 import { StatusBadge } from "@/components/status-badge";
 import { getExecution } from "@/lib/api";
@@ -44,6 +44,10 @@ export default async function ExecutionDetailPage({
         </div>
         <ReplayButton executionId={execution.executionId} capability={execution.replayCapability} />
       </section>
+      <LiveExecutionView
+        key={`${execution.executionId}-${execution.status}-${execution.updatedAt}`}
+        initialExecution={execution}
+      />
       <section className="detail-grid">
         <div className="panel facts">
           <h2>Envelope</h2>
@@ -116,16 +120,6 @@ export default async function ExecutionDetailPage({
             </article>
           ))}
         </div>
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>Event timeline</h2>
-            <p>Append-only policy and execution history.</p>
-          </div>
-          <span className="muted">{execution.events.length} events</span>
-        </div>
-        <EventTimeline events={execution.events} />
       </section>
     </>
   );

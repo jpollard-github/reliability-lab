@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gt } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import type {
@@ -82,6 +82,26 @@ export class PostgresExecutionRepository implements ExecutionRepository {
 
   async appendEvent(event: ExecutionEvent) {
     await this.#db.insert(executionEvents).values(toEventRow(event)).onConflictDoNothing();
+  }
+
+  async eventsAfter(tenantId: TenantId, executionId: ExecutionId, afterSequence: number) {
+    const [execution] = await this.#db
+      .select({ id: executions.id })
+      .from(executions)
+      .where(and(eq(executions.tenantId, tenantId), eq(executions.id, executionId)))
+      .limit(1);
+    if (!execution) return null;
+    const rows = await this.#db
+      .select({ data: executionEvents.data })
+      .from(executionEvents)
+      .where(
+        and(
+          eq(executionEvents.executionId, executionId),
+          gt(executionEvents.sequence, afterSequence),
+        ),
+      )
+      .orderBy(asc(executionEvents.sequence));
+    return rows.map((row) => row.data);
   }
 
   async findById(tenantId: TenantId, executionId: ExecutionId) {

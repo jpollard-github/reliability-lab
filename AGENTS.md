@@ -65,7 +65,12 @@ cookies, keys, messages, and input from logs. Live-provider request-body retenti
 ## Repository skills
 
 - `$export-repo`: package tracked and non-ignored repository files using `pnpm export:repo`; use when
-  asked to archive or share the repository.
+  asked to archive or share the repository. This is the source handoff archive.
 - `$export-working-files`: package only explicitly allowlisted, ignored, non-secret artifacts using
   `pnpm export:working`; use when asked to preserve local traces, sanitized fixtures, screenshots, or
-  diagnostics.
+  diagnostics. It is not a source-code change-set exporter.
+
+When a substantial implementation task explicitly requests a reviewable handoff archive, run the
+full repository export only after all edits and verification are complete. Review the dry run first;
+a dry run is not an export. Do not edit after creating the final archive unless verification is
+rerun as appropriate and the archive is recreated.

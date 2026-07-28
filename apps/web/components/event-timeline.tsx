@@ -28,6 +28,19 @@ function EventDetails({ event }: { event: ExecutionEvent }) {
           {event.provider} / {event.model}, attempt {event.attemptNumber}
         </p>
       );
+    case "provider.response_received":
+      return (
+        <p>
+          {event.provider} / {event.model}, attempt {event.attemptNumber}, {event.latencyMs} ms
+        </p>
+      );
+    case "attempt.failed":
+      return (
+        <p>
+          Attempt {event.attemptNumber}: {event.error.category} · {event.error.code} ·{" "}
+          {event.latencyMs} ms
+        </p>
+      );
     case "retry.scheduled":
       return (
         <p>
@@ -42,6 +55,16 @@ function EventDetails({ event }: { event: ExecutionEvent }) {
       );
     case "structured_output.rejected":
       return <p>{event.errors.join("; ")}</p>;
+    case "structured_output.validated":
+      return <p>Attempt {event.attemptNumber} passed the requested schema.</p>;
+    case "budget.exceeded":
+      return (
+        <p>
+          Observed {event.observed}; configured limit {event.limit}.
+        </p>
+      );
+    case "circuit.rejected":
+      return <p>{event.provider} was not called because its circuit was open.</p>;
     case "execution.failed":
       return (
         <p>

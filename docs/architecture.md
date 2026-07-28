@@ -9,11 +9,18 @@ deterministic fake and focused OpenAI-compatible HTTP adapters. `packages/db` st
 evidence and implements the encrypted PostgreSQL replay vault. `apps/web` talks only to the API and
 never receives capsule bodies.
 
-A submission flows API → idempotency lookup → execution service → capsule retention decision →
-provider attempt(s) → structured validation → append-only events/current-state projection → API
-response. Replay first asks the tenant-scoped capsule port for a current capability, decrypts only
+A submission flows API → idempotency lookup → persisted running envelope and acceptance event →
+`202` response. The execution service then continues in the API process through capsule retention
+decision → provider attempt(s) → structured validation → append-only events/current-state
+projection. Replay first asks the tenant-scoped capsule port for a current capability, decrypts only
 inside the PostgreSQL adapter when replay is actually requested, invokes the normal execution path,
 links the new envelope to the original, and compares normalized outcomes.
+
+The live machine view uses a tenant-scoped SSE endpoint at the API boundary. It reads ordered events
+after a sequence cursor from the execution repository, backfills persisted history, polls for new
+persisted evidence, sends heartbeat comments, and closes after terminal evidence. The browser uses
+fetch streaming rather than native `EventSource` because the prototype tenant boundary is a request
+header. Core exposes only an event-cursor repository operation and has no SSE or browser concepts.
 
 ## Replay vault boundary
 
@@ -45,7 +52,9 @@ sent to a provider if required capsule persistence fails.
 - **Replay storage:** plaintext exists transiently in the API process for execution and
   encryption/decryption. It is not a database column, API response, audit field, log, or span.
 - **Dashboard:** browser requests use a fixed development tenant. Production requires authenticated
-  tenant selection and authorization.
+  tenant selection and authorization. Its live route receives only the typed, operator-safe event
+  record; prompts, capsule material, keys, provider credentials, cookies, and authorization are not
+  event payloads.
 
 ## Read behavior and scaling tradeoff
 
@@ -61,7 +70,10 @@ execution may proceed when optional replay persistence fails, and the envelope t
 `missing`. Live retention is a stronger promise: startup rejects invalid durable configuration and a
 runtime capsule-write failure prevents the provider call.
 
-Execution remains synchronous. The append-only event log explains policy decisions while the
-execution row is a mutable query projection. Replay audit/lifecycle operations are transactional
-inside the vault, but execution-event/projection writes are not a transactional outbox. Queue,
-worker, lease, and recovery work remains in the [roadmap](roadmap.md).
+Accepted execution continues asynchronously but remains owned by the API process. The initial
+running projection and acceptance event are persisted before `202`, but there is no durable queue,
+worker, lease, or recovery claim: a process failure can lose in-flight work. The append-only event
+log explains decisions while the execution row is a mutable query projection. Replay
+audit/lifecycle operations are transactional inside the vault, but execution-event/projection
+writes are not a transactional outbox. Durable execution remains in the
+[roadmap](roadmap.md).
