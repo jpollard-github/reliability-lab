@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { LiveExecutionView } from "@/components/live-execution-view";
 import { ReplayButton } from "@/components/replay-button";
 import { StatusBadge } from "@/components/status-badge";
-import { getExecution } from "@/lib/api";
+import { AddToCase } from "@/components/add-to-case";
+import { getExecution, getInvestigationCases } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,13 @@ export default async function ExecutionDetailPage({
   const requestedReturnTo = Array.isArray(rawReturnTo) ? rawReturnTo[0] : rawReturnTo;
   const returnTo =
     requestedReturnTo?.startsWith("/investigations") === true ? requestedReturnTo : "/";
-  const execution = await getExecution(executionId);
+  const recentCaseParams = new URLSearchParams({ limit: "10" });
+  recentCaseParams.append("status", "open");
+  recentCaseParams.append("status", "investigating");
+  const [execution, recentCases] = await Promise.all([
+    getExecution(executionId),
+    getInvestigationCases(recentCaseParams),
+  ]);
   if (!execution) notFound();
   const signals = executionSignals(execution);
 
@@ -124,6 +131,11 @@ export default async function ExecutionDetailPage({
           )}
         </div>
       </section>
+      <AddToCase
+        beginCaseHref={`/investigation-cases?newEvidenceType=execution&newEvidenceId=${encodeURIComponent(execution.executionId)}`}
+        cases={recentCases.data}
+        evidence={{ type: "execution", executionId: execution.executionId }}
+      />
       <section className="panel">
         <div className="panel-heading">
           <div>

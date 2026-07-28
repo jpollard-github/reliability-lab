@@ -11,6 +11,10 @@ import type {
 import type { ComparisonExperimentRepository, ExecutionRepository } from "@reliability-lab/core";
 import {
   comparisonExperiments,
+  investigationCaseEvidence,
+  investigationCaseEvents,
+  investigationCaseNotes,
+  investigationCases,
   executionAttempts,
   executionEvents,
   executionJobs,
@@ -23,10 +27,15 @@ import {
 export * from "./durable-execution.js";
 export * from "./execution-commands.js";
 export * from "./investigation.js";
+export * from "./investigation-cases.js";
 export * from "./replay-capsules.js";
 export * from "./replay-runtime-config.js";
 export {
   comparisonExperiments,
+  investigationCaseEvidence,
+  investigationCaseEvents,
+  investigationCaseNotes,
+  investigationCases,
   executionJobs,
   replayCapsuleAudits,
   replayCapsules,
@@ -34,6 +43,10 @@ export {
 
 export type ReliabilityDatabase = NodePgDatabase<{
   comparisonExperiments: typeof comparisonExperiments;
+  investigationCases: typeof investigationCases;
+  investigationCaseNotes: typeof investigationCaseNotes;
+  investigationCaseEvidence: typeof investigationCaseEvidence;
+  investigationCaseEvents: typeof investigationCaseEvents;
   executions: typeof executions;
   executionAttempts: typeof executionAttempts;
   executionEvents: typeof executionEvents;
@@ -49,6 +62,10 @@ export function createDatabase(databaseUrl: string) {
     schema: {
       executions,
       comparisonExperiments,
+      investigationCases,
+      investigationCaseNotes,
+      investigationCaseEvidence,
+      investigationCaseEvents,
       executionAttempts,
       executionEvents,
       executionJobs,

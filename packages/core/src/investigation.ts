@@ -283,7 +283,7 @@ export function summarizeReliability(
       timeoutFailures: executions.filter((execution) =>
         execution.attempts.some((attempt) => attempt.error?.category === "timeout"),
       ).length,
-      providerCapacityFailures: executions.filter((execution) =>
+      providerUnavailableFailures: executions.filter((execution) =>
         execution.attempts.some((attempt) => attempt.error?.category === "provider_unavailable"),
       ).length,
     },

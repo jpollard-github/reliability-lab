@@ -81,6 +81,29 @@ envelopes, never the capsule, prompt, messages, structured schema content, or cr
 Deleting or expiring a capsule prevents creation of a new variant and produces an explicit
 unavailable experiment; existing normalized execution evidence remains.
 
+## Saved investigation cases
+
+Cases store bounded operational prose—title, question, finding, resolution, and append-only
+notes—in plaintext. They are not a prompt-retention mechanism. Evidence rows store only typed
+tenant-scoped references to execution IDs, comparison experiment IDs, or canonical
+provider/model/exact-range observations. The API accepts no arbitrary external URL, HTML, prompt,
+message, output, replay material, command payload, ciphertext, provider credential, raw provider
+body, or arbitrary pasted attachment.
+
+Every case, note, evidence, list, and timeline operation scopes by tenant. Cross-tenant evidence is
+reported as not found. Removing a link leaves the execution/comparison intact and appends a
+metadata-only lifecycle event. Notes have no edit/delete endpoint; archive replaces hard case
+deletion in this slice.
+
+Timeline metadata contains safe identifiers, types, changed-field names, status transitions, and
+presence flags. Note bodies, finding text, and resolution text remain only in their normal current
+records and are not duplicated into timeline metadata, logs, or trace attributes. Logs identify case
+ID and operation type. Repository exports contain source and safe fixtures, never runtime case rows.
+
+The `X-Tenant-Id` header is routing context, not a person. Cases deliberately have no author, owner,
+assignee, or resolver field. Authenticated authorship, role-based access, and PostgreSQL row-level
+security remain absent and are required before production use.
+
 ## Remaining risks
 
 Plaintext must exist transiently to encrypt a command and to call a provider or replay a capsule, so

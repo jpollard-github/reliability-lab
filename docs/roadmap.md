@@ -127,16 +127,25 @@ Those remain possible future work, not prerequisites for Horizon 5.
 
 ### Horizon 5: An operator’s reliability lab
 
-**Current movement.** Investigation is beginning to scale beyond opening one execution ID at a
-time.
+**Current movement: Saved Investigation Cases.** Investigation now persists beyond one browser
+session without becoming a generic ticketing system.
 
 The console supports useful filtering and search, trace/log correlation, replay comparisons, scenario catalogs, policy experiments, provider health views, and aggregate reliability metrics. The system begins to expose service-level signals such as success, degraded success, retry recovery, fallback dependence, latency-budget failures, and replay reproducibility.
 
-The first movement, **Investigation Workbench Foundation**, is now implemented: bounded explicit
+The established first movement, **Investigation Workbench Foundation**, provides bounded explicit
 time ranges, compact and stably paginated execution search, aggregate reliability signals,
 attempt-level provider/model observations, trace correlation, and evidence-grounded drill-down to
-existing detail/replay/comparison flows. It deliberately does not claim external log search,
-universal provider health, saved cases, alerting, or the full Horizon 5 outcome.
+existing detail/replay/comparison flows.
+
+The current movement, **Saved Investigation Cases**, adds exact canonical scope snapshots, bounded
+current interpretation, archive status, typed current evidence references, append-only notes, and a
+metadata-only lifecycle timeline. It deliberately has no fabricated author, assignment, threaded
+comments, arbitrary attachments/URLs, automatic case creation, or copied execution envelopes. The
+tenant header remains routing context rather than authenticated identity.
+
+Horizon 5 is not complete. A broader scenario catalog and explicitly configured external trace/log
+correlation remain later possibilities when the workflow justifies them. The product still does not
+claim universal provider health, alerting, or the full Horizon 5 completion signal.
 
 **Completion signal.** A developer can move from an investigation case to a supported reliability conclusion without querying tables or reading application source.
 
@@ -175,14 +184,16 @@ Durable Execution Safety
         ↓
 Investigation Workbench Foundation
         ↓
-Saved investigation cases, scenario catalog, and external trace/log integrations when justified
+Saved Investigation Cases
+        ↓
+Scenario Catalog and External Correlation Integrations
 ```
 
 Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
 The **Horizon 4 Durable Execution Foundation** now makes acceptance restart-durable in PostgreSQL
-worker mode and fences stale claims without overstating exactly-once provider behavior. The current
-movement is the Horizon 5 Investigation Workbench Foundation described above. Saved cases, a
-scenario catalog, and explicitly configured trace/log integrations remain later Horizon 5 work.
-Cancellation, Redis
+worker mode and fences stale claims without overstating exactly-once provider behavior. The
+Investigation Workbench Foundation is established, and Saved Investigation Cases is the current
+Horizon 5 movement. A scenario catalog and explicitly configured trace/log integrations remain later
+Horizon 5 work. Cancellation, Redis
 coordination, generic outbox tooling, resumable workflow machinery, and cloud infrastructure are not
 prerequisites for that movement.

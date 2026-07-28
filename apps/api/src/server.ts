@@ -1,10 +1,12 @@
 import { createClient, type RedisClientType } from "redis";
 import {
   ExecutionService,
+  InvestigationCaseService,
   MapProviderRegistry,
   MemoryComparisonExperimentRepository,
   MemoryExecutionRepository,
   MemoryInvestigationReadRepository,
+  MemoryInvestigationCaseRepository,
   MemoryReplayCapsuleStore,
   type ComparisonExperimentRepository,
   type ExecutionRepository,
@@ -16,6 +18,7 @@ import {
   PostgresDurableExecutionStore,
   PostgresExecutionRepository,
   PostgresInvestigationReadRepository,
+  PostgresInvestigationCaseRepository,
   PostgresReplayCapsuleStore,
 } from "@reliability-lab/db";
 import { OpenTelemetryExecutionTracer, startTelemetry } from "@reliability-lab/observability";
@@ -111,9 +114,17 @@ const service = new ExecutionService({
   replayRetentionMs: replayConfig.retentionMs,
   ...(durableStore ? { durableAcceptance: durableStore } : {}),
 });
+const investigationCases = new InvestigationCaseService({
+  cases: database
+    ? new PostgresInvestigationCaseRepository(database)
+    : new MemoryInvestigationCaseRepository(),
+  executions: repository,
+  comparisons,
+});
 
 const app = await buildApp({
   service,
+  investigationCases,
   investigations: database
     ? new PostgresInvestigationReadRepository(database)
     : new MemoryInvestigationReadRepository(repository),
@@ -133,6 +144,7 @@ const app = await buildApp({
           await databasePool.query("select 1 from replay_capsules limit 0");
         }
         await databasePool.query("select 1 from comparison_experiments limit 0");
+        await databasePool.query("select 1 from investigation_cases limit 0");
         if (durableStore) await databasePool.query("select 1 from execution_jobs limit 0");
       } catch {
         checks.repository = "postgres:unavailable";

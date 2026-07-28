@@ -1,5 +1,10 @@
 import Link from "next/link";
-import type { ReliabilitySummary } from "@reliability-lab/contracts";
+import type {
+  InvestigationCaseEvidenceInput,
+  ReliabilitySummary,
+  SavedInvestigationScope,
+} from "@reliability-lab/contracts";
+import { CreateCaseForm } from "@/components/create-case-form";
 import { ExecutionTable } from "@/components/execution-table";
 import {
   getInvestigationSummary,
@@ -51,6 +56,8 @@ export default async function InvestigationsPage({
   ]);
   const returnTo = `/investigations${current.size ? `?${current.toString()}` : ""}`;
   const selectedWindow = isWindowPreset(first(raw.window)) ? first(raw.window) : "24h";
+  const savedScope = toSavedScope(range, current);
+  const providerEvidence = activeProviderEvidence(savedScope);
 
   return (
     <>
@@ -172,6 +179,13 @@ export default async function InvestigationsPage({
           value={String(summary.signals.providerOutcomeAmbiguous)}
         />
         <DrillCard
+          href={filterHref(current, "errorCategory", "provider_unavailable")}
+          label="Provider unavailable"
+          note="generic normalized category"
+          tone="danger"
+          value={String(summary.signals.providerUnavailableFailures)}
+        />
+        <DrillCard
           href="#execution-explorer"
           label="p95 latency"
           note={`${summary.latency.sampleSize} terminal samples`}
@@ -179,7 +193,33 @@ export default async function InvestigationsPage({
         />
       </section>
 
-      <section className="panel">
+      <section className="panel" aria-labelledby="save-investigation-heading">
+        <div className="panel-heading">
+          <div>
+            <h2 id="save-investigation-heading">Save investigation</h2>
+            <p>
+              Preserve this exact UTC range and canonical filters. Cursor, page size, and moving
+              preset are deliberately excluded.
+            </p>
+          </div>
+        </div>
+        <CreateCaseForm
+          optionalEvidence={
+            providerEvidence
+              ? [
+                  {
+                    label: `${providerEvidence.provider} / ${providerEvidence.model} in this exact range`,
+                    evidence: providerEvidence,
+                  },
+                ]
+              : []
+          }
+          scope={savedScope}
+          visibleExecutionIds={executions.data.map((execution) => execution.executionId)}
+        />
+      </section>
+
+      <section className="panel" id="provider-observations">
         <div className="panel-heading">
           <div>
             <h2>Outcome trend</h2>
@@ -521,4 +561,56 @@ function shortDate(value: string) {
     day: "numeric",
     hour: "numeric",
   });
+}
+
+function toSavedScope(
+  range: { from: string; to: string },
+  params: URLSearchParams,
+): SavedInvestigationScope {
+  const query = params.get("q")?.trim();
+  const statuses = canonicalValues(params, "status") as NonNullable<
+    SavedInvestigationScope["statuses"]
+  >;
+  const providers = canonicalValues(params, "provider");
+  const models = canonicalValues(params, "model");
+  const errorCode = params.get("errorCode")?.trim();
+  return {
+    range,
+    ...(query ? { query } : {}),
+    ...(statuses.length ? { statuses } : {}),
+    ...(providers.length ? { providers } : {}),
+    ...(models.length ? { models } : {}),
+    ...(params.get("errorCategory")
+      ? {
+          errorCategory: params.get("errorCategory") as NonNullable<
+            SavedInvestigationScope["errorCategory"]
+          >,
+        }
+      : {}),
+    ...(errorCode ? { errorCode } : {}),
+    ...(params.get("signal")
+      ? {
+          signal: params.get("signal") as NonNullable<SavedInvestigationScope["signal"]>,
+        }
+      : {}),
+  };
+}
+
+function activeProviderEvidence(
+  scope: SavedInvestigationScope,
+): Extract<InvestigationCaseEvidenceInput, { type: "provider_observation" }> | null {
+  if (scope.providers?.length !== 1 || scope.models?.length !== 1) return null;
+  return {
+    type: "provider_observation",
+    provider: scope.providers[0]!,
+    model: scope.models[0]!,
+    range: scope.range,
+  };
+}
+
+function canonicalValues(params: URLSearchParams, key: string) {
+  return [...new Set(params.getAll(key).flatMap((value) => value.split(",")))]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
 }

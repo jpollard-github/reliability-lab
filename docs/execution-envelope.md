@@ -105,3 +105,15 @@ Signal definitions are shared pure domain projections:
 PostgreSQL implements equivalent predicates without reconstructing envelopes. Provider/model rows
 aggregate attempt evidence, not the envelope's initial route. Missing latency and cost remain
 missing evidence; rates are null when their terminal denominator is zero.
+
+## Saved-case evidence linkage
+
+An investigation case does not become another execution envelope. Execution evidence stores only a
+tenant-scoped execution ID association; comparison evidence stores only an experiment ID
+association; provider observation evidence stores provider, model, and an exact bounded range.
+Opening a link uses the existing current evidence API.
+
+No case table copies attempts, events, prompts, messages, outputs, replay capsules, encrypted
+commands, ciphertext, or raw provider bodies. Removing an association records metadata in the case
+timeline and does not delete the referenced execution or comparison. Replay expiry or deletion also
+does not remove an execution evidence association.

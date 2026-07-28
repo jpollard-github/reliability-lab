@@ -24,6 +24,7 @@ import {
 
 export * from "./comparison.js";
 export * from "./investigation.js";
+export * from "./investigation-cases.js";
 
 export interface Clock {
   now(): Date;

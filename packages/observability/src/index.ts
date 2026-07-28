@@ -39,6 +39,11 @@ export function startTelemetry(options: { serviceName: string; otlpEndpoint?: st
 export const pinoRedactionPaths = [
   "req.headers.authorization",
   "req.headers.cookie",
+  "req.body.title",
+  "req.body.question",
+  "req.body.finding",
+  "req.body.resolution",
+  "req.body.body",
   "headers.authorization",
   "headers.cookie",
   "apiKey",
@@ -47,4 +52,10 @@ export const pinoRedactionPaths = [
   "*.authorization",
   "*.messages",
   "*.input",
+  "*.title",
+  "*.question",
+  "*.finding",
+  "*.resolution",
+  "*.note",
+  "*.body",
 ];

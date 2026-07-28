@@ -222,7 +222,7 @@ Useful fields include:
 - median and p95 attempt latency;
 - timeout count;
 - rate-limit count;
-- provider-capacity count when represented by normalized evidence;
+- provider-unavailable count for the generic normalized `provider_unavailable` category;
 - structured-output rejection associated with responses;
 - sample size.
 
@@ -493,5 +493,11 @@ filters drill into ordinary execution detail pages while preserving a return lin
 
 The compatibility execution-list endpoint remains for older callers. The workbench does not use it,
 does not fetch replay capsules or prompt/output bodies, and does not hydrate full attempts and
-events for table rows. External logs/traces, saved investigation cases, alerting, anomaly detection,
-and universal provider rankings remain intentionally outside this foundation.
+events for table rows. Saved Investigation Cases now preserve an exact resolved workbench scope and
+typed evidence references; external logs/traces, alerting, anomaly detection, and universal provider
+rankings remain outside this foundation.
+
+The summary calls generic normalized failures `providerUnavailableFailures`, not capacity failures.
+The current taxonomy includes upstream 5xx and other unavailable outcomes. Reliability Lab will only
+claim a separate capacity signal after a stable normalized code represents explicit capacity
+evidence.

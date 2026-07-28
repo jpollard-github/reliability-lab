@@ -198,6 +198,141 @@ test("shows accessible empty evidence states for a bounded custom window", async
   await expect(page.getByText("No executions recorded for demo-tenant.")).toBeVisible();
 });
 
+test("saves a complete investigation case and reopens its exact evidence scope", async ({
+  page,
+  request,
+}) => {
+  test.slow();
+  const caseTitle = `Retry recovery case ${Date.now()}`;
+  const retryCreate = await request.post("http://127.0.0.1:4000/v1/executions", {
+    headers: { "x-tenant-id": "demo-tenant" },
+    data: {
+      provider: "fake-primary",
+      model: "deterministic-v1",
+      input: "Saved case retry evidence",
+      failureMode: "rate_limit",
+      policy: { maxAttempts: 2, baseBackoffMs: 0, maxBackoffMs: 0, jitterRatio: 0 },
+    },
+  });
+  const fallbackCreate = await request.post("http://127.0.0.1:4000/v1/executions", {
+    headers: { "x-tenant-id": "demo-tenant" },
+    data: {
+      provider: "fake-primary",
+      model: "deterministic-v1",
+      input: "Saved case fallback evidence",
+      failureMode: "provider_error",
+      policy: {
+        maxAttempts: 1,
+        fallbackProvider: "fake-fallback",
+        fallbackModel: "fallback-v1",
+      },
+    },
+  });
+  expect(retryCreate.status()).toBe(202);
+  expect(fallbackCreate.status()).toBe(202);
+  const retry = (await retryCreate.json()) as { executionId: string };
+  const fallback = (await fallbackCreate.json()) as { executionId: string };
+  await waitForExecution(request, retry.executionId, "succeeded");
+  await waitForExecution(request, fallback.executionId, "degraded");
+
+  const comparisonCreate = await request.post(
+    `http://127.0.0.1:4000/v1/executions/${retry.executionId}/comparisons`,
+    {
+      headers: { "x-tenant-id": "demo-tenant" },
+      data: {
+        variation: {
+          policy: {
+            maxAttempts: 1,
+            fallbackProvider: "fake-fallback",
+            fallbackModel: "fallback-v1",
+          },
+        },
+      },
+    },
+  );
+  expect(comparisonCreate.status()).toBe(202);
+  const comparison = (await comparisonCreate.json()) as {
+    experiment: { experimentId: string; variantExecutionId?: string };
+  };
+  if (comparison.experiment.variantExecutionId) {
+    await waitForExecution(request, comparison.experiment.variantExecutionId, "degraded");
+  }
+
+  await page.goto("/investigations?window=24h&signal=retry_recovered");
+  await expect(page.getByRole("heading", { name: "Save investigation" })).toBeVisible();
+  await page.getByLabel("Case title").fill(caseTitle);
+  await page.getByLabel("Reliability question").fill("Did bounded retry recover this window?");
+  await page.getByLabel(retry.executionId.slice(0, 12)).check();
+  await page.getByRole("button", { name: "Save investigation" }).click();
+
+  await expect(page).toHaveURL(/\/investigation-cases\/[^/?]+$/);
+  const caseUrl = page.url();
+  await expect(page.getByRole("heading", { name: caseTitle })).toBeVisible();
+  await expect(page.getByText(/Actor identity is unavailable/i)).toBeVisible();
+  await expect(page.getByText(retry.executionId, { exact: true })).toBeVisible();
+
+  await page.getByLabel("Evidence type").selectOption("comparison");
+  await page.getByLabel("Execution or comparison ID").fill(comparison.experiment.experimentId);
+  await page.getByRole("button", { name: "Add evidence" }).click();
+  await expect(page.getByText(comparison.experiment.experimentId, { exact: true })).toBeVisible();
+
+  await page.getByLabel("Note", { exact: true }).fill("Retry recovered on the second attempt.");
+  await page.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByText("Retry recovered on the second attempt.")).toBeVisible();
+
+  await page.getByLabel("Current finding").fill("Bounded retry recovered the selected execution.");
+  await page.getByLabel("Resolution").fill("Keep the bounded retry policy.");
+  await page.getByLabel("Status").selectOption("resolved");
+  await page.getByRole("button", { name: "Update case" }).click();
+  await expect(page.getByText("resolved", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("paragraph").filter({
+      hasText: "Bounded retry recovered the selected execution.",
+    }),
+  ).toBeVisible();
+
+  const savedScope = page.getByRole("link", { name: "Open saved workbench scope" });
+  await savedScope.click();
+  await expect(page).toHaveURL(/from=/);
+  await expect(page).toHaveURL(/to=/);
+  await expect(page).toHaveURL(/signal=retry_recovered/);
+  await expect(page.getByLabel("Signal")).toHaveValue("retry_recovered");
+
+  await page.goto(caseUrl);
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: retry.executionId })
+    .getByRole("link", { name: "Open evidence" })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/executions/${retry.executionId}$`));
+  await expect(page.getByText("Trace ID (copyable)")).toBeVisible();
+
+  const seedRange = {
+    from: new Date(Date.now() - 60_000).toISOString(),
+    to: new Date(Date.now() + 60_000).toISOString(),
+  };
+  const seeds = await Promise.all(
+    Array.from({ length: 26 }, (_, index) =>
+      request.post("http://127.0.0.1:4000/v1/investigation-cases", {
+        headers: { "x-tenant-id": "demo-tenant" },
+        data: {
+          title: `Pagination case ${String(index).padStart(2, "0")}`,
+          question: "Does case pagination remain stable?",
+          savedScope: { range: seedRange },
+        },
+      }),
+    ),
+  );
+  expect(seeds.every((response) => response.status() === 201)).toBe(true);
+
+  await page.goto(`/investigation-cases?status=resolved&q=${encodeURIComponent(caseTitle)}`);
+  await expect(page.getByRole("link", { name: caseTitle })).toBeVisible();
+  await page.goto("/investigation-cases");
+  await page.getByRole("link", { name: "Next page" }).click();
+  await expect(page).toHaveURL(/cursor=/);
+  await expect(page.getByRole("link", { name: "First page" })).toBeVisible();
+});
+
 test("navigates a stable cursor page from a seeded execution set", async ({ page, request }) => {
   const submissions = await Promise.all(
     Array.from({ length: 26 }, (_, index) =>

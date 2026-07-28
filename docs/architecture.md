@@ -6,8 +6,9 @@
 HTTP. `apps/worker` is the separate durable continuation process. `packages/core` owns acceptance
 preparation, continuation, provider policy, events, replay capability, and comparison behavior
 through ports. `packages/providers` implements deterministic fake and focused OpenAI-compatible
-HTTP adapters. `packages/db` stores execution evidence, durable jobs, comparison experiments, and
-the separately encrypted PostgreSQL Replay Vault. `apps/web` talks only to the API and never
+HTTP adapters. `packages/db` stores execution evidence, durable jobs, comparison experiments, saved
+investigation cases, and the separately encrypted PostgreSQL Replay Vault. `apps/web` talks only to
+the API and never
 receives command or capsule bodies.
 
 `EXECUTION_MODE=in_process` is the infrastructure-free default: the API persists acceptance,
@@ -40,7 +41,8 @@ functions. Search uses an opaque cursor ordered by `created_at DESC, id DESC`; e
 tenant and half-open time predicates.
 
 The focused `/v1/investigations/executions`, `/summary`, and `/providers` endpoints return the exact
-resolved range. The list query is one bounded SQL statement, summary uses two fixed statements
+resolved range. Execution search uses one bounded page statement plus one fixed count statement,
+summary uses two fixed statements
 (aggregate plus trend), and provider observations use one statement. None inspects replay
 capability or selects prompts, outputs, event arrays, attempt arrays, command ciphertext, or replay
 capsules. Full envelopes remain the detail-page contract.
@@ -49,6 +51,31 @@ Outcome rates divide succeeded, degraded, and failed counts by all terminal outc
 reserved cancelled status when present. Queued and running are reported as in flight. Provider/model
 observations use attempts, exclude running attempts from their observed success denominator, expose
 sample size, and deliberately assign no health score.
+
+The summary name `providerUnavailableFailures` describes executions with any attempt normalized as
+`provider_unavailable`. That category includes generic upstream outages and explicit unavailable
+responses; it is not presented as provider capacity. A future capacity count requires a distinct,
+stable normalized code with explicit capacity evidence.
+
+## Saved investigation case boundary
+
+`InvestigationCaseService` is a framework-independent orchestrator beside execution policy and the
+investigation read model. It canonicalizes an exact saved range and filters, validates execution and
+comparison ownership through their existing tenant-scoped repositories, and coordinates case state,
+append-only notes, evidence associations, and metadata timeline events. Memory and PostgreSQL case
+repositories implement the same contract.
+
+PostgreSQL persists `investigation_cases`, `investigation_case_notes`,
+`investigation_case_evidence`, and `investigation_case_events`. Case updates and their timeline
+events are transactional; note/evidence mutations and their lifecycle events are transactional.
+Evidence rows contain typed identifiers or a canonical provider/model/range reference, never copied
+execution envelopes. Case pages use `updated_at DESC, id DESC`, an opaque two-field cursor, and a
+separate fixed total query so an empty terminal page still reports all matching cases.
+
+The current case record holds title, question, status, optional importance, finding, resolution, and
+resolved time. Notes have no update/delete path. Timeline metadata records IDs, evidence types,
+changed field names, presence booleans, and status transitions; it does not duplicate note, finding,
+or resolution prose. Archive is the retention action; there is no hard-delete endpoint.
 
 ## Durable job boundary
 
@@ -104,6 +131,9 @@ share replay capabilities.
   access includes tenant/execution identity; command AAD binds the same identity.
 - **Comparison persistence:** definitions include requested variation and resolved non-sensitive
   conditions, never retained input or cryptographic material.
+- **Case persistence:** bounded operational prose is plaintext, while evidence is typed references.
+  No prompt, output, capsule, command, ciphertext, credential, raw provider body, or arbitrary URL is
+  accepted. The tenant header is not an authenticated author.
 - **Command and replay storage:** plaintext exists transiently only while encrypting/decrypting or
   calling a provider. It is not a metadata column, API response, audit field, log, or span.
 - **Dashboard:** the fixed development tenant is not authentication. The browser receives typed,

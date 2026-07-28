@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ExecutionEnvelope, ExecutionEvent } from "@reliability-lab/contracts";
 import {
   decodeExecutionCursor,
+  encodeExecutionCursor,
   InvestigationQueryError,
   MemoryExecutionRepository,
   MemoryInvestigationReadRepository,
@@ -69,6 +70,32 @@ describe("investigation projections", () => {
     });
   });
 
+  it("names generic provider-unavailable evidence without implying capacity", () => {
+    const unavailable = fixture({
+      status: "failed",
+      attempts: [
+        {
+          attemptNumber: 1,
+          provider: "fake-primary",
+          model: "deterministic-v1",
+          status: "failed",
+          startedAt: "2026-01-01T12:00:00.000Z",
+          completedAt: "2026-01-01T12:00:00.010Z",
+          durationMs: 10,
+          error: {
+            category: "provider_unavailable",
+            code: "upstream_503",
+            message: "Provider returned 503",
+            retryable: true,
+          },
+        },
+      ],
+    });
+    const summary = summarizeReliability([unavailable], RANGE);
+    expect(summary.signals.providerUnavailableFailures).toBe(1);
+    expect(JSON.stringify(summary.signals)).not.toContain("Capacity");
+  });
+
   it("returns null rates and percentiles when no terminal evidence exists", () => {
     const summary = summarizeReliability([fixture({ status: "queued" })], RANGE);
     expect(summary.outcomes.successRate).toBeNull();
@@ -134,6 +161,12 @@ describe("investigation projections", () => {
       cursor: first.nextCursor!,
     });
     expect(second.data.map((item) => item.executionId)).toEqual(["execution-a"]);
+    const terminal = await investigations.searchExecutions("tenant-a", {
+      range: RANGE,
+      limit: 1,
+      cursor: encodeExecutionCursor(second.data[0]!.createdAt, second.data[0]!.executionId),
+    });
+    expect(terminal).toMatchObject({ data: [], total: 2 });
   });
 
   it("rejects malformed, inverted, and over-wide ranges", () => {

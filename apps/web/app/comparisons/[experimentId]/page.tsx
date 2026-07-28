@@ -6,7 +6,8 @@ import type {
   ExecutionPolicy,
 } from "@reliability-lab/contracts";
 import { ExecutionMachineView } from "@/components/live-execution-view";
-import { getComparison } from "@/lib/api";
+import { AddToCase } from "@/components/add-to-case";
+import { getComparison, getInvestigationCases } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,13 @@ export default async function ComparisonDetailPage({
   params: Promise<{ experimentId: string }>;
 }) {
   const { experimentId } = await params;
-  const comparison = await getComparison(experimentId);
+  const recentCaseParams = new URLSearchParams({ limit: "10" });
+  recentCaseParams.append("status", "open");
+  recentCaseParams.append("status", "investigating");
+  const [comparison, recentCases] = await Promise.all([
+    getComparison(experimentId),
+    getInvestigationCases(recentCaseParams),
+  ]);
   if (!comparison) notFound();
   const { experiment, originalExecution, variantExecution, projection } = comparison;
 
@@ -54,6 +61,12 @@ export default async function ComparisonDetailPage({
           <p>{experiment.unavailableReason}</p>
         </section>
       ) : null}
+
+      <AddToCase
+        beginCaseHref={`/investigation-cases?newEvidenceType=comparison&newEvidenceId=${encodeURIComponent(experiment.experimentId)}`}
+        cases={recentCases.data}
+        evidence={{ type: "comparison", experimentId: experiment.experimentId }}
+      />
 
       <section className="comparison-configs" aria-label="Execution configurations">
         <ConfigurationCard

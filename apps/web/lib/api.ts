@@ -2,6 +2,8 @@ import type {
   ComparisonView,
   ExecutionEnvelope,
   ExecutionSummaryPage,
+  InvestigationCaseDetail,
+  InvestigationCasePage,
   ProviderObservationPage,
   ReliabilitySummary,
 } from "@reliability-lab/contracts";
@@ -45,6 +47,31 @@ export async function getComparison(experimentId: string): Promise<ComparisonVie
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Comparison detail failed with HTTP ${response.status}`);
   return (await response.json()) as ComparisonView;
+}
+
+export async function getInvestigationCases(
+  params: URLSearchParams = new URLSearchParams(),
+): Promise<InvestigationCasePage> {
+  const query = params.size ? `?${params.toString()}` : "";
+  const response = await fetch(`${apiUrl}/v1/investigation-cases${query}`, {
+    headers: { "x-tenant-id": tenantId },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Investigation case list failed with HTTP ${response.status}`);
+  return (await response.json()) as InvestigationCasePage;
+}
+
+export async function getInvestigationCase(
+  caseId: string,
+): Promise<InvestigationCaseDetail | null> {
+  const response = await fetch(`${apiUrl}/v1/investigation-cases/${encodeURIComponent(caseId)}`, {
+    headers: { "x-tenant-id": tenantId },
+    cache: "no-store",
+  });
+  if (response.status === 404) return null;
+  if (!response.ok)
+    throw new Error(`Investigation case detail failed with HTTP ${response.status}`);
+  return (await response.json()) as InvestigationCaseDetail;
 }
 
 async function getInvestigationResponse<T>(

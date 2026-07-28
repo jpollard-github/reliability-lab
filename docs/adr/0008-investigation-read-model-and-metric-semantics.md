@@ -24,6 +24,10 @@ opaque cursor. PostgreSQL uses selected execution columns, event `EXISTS` predic
 attempt evidence, percentile functions, and fixed query counts. Full envelopes and current replay
 capability remain detail concerns.
 
+Execution search uses one bounded page query plus one fixed count query. The count excludes cursor
+position and always represents all matching records for the selected range and filters, including
+when a valid cursor produces an empty terminal page.
+
 Define outcome-rate terminal evidence as `succeeded`, `degraded`, `failed`, and `cancelled`. Report
 queued and running as in flight and cancelled separately. Rates are null when this denominator is
 zero.
@@ -36,6 +40,11 @@ success denominator. Every row exposes counts, latency sample size, p50/p95, nor
 and a small-sample assessment. There is no composite reliability score, provider ranking, or
 statistical-confidence claim.
 
+Name the execution-level generic unavailable count `providerUnavailableFailures`. The normalized
+`provider_unavailable` category includes upstream 5xx responses and explicit unavailable outcomes;
+it is not sufficient evidence for a capacity claim. A separate capacity metric requires a future
+stable normalized code that represents explicit capacity evidence.
+
 ## Consequences
 
 - Aggregate-to-execution drill-down no longer loads all envelopes, event arrays, attempt arrays, or
@@ -46,5 +55,5 @@ statistical-confidence claim.
   tenant/status/time, and execution/event-type lookups.
 - The compatibility list remains unbounded and should not be used for analytics.
 - Counts describe the selected evidence window, not an SLA or universal provider state.
-- External trace/log integration, saved cases, anomaly detection, and complete Horizon 5 workflows
-  remain future work.
+- Saved cases build on this read model without changing its calculations. External trace/log
+  integration, anomaly detection, and complete Horizon 5 workflows remain future work.

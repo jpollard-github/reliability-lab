@@ -6,9 +6,19 @@ import Fastify, { type FastifyBaseLogger } from "fastify";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   CreateComparisonBodySchema,
+  CreateInvestigationCaseBodySchema,
   CreateExecutionBodySchema,
+  AddInvestigationCaseNoteBodySchema,
   ExecutionSummaryPageSchema,
   ExecutionStatusSchema,
+  InvestigationCaseDetailSchema,
+  InvestigationCaseEvidenceInputSchema,
+  InvestigationCaseImportanceSchema,
+  InvestigationCasePageSchema,
+  InvestigationCaseStatusSchema,
+  InvestigationCaseNoteSchema,
+  InvestigationCaseEvidenceSchema,
+  UpdateInvestigationCaseBodySchema,
   InvestigationSignalSchema,
   ProviderErrorCategorySchema,
   ProviderObservationPageSchema,
@@ -21,10 +31,13 @@ import {
   ComparisonNotFoundError,
   ExecutionNotFoundError,
   IdempotencyConflictError,
+  InvestigationCaseInputError,
+  InvestigationCaseNotFoundError,
   InvestigationQueryError,
   RateLimitRejectedError,
   resolveInvestigationRange,
   type InvestigationReadRepository,
+  type InvestigationCaseService,
   type ExecutionService,
 } from "@reliability-lab/core";
 import { pinoRedactionPaths } from "@reliability-lab/observability";
@@ -46,6 +59,13 @@ const ExecutionParamsSchema = Type.Object({
 });
 const ComparisonParamsSchema = Type.Object({
   experimentId: Type.String({ minLength: 1 }),
+});
+const InvestigationCaseParamsSchema = Type.Object({
+  caseId: Type.String({ minLength: 1, maxLength: 256 }),
+});
+const InvestigationCaseEvidenceParamsSchema = Type.Object({
+  caseId: Type.String({ minLength: 1, maxLength: 256 }),
+  evidenceId: Type.String({ minLength: 1, maxLength: 256 }),
 });
 const ExecutionEventQuerySchema = Type.Object({
   after: Type.Optional(Type.Integer({ minimum: 0 })),
@@ -89,6 +109,17 @@ const InvestigationProviderQuerySchema = Type.Object(
 const InvestigationSummaryQuerySchema = Type.Object(InvestigationRangeQueryProperties, {
   additionalProperties: false,
 });
+const InvestigationCaseListQuerySchema = Type.Object(
+  {
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 25 })),
+    cursor: Type.Optional(Type.String({ minLength: 1, maxLength: 2_048 })),
+    status: Type.Optional(Type.Array(InvestigationCaseStatusSchema, { minItems: 1, maxItems: 4 })),
+    importance: Type.Optional(InvestigationCaseImportanceSchema),
+    q: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+    executionId: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+  },
+  { additionalProperties: false },
+);
 const ExecutionEventHeadersSchema = Type.Object({
   "x-tenant-id": Type.String({ minLength: 1, maxLength: 128 }),
   "last-event-id": Type.Optional(Type.String({ pattern: "^[0-9]+$" })),
@@ -220,10 +251,22 @@ const ComparisonViewSchema = Type.Unsafe<ComparisonView>({
     projection: { type: "object", additionalProperties: true },
   },
 });
+const InvestigationCaseEvidenceResultSchema = Type.Object(
+  {
+    evidence: InvestigationCaseEvidenceSchema,
+    added: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+const InvestigationCaseEvidenceRemovedSchema = Type.Object(
+  { removed: Type.Literal(true) },
+  { additionalProperties: false },
+);
 
 interface AppOptions {
   service: ExecutionService;
   investigations: InvestigationReadRepository;
+  investigationCases: InvestigationCaseService;
   readiness?: () => Promise<{ ready: boolean; checks: Record<string, string> }>;
   logger?: FastifyBaseLogger | boolean;
   enableFailureInjection?: boolean;
@@ -244,7 +287,7 @@ export async function buildApp(options: AppOptions) {
 
   await app.register(cors, {
     origin: process.env.NODE_ENV === "production" ? false : true,
-    methods: ["GET", "HEAD", "POST", "DELETE"],
+    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE"],
   });
   await app.register(swagger, {
     openapi: {
@@ -461,6 +504,187 @@ export async function buildApp(options: AppOptions) {
         ...(request.query.provider ? { providers: arrayValue(request.query.provider) } : {}),
         ...(request.query.model ? { models: arrayValue(request.query.model) } : {}),
       });
+    },
+  );
+
+  app.post(
+    "/v1/investigation-cases",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        body: CreateInvestigationCaseBodySchema,
+        response: { 201: InvestigationCaseDetailSchema, 400: ErrorSchema },
+      },
+    },
+    async (request, reply) => {
+      const detail = await options.investigationCases.create(
+        request.headers["x-tenant-id"],
+        request.body,
+      );
+      request.log.info(
+        { caseId: detail.case.caseId, operation: "case.created" },
+        "investigation case created",
+      );
+      return reply.code(201).send(detail);
+    },
+  );
+
+  app.get(
+    "/v1/investigation-cases",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        querystring: InvestigationCaseListQuerySchema,
+        response: { 200: InvestigationCasePageSchema, 400: ErrorSchema },
+      },
+    },
+    async (request) =>
+      options.investigationCases.list(request.headers["x-tenant-id"], {
+        limit: request.query.limit ?? 25,
+        ...(request.query.cursor ? { cursor: request.query.cursor } : {}),
+        ...(request.query.status ? { statuses: arrayValue(request.query.status) } : {}),
+        ...(request.query.importance ? { importance: request.query.importance } : {}),
+        ...(request.query.q ? { query: request.query.q } : {}),
+        ...(request.query.executionId ? { executionId: request.query.executionId } : {}),
+      }),
+  );
+
+  app.get(
+    "/v1/investigation-cases/:caseId",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: InvestigationCaseParamsSchema,
+        response: { 200: InvestigationCaseDetailSchema, 404: ErrorSchema },
+      },
+    },
+    async (request) =>
+      options.investigationCases.get(request.headers["x-tenant-id"], request.params.caseId),
+  );
+
+  app.patch(
+    "/v1/investigation-cases/:caseId",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: InvestigationCaseParamsSchema,
+        body: UpdateInvestigationCaseBodySchema,
+        response: {
+          200: InvestigationCaseDetailSchema,
+          400: ErrorSchema,
+          404: ErrorSchema,
+        },
+      },
+    },
+    async (request) => {
+      const detail = await options.investigationCases.update(
+        request.headers["x-tenant-id"],
+        request.params.caseId,
+        request.body,
+      );
+      request.log.info(
+        { caseId: request.params.caseId, operation: "case.updated" },
+        "investigation case updated",
+      );
+      return detail;
+    },
+  );
+
+  app.post(
+    "/v1/investigation-cases/:caseId/notes",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: InvestigationCaseParamsSchema,
+        body: AddInvestigationCaseNoteBodySchema,
+        response: {
+          201: InvestigationCaseNoteSchema,
+          400: ErrorSchema,
+          404: ErrorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const note = await options.investigationCases.addNote(
+        request.headers["x-tenant-id"],
+        request.params.caseId,
+        request.body,
+      );
+      request.log.info(
+        { caseId: request.params.caseId, operation: "case.note_added" },
+        "investigation case note added",
+      );
+      return reply.code(201).send(note);
+    },
+  );
+
+  app.post(
+    "/v1/investigation-cases/:caseId/evidence",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: InvestigationCaseParamsSchema,
+        body: InvestigationCaseEvidenceInputSchema,
+        response: {
+          200: InvestigationCaseEvidenceResultSchema,
+          400: ErrorSchema,
+          404: ErrorSchema,
+        },
+      },
+    },
+    async (request) => {
+      const result = await options.investigationCases.addEvidence(
+        request.headers["x-tenant-id"],
+        request.params.caseId,
+        request.body,
+      );
+      request.log.info(
+        {
+          caseId: request.params.caseId,
+          operation: "case.evidence_added",
+          evidenceType: request.body.type,
+          added: result.added,
+        },
+        "investigation case evidence linked",
+      );
+      return result;
+    },
+  );
+
+  app.delete(
+    "/v1/investigation-cases/:caseId/evidence/:evidenceId",
+    {
+      schema: {
+        tags: ["investigation-cases"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: InvestigationCaseEvidenceParamsSchema,
+        response: { 200: InvestigationCaseEvidenceRemovedSchema, 404: ErrorSchema },
+      },
+    },
+    async (request) => {
+      await options.investigationCases.removeEvidence(
+        request.headers["x-tenant-id"],
+        request.params.caseId,
+        request.params.evidenceId,
+      );
+      request.log.info(
+        { caseId: request.params.caseId, operation: "case.evidence_removed" },
+        "investigation case evidence unlinked",
+      );
+      return { removed: true as const };
     },
   );
 
@@ -684,10 +908,17 @@ function submissionResponse(execution: ExecutionEnvelope): Static<typeof Submiss
 }
 
 function mapError(error: unknown) {
+  if (error instanceof InvestigationCaseInputError) {
+    return { error: "invalid_investigation_case", message: error.message, statusCode: 400 };
+  }
   if (error instanceof InvestigationQueryError) {
     return { error: "invalid_investigation_query", message: error.message, statusCode: 400 };
   }
-  if (error instanceof ExecutionNotFoundError || error instanceof ComparisonNotFoundError) {
+  if (
+    error instanceof ExecutionNotFoundError ||
+    error instanceof ComparisonNotFoundError ||
+    error instanceof InvestigationCaseNotFoundError
+  ) {
     return { error: "not_found", message: error.message, statusCode: 404 };
   }
   if (error instanceof IdempotencyConflictError) {

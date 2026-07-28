@@ -42,8 +42,9 @@ type SearchRow = {
   errorCategory: ProviderErrorCategory | null;
   errorCode: string | null;
   comparisonCount: number | string;
-  totalCount: number | string;
 };
+
+type CountRow = { totalCount: number | string };
 
 type AggregateRow = {
   total: number | string;
@@ -61,7 +62,7 @@ type AggregateRow = {
   providerOutcomeAmbiguous: number | string;
   rateLimitFailures: number | string;
   timeoutFailures: number | string;
-  providerCapacityFailures: number | string;
+  providerUnavailableFailures: number | string;
   latencySampleSize: number | string;
   p50Ms: number | string | null;
   p95Ms: number | string | null;
@@ -109,12 +110,13 @@ type ProviderRow = {
 export class PostgresInvestigationReadRepository implements InvestigationReadRepository {
   readonly #db: ReliabilityDatabase;
   readonly #onQuery:
-    ((operation: "search" | "summary" | "trend" | "providers") => void) | undefined;
+    | ((operation: "search" | "search_count" | "summary" | "trend" | "providers") => void)
+    | undefined;
 
   constructor(
     db: ReliabilityDatabase,
     options: {
-      onQuery?: (operation: "search" | "summary" | "trend" | "providers") => void;
+      onQuery?: (operation: "search" | "search_count" | "summary" | "trend" | "providers") => void;
     } = {},
   ) {
     this.#db = db;
@@ -134,7 +136,9 @@ export class PostgresInvestigationReadRepository implements InvestigationReadRep
         )`
       : sql``;
     this.#onQuery?.("search");
-    const result = await this.#db.execute<SearchRow>(sql`
+    this.#onQuery?.("search_count");
+    const [result, countResult] = await Promise.all([
+      this.#db.execute<SearchRow>(sql`
       WITH matched AS (
         SELECT e.*
         FROM executions e
@@ -214,8 +218,7 @@ export class PostgresInvestigationReadRepository implements InvestigationReadRep
               comparison.original_execution_id = p.id
               OR comparison.variant_execution_id = p.id
             )
-        ) AS "comparisonCount",
-        (SELECT COUNT(*)::integer FROM matched) AS "totalCount"
+        ) AS "comparisonCount"
       FROM page p
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::integer AS attempt_count
@@ -230,7 +233,13 @@ export class PostgresInvestigationReadRepository implements InvestigationReadRep
         LIMIT 1
       ) final_attempt ON TRUE
       ORDER BY p.created_at DESC, p.id DESC
-    `);
+      `),
+      this.#db.execute<CountRow>(sql`
+        SELECT COUNT(*)::integer AS "totalCount"
+        FROM executions e
+        WHERE ${sql.join(conditions, sql` AND `)}
+      `),
+    ]);
     const rows = result.rows;
     const hasNext = rows.length > query.limit;
     const visibleRows = rows.slice(0, query.limit);
@@ -239,7 +248,7 @@ export class PostgresInvestigationReadRepository implements InvestigationReadRep
     return {
       range: query.range,
       data,
-      total: numberValue(rows[0]?.totalCount),
+      total: numberValue(countResult.rows[0]?.totalCount),
       ...(hasNext && last
         ? { nextCursor: encodeExecutionCursor(last.createdAt, last.executionId) }
         : {}),
@@ -352,7 +361,7 @@ export class PostgresInvestigationReadRepository implements InvestigationReadRep
               WHERE a.execution_id = b.id
                 AND a.data #>> '{error,category}' = 'provider_unavailable'
             )
-          )::integer AS "providerCapacityFailures",
+          )::integer AS "providerUnavailableFailures",
           COUNT(b.duration_ms) FILTER (
             WHERE b.status IN ('succeeded', 'degraded', 'failed', 'cancelled')
           )::integer AS "latencySampleSize",
@@ -470,7 +479,7 @@ export class PostgresInvestigationReadRepository implements InvestigationReadRep
         providerOutcomeAmbiguous: numberValue(aggregate.providerOutcomeAmbiguous),
         rateLimitFailures: numberValue(aggregate.rateLimitFailures),
         timeoutFailures: numberValue(aggregate.timeoutFailures),
-        providerCapacityFailures: numberValue(aggregate.providerCapacityFailures),
+        providerUnavailableFailures: numberValue(aggregate.providerUnavailableFailures),
       },
       latency: {
         sampleSize: numberValue(aggregate.latencySampleSize),
@@ -757,7 +766,7 @@ function emptyAggregate(): AggregateRow {
     providerOutcomeAmbiguous: 0,
     rateLimitFailures: 0,
     timeoutFailures: 0,
-    providerCapacityFailures: 0,
+    providerUnavailableFailures: 0,
     latencySampleSize: 0,
     p50Ms: null,
     p95Ms: null,

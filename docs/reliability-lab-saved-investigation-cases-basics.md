@@ -425,16 +425,16 @@ Those features can wait until there is a demonstrated workflow.
 
 ## Working vocabulary
 
-| Term | Plain meaning |
-| --- | --- |
-| Investigation case | A durable home for one reliability question |
-| Saved scope | Exact workbench range and filters captured when the case was created |
-| Evidence link | Typed reference to an execution, comparison, or provider observation |
-| Note | Append-only observation made during investigation |
-| Finding | Current interpretation supported by evidence |
-| Resolution | Final or current decision based on the investigation |
-| Case timeline | Metadata history of important case changes |
-| Actor unavailable | Honest statement that authentication does not yet identify people |
+| Term               | Plain meaning                                                        |
+| ------------------ | -------------------------------------------------------------------- |
+| Investigation case | A durable home for one reliability question                          |
+| Saved scope        | Exact workbench range and filters captured when the case was created |
+| Evidence link      | Typed reference to an execution, comparison, or provider observation |
+| Note               | Append-only observation made during investigation                    |
+| Finding            | Current interpretation supported by evidence                         |
+| Resolution         | Final or current decision based on the investigation                 |
+| Case timeline      | Metadata history of important case changes                           |
+| Actor unavailable  | Honest statement that authentication does not yet identify people    |
 
 ---
 
@@ -455,3 +455,35 @@ Case file:
 ```
 
 The case file should make the investigation durable without becoming another enterprise ticket system with seventeen required dropdowns.
+
+---
+
+## What is implemented now
+
+The first bounded slice is available at `/investigation-cases` and from the
+`/investigations` workbench.
+
+It implements:
+
+- exact resolved UTC ranges rather than moving presets;
+- canonical filters without cursor, page size, or presentation anchors;
+- bounded tenant-scoped case list search and stable cursor pagination;
+- title, question, status, optional importance, current finding, and resolution;
+- coherent resolved timestamps and archive instead of hard deletion;
+- typed execution, comparison, and provider-observation references;
+- same-tenant validation and idempotent duplicate evidence links;
+- append-only notes;
+- metadata-only lifecycle timeline events;
+- links back to the exact saved workbench scope and current evidence pages;
+- memory and PostgreSQL persistence;
+- no actor fields.
+
+Case storage deliberately does not copy full envelopes, prompt/messages, outputs, attempts, events,
+replay capsules, encrypted commands, ciphertext, provider bodies, credentials, arbitrary logs, or
+external URLs. Removing an evidence association does not remove the authoritative execution or
+comparison.
+
+The tenant header is still not authentication. A timestamp says when an operation occurred, but the
+system cannot truthfully say who performed it. See
+[ADR 0009](adr/0009-saved-investigation-cases-and-evidence-references.md) for the persistence and
+reference decision.

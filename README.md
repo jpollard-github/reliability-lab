@@ -32,6 +32,9 @@ Implemented now:
 - Investigation Workbench with explicit bounded time windows, aggregate outcome and recovery
   signals, attempt-level provider/model observations, URL-backed drill-down filters, stable cursor
   pagination, trace correlation, and compact execution summaries
+- Saved Investigation Cases with exact canonical workbench scopes, current findings and resolution,
+  typed execution/comparison/provider-observation references, append-only notes, metadata-only
+  lifecycle timelines, archive status, and stable tenant-scoped case pagination
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
   overrides, resolved non-sensitive conditions, linked variant executions, and read-time projections
 - explicit `in_process` and `postgres_worker` execution modes; durable mode atomically accepts
@@ -67,6 +70,9 @@ flowchart LR
   Capsule --> CapsuleMemory[Process-local memory]
   Service --> Experiment[Comparison experiment port]
   Experiment --> PG
+  API --> Case[Investigation case service]
+  Case --> CaseStore[Case repository port]
+  CaseStore --> PG
   Service --> OTel[OpenTelemetry]
   API --> Pino[Redacted structured logs]
   Web[Next.js operator console] --> API
@@ -84,6 +90,7 @@ Plain-language guides:
 - [Durable Execution basics](docs/reliability-lab-durable-execution-basics.md)
 - [Lease Safety and Fencing basics](docs/reliability-lab-lease-safety-basics.md)
 - [Investigation Workbench basics](docs/reliability-lab-investigation-workbench-basics.md)
+- [Saved Investigation Cases basics](docs/reliability-lab-saved-investigation-cases-basics.md)
 
 ## Execution lifecycle
 
@@ -118,6 +125,9 @@ Plain-language guides:
 13. Investigation reads use separate memory/PostgreSQL adapters. Focused tenant-scoped endpoints
     return compact rows, bounded aggregates, and provider/model attempt observations without
     hydrating full envelopes or replay capability.
+14. An operator may persist the exact resolved workbench range and canonical filters as a case.
+    Cases reference current execution/comparison/provider evidence without copying envelopes,
+    prompts, outputs, attempts, events, replay material, or command payloads.
 
 ## Repository layout
 
@@ -232,6 +242,17 @@ Comparison requests cannot replace input or messages. Omitted controls inherit o
 supported `null` values explicitly remove fallback or cost limits, and a no-op requires
 `reproducibilityCheck: true`.
 
+Create a saved case from an exact range:
+
+```bash
+curl -sS http://localhost:4000/v1/investigation-cases \
+  -H 'content-type: application/json' -H 'x-tenant-id: demo-tenant' \
+  -d '{"title":"Retry recovery","question":"Did bounded retry recover?","savedScope":{"range":{"from":"2026-07-28T12:00:00.000Z","to":"2026-07-28T13:00:00.000Z"},"signal":"retry_recovered"}}'
+```
+
+Case requests accept bounded plain text and typed internal evidence references only. They have no
+author or owner field because the prototype does not authenticate people.
+
 Delete retained replay data idempotently:
 
 ```bash
@@ -318,6 +339,9 @@ without a duplicate call, command cleanup, key rotation, tenant isolation, repla
 independence, and atomic comparison variants. Playwright starts separate API and worker processes,
 observes queue/claim evidence, preserves replay deletion, and exercises the durable
 original-to-variant flow. There are deliberately no broad snapshots.
+Saved-case tests cover canonical exact scopes, status/resolved-time behavior, append-only notes,
+idempotent tenant-owned evidence links, empty terminal cursor totals, PostgreSQL restart reads,
+metadata-only timelines, and the browser save/reopen/update workflow.
 
 ## Observability
 
@@ -336,6 +360,9 @@ rows contain metadata only. Expiry and deletion revoke replay immediately while 
 remains. Live retention defaults off and fails closed unless the durable encrypted path is valid.
 The environment keyring is a prototype, not managed production key infrastructure. See
 [`docs/security-and-retention.md`](docs/security-and-retention.md).
+Investigation cases can contain bounded operational prose in plaintext. They never copy prompt,
+output, replay, command, credential, or provider-body content, and lifecycle events omit note,
+finding, and resolution text. Tenant routing still cannot establish authorship.
 
 ## Design tradeoffs
 
