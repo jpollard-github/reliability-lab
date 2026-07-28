@@ -180,14 +180,14 @@ export function projectComparison(
       variant.durationMs,
       terminal,
     ),
-    numericDimension(
+    tokenDimension(
       "input_tokens",
       "Input tokens",
       tokens(original, "inputTokens"),
       tokens(variant, "inputTokens"),
       terminal,
     ),
-    numericDimension(
+    tokenDimension(
       "output_tokens",
       "Output tokens",
       tokens(original, "outputTokens"),
@@ -409,6 +409,35 @@ function numericDimension(
     right,
     compare(left, right, true),
     `Lower ${label.toLowerCase()} is treated as improved for this dimension only.`,
+  );
+}
+
+function tokenDimension(
+  key: "input_tokens" | "output_tokens",
+  label: string,
+  left: number | undefined,
+  right: number | undefined,
+  terminal: boolean,
+): ComparisonDimension {
+  if (!terminal || left === undefined || right === undefined) {
+    return dimension(
+      key,
+      label,
+      left ?? null,
+      right ?? null,
+      "unavailable",
+      "Complete token evidence is unavailable; missing is not zero.",
+    );
+  }
+  return dimension(
+    key,
+    label,
+    left,
+    right,
+    left === right ? "unchanged" : "mixed",
+    left === right
+      ? "Token usage matched."
+      : "Token usage changed. Fewer tokens are factual, not inherently better without an evaluated token budget.",
   );
 }
 

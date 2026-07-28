@@ -1,20 +1,21 @@
 # Reliability Lab: Durable Execution Basics
 
-This document explains the next Reliability Lab horizon in plain language.
+This document explains the implemented Durable Execution Foundation in plain language.
 
 ## The next horizon in one sentence
 
-**Durable execution means that once the API truthfully accepts an LLM request, the work can continue or reach an explicit recoverable state even if the API or worker process restarts.**
+**Durable execution means that once the API truthfully accepts an LLM request, the work can continue or reach an explicit recovery outcome even if the API or worker process restarts.**
 
-The current system has an honest `202 Accepted`, but accepted work still continues inside one API process.
+Reliability Lab now has two explicit modes.
 
-That is honest asynchronous execution.
+- `in_process` is the infrastructure-free default. It is honest asynchronous execution, but accepted in-flight work remains tied to the API process.
+- `postgres_worker` atomically stores accepted work and lets a separate worker continue it later.
 
-It is not yet durable asynchronous execution.
+Only the second mode is durable asynchronous execution.
 
 ---
 
-## What happens today?
+## What happens in the default in-process mode?
 
 The current lifecycle is approximately:
 
@@ -50,7 +51,7 @@ The database may still contain a running execution with no process left to finis
 
 ---
 
-## What changes with durable execution?
+## What happens in PostgreSQL worker mode?
 
 Durable mode separates request acceptance from execution work:
 
@@ -341,9 +342,9 @@ The display remains a projection of the factual record.
 
 ---
 
-## What should the first durable slice prove?
+## What does the first durable slice prove?
 
-A bounded first slice should prove:
+The bounded implementation and its tests prove:
 
 1. the API can accept work without performing it;
 2. accepted work survives API restart;
@@ -362,9 +363,9 @@ That is enough for a coherent foundation.
 
 ---
 
-## What should remain out of scope initially?
+## What remains out of scope?
 
-The first durable slice does not need:
+The first durable slice intentionally does not include:
 
 - Kubernetes;
 - Redis as a job queue;
@@ -386,28 +387,28 @@ Those may belong later, but they should not obscure the core acceptance and reco
 
 ## Working vocabulary
 
-| Term | Plain meaning |
-| --- | --- |
-| Durable acceptance | The system has persisted enough state to continue accepted work after process loss |
-| Execution job | The durable scheduling record for accepted work |
-| Execution command | The sensitive private request needed by a worker |
-| Worker | A separate process that claims and performs jobs |
-| Lease | A time-limited worker claim on a job |
-| Heartbeat | A lease extension showing the worker is still alive |
-| Reclaim | Another worker safely taking an expired job |
-| Provider-call ambiguity | The provider may have received a call, but no durable result was recorded |
-| Idempotency | Repeating the same submission safely returns the same execution |
-| Atomic acceptance | Execution, event, job, and related records commit together or not at all |
-| At-least-once delivery | A job may be offered again until it reaches a terminal state |
-| Exactly-once effect | A stronger guarantee that is generally impossible without provider cooperation |
-| Command payload deletion | Removing transient sensitive input after execution |
-| Replay retention | Optional longer-lived storage for later reproduction |
+| Term                     | Plain meaning                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| Durable acceptance       | The system has persisted enough state to continue accepted work after process loss |
+| Execution job            | The durable scheduling record for accepted work                                    |
+| Execution command        | The sensitive private request needed by a worker                                   |
+| Worker                   | A separate process that claims and performs jobs                                   |
+| Lease                    | A time-limited worker claim on a job                                               |
+| Heartbeat                | A lease extension showing the worker is still alive                                |
+| Reclaim                  | Another worker safely taking an expired job                                        |
+| Provider-call ambiguity  | The provider may have received a call, but no durable result was recorded          |
+| Idempotency              | Repeating the same submission safely returns the same execution                    |
+| Atomic acceptance        | Execution, event, job, and related records commit together or not at all           |
+| At-least-once delivery   | A job may be offered again until it reaches a terminal state                       |
+| Exactly-once effect      | A stronger guarantee that is generally impossible without provider cooperation     |
+| Command payload deletion | Removing transient sensitive input after execution                                 |
+| Replay retention         | Optional longer-lived storage for later reproduction                               |
 
 ---
 
 ## Final mental model
 
-The current system is a restaurant where the cashier accepts an order and then personally walks into the kitchen to cook it.
+In-process mode is a restaurant where the cashier accepts an order and then personally walks into the kitchen to cook it.
 
 Durable execution adds a ticket rail and a cook:
 

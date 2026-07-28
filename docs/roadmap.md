@@ -86,12 +86,12 @@ a sequence cursor, and closes after terminal evidence; playback changes presenta
 
 The prototype meets this horizon's completion signal with dashboard-started deterministic retry and
 fallback scenarios, a refresh-safe event stream, live incremental history, and pause, resume, step,
-restart, and speed controls. Accepted work still runs inside the API process and may be lost if that
-process exits, a limitation reserved for the durable-execution horizon.
+restart, and speed controls. The stream now also projects durable queue, worker claim, and recovery
+evidence.
 
 ### Horizon 3: Compare, not merely repeat
 
-**Current state.** An execution or investigation case can be replayed as a controlled,
+**Established foundation.** An execution or investigation case can be replayed as a controlled,
 tenant-scoped original-versus-variant experiment.
 
 The operator chooses bounded provider, model, retry, fallback, and budget overrides while retained
@@ -106,9 +106,17 @@ dimension-level explanations, and links to both execution details.
 
 ### Horizon 4: Execution that survives reality
 
-**Desired outcome.** Work is no longer tied to one synchronous API process.
+**Durable Execution Foundation implemented; horizon remains in progress.** In explicit PostgreSQL
+worker mode, accepted work is no longer tied to the API process.
 
-Submission and execution separate through a durable queue and worker. Event and projection changes gain transactional boundaries and an outbox. Idempotency becomes concurrency-safe. Leases, cancellation, timeout recovery, and provider-call ambiguity are explicit. Redis-backed rate and circuit controls work across replicas.
+The foundation atomically accepts executions and comparison variants into PostgreSQL, encrypts
+transient commands, serializes idempotency by tenant/key, and uses a separate worker with exclusive
+leases, heartbeats, bounded concurrency, safe reclaim, terminal reconciliation, and conservative
+provider-call ambiguity. Existing persisted SSE carries worker-produced evidence.
+
+The full horizon is not complete. Continuation does not have a general transactional outbox;
+cancellation, operator recovery/dead-letter tools, distributed rate/circuit controls, and resumable
+mid-policy execution remain future work.
 
 **Completion signal.** An API or worker restart does not silently lose accepted work, duplicate an execution, or erase the explanation of what happened.
 
@@ -155,5 +163,6 @@ Replay Vault → Live Machine View → Comparative Replay → Durable Execution
 ```
 
 Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
-The next movement is **Horizon 4: Execution that survives reality**, strengthening acceptance,
-continuation, and cross-repository consistency without weakening the evidence model.
+The **Horizon 4 Durable Execution Foundation** makes acceptance restart-durable in PostgreSQL worker
+mode. The next movement is to deepen recovery and distributed runtime controls without overstating
+exactly-once provider behavior.

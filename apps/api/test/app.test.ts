@@ -86,6 +86,8 @@ describe("Reliability Lab API", () => {
     });
     expect(detail.statusCode).toBe(200);
     expect(detail.json().tenantId).toBe("tenant-a");
+    expect(detail.json().policy).toMatchObject({ maxAttempts: 2, maxBackoffMs: 1_000 });
+    expect(detail.json().budget).toMatchObject({ maxLatencyMs: 10_000 });
     expect(detail.json().replayCapability.state).toBe("available");
 
     const replay = await app.inject({

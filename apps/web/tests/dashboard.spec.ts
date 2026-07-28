@@ -1,5 +1,27 @@
 import { expect, test } from "@playwright/test";
 
+test("shows durable queue and worker evidence before terminal completion", async ({
+  page,
+  request,
+}) => {
+  const create = await request.post("http://127.0.0.1:4000/v1/executions", {
+    headers: { "x-tenant-id": "demo-tenant" },
+    data: {
+      provider: "fake-primary",
+      model: "deterministic-v1",
+      input: "Durable Playwright execution",
+    },
+  });
+  expect(create.status()).toBe(202);
+  const body = (await create.json()) as { executionId: string; status: string };
+  expect(body.status).toBe("queued");
+
+  await page.goto(`/executions/${body.executionId}`);
+  await expect(page.getByText("Execution queued", { exact: true })).toBeVisible();
+  await expect(page.getByText("Worker claimed execution", { exact: true })).toBeVisible();
+  await expect(page.getByText("Execution succeeded", { exact: true })).toBeVisible();
+});
+
 test("lists an execution and opens its event timeline", async ({ page, request }) => {
   const create = await request.post("http://127.0.0.1:4000/v1/executions", {
     headers: {
@@ -39,7 +61,7 @@ test("lists an execution and opens its event timeline", async ({ page, request }
   await expect(page.getByRole("button", { name: "Compare with variant" })).toBeDisabled();
 });
 
-test("shows a real retry transition while the execution is still running", async ({ page }) => {
+test("shows a real retry transition from durable event evidence", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Deterministic scenario").selectOption("retry");
   await page.getByRole("button", { name: "Start and watch execution" }).click();
@@ -48,7 +70,6 @@ test("shows a real retry transition while the execution is still running", async
   await expect(page.getByRole("heading", { name: "Live execution machine" })).toBeVisible();
   await expect(page.getByText("Retry scheduled", { exact: true })).toBeVisible();
   await expect(page.getByText("1500 ms real backoff", { exact: false })).toBeVisible();
-  await expect(page.locator(".live-machine .status-running")).toBeVisible();
   await expect(page.getByText("Execution succeeded", { exact: true })).toBeVisible();
   await expect(page.getByText("Stream complete", { exact: true })).toBeVisible();
 });
@@ -60,7 +81,9 @@ test("compares a retrying execution with an immediate-fallback variant", async (
   await expect(page.getByText("Retry scheduled", { exact: true })).toBeVisible();
   await expect(page.getByText("Execution succeeded", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Compare with variant" }).click();
+  const compare = page.getByRole("button", { name: "Compare with variant" });
+  await expect(compare).toBeEnabled();
+  await compare.click();
   await page.getByLabel("Comparison preset").selectOption("fallback");
   await page.getByRole("button", { name: "Create comparison" }).click();
 

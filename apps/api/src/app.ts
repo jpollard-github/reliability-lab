@@ -101,8 +101,8 @@ const ExecutionEnvelopeSchema = Type.Unsafe<ExecutionEnvelope>({
     model: { type: "string" },
     traceId: { type: "string" },
     requestHash: { type: "string" },
-    policy: { type: "object" },
-    budget: { type: "object" },
+    policy: { type: "object", additionalProperties: true },
+    budget: { type: "object", additionalProperties: true },
     attempts: { type: "array" },
     events: { type: "array" },
     createdAt: { type: "string" },
@@ -120,7 +120,7 @@ const ReplayResponseSchema = Type.Union([
     replayable: Type.Literal(true),
     originalExecutionId: Type.String(),
     replayExecution: ExecutionEnvelopeSchema,
-    outcomeMatches: Type.Boolean(),
+    outcomeMatches: Type.Union([Type.Boolean(), Type.Null()]),
   }),
   Type.Object({
     replayable: Type.Literal(false),
@@ -293,29 +293,30 @@ export async function buildApp(options: AppOptions) {
         },
         "execution accepted",
       );
-      void submission.completion.then(
-        (execution) => {
-          app.log.info(
-            {
-              executionId: execution.executionId,
-              tenantId: execution.tenantId,
-              traceId: execution.traceId,
-              status: execution.status,
-            },
-            "execution completed",
-          );
-        },
-        () => {
-          app.log.error(
-            {
-              executionId: submission.execution.executionId,
-              tenantId: submission.execution.tenantId,
-              traceId: submission.execution.traceId,
-            },
-            "execution continuation could not persist a terminal result",
-          );
-        },
-      );
+      if (submission.completion)
+        void submission.completion.then(
+          (execution) => {
+            app.log.info(
+              {
+                executionId: execution.executionId,
+                tenantId: execution.tenantId,
+                traceId: execution.traceId,
+                status: execution.status,
+              },
+              "execution completed",
+            );
+          },
+          () => {
+            app.log.error(
+              {
+                executionId: submission.execution.executionId,
+                tenantId: submission.execution.tenantId,
+                traceId: submission.execution.traceId,
+              },
+              "execution continuation could not persist a terminal result",
+            );
+          },
+        );
       return reply.code(202).send(submissionResponse(submission.execution));
     },
   );

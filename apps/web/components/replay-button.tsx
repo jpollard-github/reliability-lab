@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExecutionEnvelope, ReplayCapability } from "@reliability-lab/contracts";
 import { ComparisonBuilder } from "@/components/comparison-builder";
@@ -20,6 +20,10 @@ export function ReplayButton({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [capability, setCapability] = useState(initialCapability);
+
+  useEffect(() => {
+    setCapability(initialCapability);
+  }, [initialCapability]);
 
   async function replay() {
     setBusy(true);

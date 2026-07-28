@@ -13,6 +13,15 @@ export const ExecutionStatusSchema = Type.Union([
 ]);
 export type ExecutionStatus = Static<typeof ExecutionStatusSchema>;
 
+export const ExecutionJobStatusSchema = Type.Union([
+  Type.Literal("pending"),
+  Type.Literal("leased"),
+  Type.Literal("completed"),
+  Type.Literal("failed"),
+  Type.Literal("ambiguous"),
+]);
+export type ExecutionJobStatus = Static<typeof ExecutionJobStatusSchema>;
+
 export const ReplayCapabilityStateSchema = Type.Union([
   Type.Literal("available"),
   Type.Literal("retention_disabled"),
@@ -157,6 +166,15 @@ interface EventBase {
 
 export type ExecutionEvent =
   | (EventBase & { type: "execution.accepted"; tenantId: TenantId; requestHash: string })
+  | (EventBase & { type: "execution.queued" })
+  | (EventBase & { type: "worker.claimed" })
+  | (EventBase & { type: "execution.recovery_detected"; reason: string })
+  | (EventBase & {
+      type: "attempt.outcome_ambiguous";
+      attemptNumber: number;
+      provider: string;
+      model: string;
+    })
   | (EventBase & { type: "idempotency.hit"; idempotencyKeyHash: string })
   | (EventBase & {
       type: "attempt.started";
@@ -203,7 +221,7 @@ export type ExecutionEvent =
       type: "replay.completed";
       originalExecutionId: ExecutionId;
       replayExecutionId: ExecutionId;
-      outcomeMatches: boolean;
+      outcomeMatches: boolean | null;
     });
 
 export interface ExecutionEnvelope {
@@ -258,7 +276,7 @@ export type ReplayResult =
       replayable: true;
       originalExecutionId: ExecutionId;
       replayExecution: ExecutionEnvelope;
-      outcomeMatches: boolean;
+      outcomeMatches: boolean | null;
     }
   | {
       replayable: false;

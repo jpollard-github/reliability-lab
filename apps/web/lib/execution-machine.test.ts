@@ -88,6 +88,47 @@ describe("execution machine projection", () => {
     expect(projection.status).toBe("running");
     expect(projection.realEventSpanMs).toBe(2_000);
   });
+
+  it("shows durable queue, claim, and recovery ambiguity from recorded events", () => {
+    const projection = projectExecutionEvents([
+      accepted(1),
+      { ...base(2), type: "execution.queued" },
+      { ...base(3), type: "worker.claimed" },
+      started(4, 1, "primary"),
+      {
+        ...base(5),
+        type: "execution.recovery_detected",
+        reason: "expired_lease_with_provider_activity",
+      },
+      {
+        ...base(6),
+        type: "attempt.outcome_ambiguous",
+        attemptNumber: 1,
+        provider: "primary",
+        model: "v1",
+      },
+      {
+        ...base(7),
+        type: "execution.failed",
+        error: {
+          category: "provider_unavailable",
+          code: "provider_call_outcome_unknown",
+          message: "Provider outcome unknown",
+          retryable: false,
+        },
+      },
+    ]);
+
+    expect(projection.steps.map((step) => step.title)).toEqual(
+      expect.arrayContaining([
+        "Execution queued",
+        "Worker claimed execution",
+        "Recovery detected",
+        "Provider outcome ambiguous",
+      ]),
+    );
+    expect(projection.status).toBe("failed");
+  });
 });
 
 function base(sequence: number) {

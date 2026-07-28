@@ -40,6 +40,8 @@ export function projectExecutionEvents(events: ExecutionEvent[]): ExecutionMachi
   const terminalEvent = [...ordered]
     .reverse()
     .find((event) => event.type === "execution.succeeded" || event.type === "execution.failed");
+  const queued = ordered.some((event) => event.type === "execution.queued");
+  const claimed = ordered.some((event) => event.type === "worker.claimed");
   const firstTime = ordered[0] ? Date.parse(ordered[0].occurredAt) : 0;
   const lastTime = ordered.at(-1) ? Date.parse(ordered.at(-1)!.occurredAt) : firstTime;
   return {
@@ -51,7 +53,9 @@ export function projectExecutionEvents(events: ExecutionEvent[]): ExecutionMachi
         ? terminalEvent.status
         : terminalEvent?.type === "execution.failed"
           ? "failed"
-          : "running",
+          : queued && !claimed
+            ? "queued"
+            : "running",
     realEventSpanMs: Math.max(0, lastTime - firstTime),
   };
 }
@@ -78,6 +82,39 @@ function toMachineStep(event: ExecutionEvent): MachineStep {
         title: "Idempotency hit",
         detail: "The existing execution was reused.",
         tone: "warning",
+      };
+    case "execution.queued":
+      return {
+        ...base,
+        kind: "decision",
+        title: "Execution queued",
+        detail: "The encrypted command is waiting for a durable worker lease.",
+        tone: "active",
+      };
+    case "worker.claimed":
+      return {
+        ...base,
+        kind: "decision",
+        title: "Worker claimed execution",
+        detail: "A durable worker acquired the execution lease.",
+        tone: "active",
+      };
+    case "execution.recovery_detected":
+      return {
+        ...base,
+        kind: "decision",
+        title: "Recovery detected",
+        detail: event.reason,
+        tone: "warning",
+      };
+    case "attempt.outcome_ambiguous":
+      return {
+        ...base,
+        kind: "outcome",
+        title: "Provider outcome ambiguous",
+        detail: `Attempt ${event.attemptNumber} on ${event.provider} / ${event.model} will not be repeated automatically.`,
+        tone: "danger",
+        attemptNumber: event.attemptNumber,
       };
     case "attempt.started":
       return {
@@ -199,10 +236,14 @@ function toMachineStep(event: ExecutionEvent): MachineStep {
         ...base,
         kind: "replay",
         title: "Replay completed",
-        detail: event.outcomeMatches
-          ? "Normalized outcome matched the original."
-          : "Normalized outcome differed from the original.",
-        tone: event.outcomeMatches ? "success" : "warning",
+        detail:
+          event.outcomeMatches === null
+            ? "The replay is queued; outcome comparison is pending."
+            : event.outcomeMatches
+              ? "Normalized outcome matched the original."
+              : "Normalized outcome differed from the original.",
+        tone:
+          event.outcomeMatches === null ? "active" : event.outcomeMatches ? "success" : "warning",
       };
   }
 }

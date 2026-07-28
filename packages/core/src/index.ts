@@ -125,13 +125,57 @@ export interface ExecuteCommand {
 
 export interface ExecutionSubmission {
   execution: ExecutionEnvelope;
-  completion: Promise<ExecutionEnvelope>;
+  completion?: Promise<ExecutionEnvelope>;
 }
 
 export interface ComparisonSubmission {
   experiment: ComparisonExperiment;
   variantExecution?: ExecutionEnvelope;
   completion?: Promise<ExecutionEnvelope>;
+}
+
+export interface DurableAcceptanceInput {
+  execution: ExecutionEnvelope;
+  command: CreateExecutionBody;
+  requestHash: string;
+  idempotencyKeyHash?: string;
+}
+
+export interface DurableComparisonAcceptanceInput extends DurableAcceptanceInput {
+  experiment: ComparisonExperiment;
+}
+
+export interface DurableAcceptancePort {
+  acceptExecution(input: DurableAcceptanceInput): Promise<ExecutionId>;
+  acceptComparison(input: DurableComparisonAcceptanceInput): Promise<ExecutionId>;
+}
+
+export interface ClaimedExecutionJob {
+  tenantId: TenantId;
+  executionId: ExecutionId;
+  command?: CreateExecutionBody;
+  reclaimed: boolean;
+  safeErrorCode?: string;
+}
+
+export interface DurableJobStore {
+  claimNext(input: {
+    workerId: string;
+    leaseDurationMs: number;
+  }): Promise<ClaimedExecutionJob | null>;
+  heartbeat(input: {
+    tenantId: TenantId;
+    executionId: ExecutionId;
+    workerId: string;
+    leaseDurationMs: number;
+  }): Promise<boolean>;
+  finish(input: {
+    tenantId: TenantId;
+    executionId: ExecutionId;
+    workerId: string;
+    status: "completed" | "failed" | "ambiguous";
+    safeErrorCode?: string;
+  }): Promise<void>;
 }
 
 export interface ExecutionServiceOptions {
@@ -147,6 +191,7 @@ export interface ExecutionServiceOptions {
   tracer?: ExecutionTracer;
   allowLivePromptRetention?: boolean;
   replayRetentionMs?: number;
+  durableAcceptance?: DurableAcceptancePort;
 }
 
 const DEFAULT_POLICY: ExecutionPolicy = {
@@ -188,6 +233,7 @@ export class ExecutionService {
   readonly #tracer: ExecutionTracer;
   readonly #allowLivePromptRetention: boolean;
   readonly #replayRetentionMs: number;
+  readonly #durableAcceptance: DurableAcceptancePort | undefined;
   readonly #active = new Map<
     ExecutionId,
     { execution: ExecutionEnvelope; completion: Promise<ExecutionEnvelope> }
@@ -207,10 +253,15 @@ export class ExecutionService {
     this.#tracer = options.tracer ?? noOpTracer;
     this.#allowLivePromptRetention = options.allowLivePromptRetention ?? false;
     this.#replayRetentionMs = options.replayRetentionMs ?? 24 * 60 * 60 * 1_000;
+    this.#durableAcceptance = options.durableAcceptance;
   }
 
   async execute(command: ExecuteCommand): Promise<ExecutionEnvelope> {
-    return (await this.submit(command)).completion;
+    const submission = await this.submit(command);
+    if (!submission.completion) {
+      throw new Error("execute() is unavailable when durable worker mode is enabled");
+    }
+    return submission.completion;
   }
 
   async submit(command: ExecuteCommand): Promise<ExecutionSubmission> {
@@ -218,7 +269,7 @@ export class ExecutionService {
     const idempotencyKeyHash = command.idempotencyKey
       ? hashCanonical(command.idempotencyKey)
       : undefined;
-    if (idempotencyKeyHash) {
+    if (idempotencyKeyHash && !this.#durableAcceptance) {
       const existing = await this.#repository.findIdempotent(command.tenantId, idempotencyKeyHash);
       if (existing) {
         if (existing.requestHash !== requestHash) {
@@ -242,38 +293,24 @@ export class ExecutionService {
       throw new RateLimitRejectedError();
     }
 
-    const createdAt = this.#clock.now().toISOString();
-    const policy: ExecutionPolicy = { ...DEFAULT_POLICY, ...command.body.policy };
-    const budget = { ...DEFAULT_BUDGET, ...command.body.budget };
-    const execution: ExecutionEnvelope = {
-      schemaVersion: 1,
-      executionId: this.#ids.executionId(),
-      tenantId: command.tenantId,
-      status: "running",
-      provider: command.body.provider,
-      model: command.body.model,
-      traceId: this.#ids.traceId(),
+    const execution = this.#prepareExecution(
+      command,
       requestHash,
-      policy,
-      budget,
-      attempts: [],
-      events: [],
-      createdAt,
-      updatedAt: createdAt,
-      replayCapability: unavailableCapability("missing", "Replay capsule has not been retained"),
-      replayable: false,
-      ...(command.replayOfExecutionId ? { replayOfExecutionId: command.replayOfExecutionId } : {}),
-    };
-    this.#addEvent(execution, {
-      type: "execution.accepted",
-      tenantId: command.tenantId,
-      requestHash,
-    });
-    if (command.replayOfExecutionId) {
-      this.#addEvent(execution, {
-        type: "replay.started",
-        originalExecutionId: command.replayOfExecutionId,
+      Boolean(this.#durableAcceptance),
+    );
+    if (this.#durableAcceptance) {
+      const acceptedExecutionId = await this.#durableAcceptance.acceptExecution({
+        execution,
+        command: structuredClone(command.body),
+        requestHash,
+        ...(idempotencyKeyHash ? { idempotencyKeyHash } : {}),
       });
+      const accepted =
+        acceptedExecutionId === execution.executionId
+          ? execution
+          : await this.#repository.findById(command.tenantId, acceptedExecutionId);
+      if (!accepted) throw new Error("Durable acceptance returned an unavailable execution");
+      return { execution: structuredClone(accepted) };
     }
 
     await this.#tracer.withSpan(
@@ -309,6 +346,137 @@ export class ExecutionService {
     );
     this.#active.set(execution.executionId, { execution, completion });
     return { execution: structuredClone(execution), completion };
+  }
+
+  #prepareExecution(
+    command: ExecuteCommand,
+    requestHash: string,
+    durable: boolean,
+  ): ExecutionEnvelope {
+    const createdAt = this.#clock.now().toISOString();
+    const execution: ExecutionEnvelope = {
+      schemaVersion: 1,
+      executionId: this.#ids.executionId(),
+      tenantId: command.tenantId,
+      status: durable ? "queued" : "running",
+      provider: command.body.provider,
+      model: command.body.model,
+      traceId: this.#ids.traceId(),
+      requestHash,
+      policy: { ...DEFAULT_POLICY, ...command.body.policy },
+      budget: { ...DEFAULT_BUDGET, ...command.body.budget },
+      attempts: [],
+      events: [],
+      createdAt,
+      updatedAt: createdAt,
+      replayCapability: unavailableCapability("missing", "Replay capsule has not been retained"),
+      replayable: false,
+      ...(command.replayOfExecutionId ? { replayOfExecutionId: command.replayOfExecutionId } : {}),
+    };
+    this.#addEvent(execution, {
+      type: "execution.accepted",
+      tenantId: command.tenantId,
+      requestHash,
+    });
+    if (command.replayOfExecutionId) {
+      this.#addEvent(execution, {
+        type: "replay.started",
+        originalExecutionId: command.replayOfExecutionId,
+      });
+    }
+    if (durable) this.#addEvent(execution, { type: "execution.queued" });
+    return execution;
+  }
+
+  async continueAcceptedExecution(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+    body: CreateExecutionBody,
+  ): Promise<{
+    kind: "completed" | "already_terminal" | "ambiguous";
+    execution: ExecutionEnvelope;
+  }> {
+    const execution = await this.#repository.findById(tenantId, executionId);
+    if (!execution) throw new ExecutionNotFoundError();
+    if (isTerminalStatus(execution.status)) {
+      return { kind: "already_terminal", execution };
+    }
+    if (hasAmbiguousProviderAttempt(execution)) {
+      const ambiguous = await this.#markAmbiguousRecovery(execution);
+      return { kind: "ambiguous", execution: ambiguous };
+    }
+    execution.status = "running";
+    execution.updatedAt = this.#clock.now().toISOString();
+    await this.#append(execution, { type: "worker.claimed" });
+    await this.#repository.update(execution);
+    const completed = await this.#continueSafely(execution, body);
+    await this.#appendDurableReplayCompletion(completed);
+    return { kind: "completed", execution: completed };
+  }
+
+  async #appendDurableReplayCompletion(execution: ExecutionEnvelope): Promise<void> {
+    if (
+      !execution.replayOfExecutionId ||
+      !isTerminalStatus(execution.status) ||
+      execution.events.some((event) => event.type === "replay.completed")
+    ) {
+      return;
+    }
+    const original = await this.#repository.findById(
+      execution.tenantId,
+      execution.replayOfExecutionId,
+    );
+    if (!original) return;
+    const outcomeMatches =
+      original.status === execution.status &&
+      original.outputText === execution.outputText &&
+      original.error?.category === execution.error?.category;
+    await this.#append(execution, {
+      type: "replay.completed",
+      originalExecutionId: original.executionId,
+      replayExecutionId: execution.executionId,
+      outcomeMatches,
+    });
+    await this.#repository.update(execution);
+  }
+
+  async failAcceptedExecution(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+    code: string,
+  ): Promise<ExecutionEnvelope> {
+    const execution = await this.#repository.findById(tenantId, executionId);
+    if (!execution) throw new ExecutionNotFoundError();
+    if (isTerminalStatus(execution.status)) return execution;
+    return this.#fail(execution, {
+      category: "unknown",
+      code,
+      message: "Durable execution could not be safely continued",
+      retryable: false,
+    });
+  }
+
+  async #markAmbiguousRecovery(execution: ExecutionEnvelope): Promise<ExecutionEnvelope> {
+    const attempt = latestUnresolvedAttempt(execution);
+    await this.#append(execution, {
+      type: "execution.recovery_detected",
+      reason: "expired_lease_with_provider_activity",
+    });
+    if (attempt) {
+      await this.#append(execution, {
+        type: "attempt.outcome_ambiguous",
+        attemptNumber: attempt.attemptNumber,
+        provider: attempt.provider,
+        model: attempt.model,
+      });
+    }
+    return this.#fail(execution, {
+      category: "provider_unavailable",
+      code: "provider_call_outcome_unknown",
+      message:
+        "The provider may have received the request; automatic duplication was avoided because no durable outcome was recorded",
+      retryable: false,
+    });
   }
 
   async #continueSafely(
@@ -443,7 +611,7 @@ export class ExecutionService {
       };
     }
     const request = capsuleResult.capsule.providerRequest;
-    const replayExecution = await this.execute({
+    const replaySubmission = await this.submit({
       tenantId,
       replayOfExecutionId: originalExecutionId,
       body: {
@@ -459,6 +627,15 @@ export class ExecutionService {
         budget: original.budget,
       },
     });
+    if (!replaySubmission.completion) {
+      return {
+        replayable: true,
+        originalExecutionId,
+        replayExecution: replaySubmission.execution,
+        outcomeMatches: null,
+      };
+    }
+    const replayExecution = await replaySubmission.completion;
     const outcomeMatches =
       original.status === replayExecution.status &&
       original.outputText === replayExecution.outputText &&
@@ -518,25 +695,46 @@ export class ExecutionService {
     }
 
     const request = capsuleResult.capsule.providerRequest;
+    const variantBody: CreateExecutionBody = {
+      provider: resolvedVariant.provider,
+      model: resolvedVariant.model,
+      ...(request.messages ? { messages: request.messages } : {}),
+      ...(request.input ? { input: request.input } : {}),
+      ...(request.structuredOutputSchema
+        ? { structuredOutputSchema: request.structuredOutputSchema }
+        : {}),
+      ...(request.failureMode ? { failureMode: request.failureMode } : {}),
+      policy: resolvedVariant.policy,
+      budget: resolvedVariant.budget,
+    };
+    if (this.#durableAcceptance) {
+      if (!(await this.#rateLimiter.consume(tenantId))) throw new RateLimitRejectedError();
+      const requestHash = hashCanonical(variantBody);
+      const variantExecution = this.#prepareExecution(
+        { tenantId, replayOfExecutionId: originalExecutionId, body: variantBody },
+        requestHash,
+        true,
+      );
+      experiment.variantExecutionId = variantExecution.executionId;
+      await this.#durableAcceptance.acceptComparison({
+        execution: variantExecution,
+        command: structuredClone(variantBody),
+        requestHash,
+        experiment,
+      });
+      return {
+        experiment: structuredClone(experiment),
+        variantExecution: structuredClone(variantExecution),
+      };
+    }
     const submission = await this.submit({
       tenantId,
       replayOfExecutionId: originalExecutionId,
-      body: {
-        provider: resolvedVariant.provider,
-        model: resolvedVariant.model,
-        ...(request.messages ? { messages: request.messages } : {}),
-        ...(request.input ? { input: request.input } : {}),
-        ...(request.structuredOutputSchema
-          ? { structuredOutputSchema: request.structuredOutputSchema }
-          : {}),
-        ...(request.failureMode ? { failureMode: request.failureMode } : {}),
-        policy: resolvedVariant.policy,
-        budget: resolvedVariant.budget,
-      },
+      body: variantBody,
     });
     experiment.variantExecutionId = submission.execution.executionId;
     await this.#comparisons.create(experiment);
-    const completion = submission.completion.then(async (execution) => {
+    const completion = submission.completion!.then(async (execution) => {
       experiment.status = "completed";
       experiment.updatedAt = this.#clock.now().toISOString();
       await this.#comparisons.update(experiment);
@@ -649,6 +847,7 @@ export class ExecutionService {
         provider: provider.id,
         model,
       });
+      await this.#repository.update(execution);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), remainingBudget);
       const result = await this.#tracer
@@ -754,6 +953,7 @@ export class ExecutionService {
         latencyMs: result.latencyMs,
         error: result.error,
       });
+      await this.#repository.update(execution);
 
       if (result.error.retryable && attemptsForProvider < maxAttempts) {
         const delayMs = this.#backoff(execution.policy, attemptsForProvider);
@@ -886,6 +1086,98 @@ export class ExecutionService {
     } else {
       execution.replayUnavailableReason = capability.reason;
     }
+  }
+}
+
+export class DurableExecutionWorker {
+  readonly #jobs: DurableJobStore;
+  readonly #service: ExecutionService;
+  readonly #workerId: string;
+  readonly #leaseDurationMs: number;
+  readonly #heartbeatIntervalMs: number;
+
+  constructor(options: {
+    jobs: DurableJobStore;
+    service: ExecutionService;
+    workerId: string;
+    leaseDurationMs: number;
+    heartbeatIntervalMs: number;
+  }) {
+    this.#jobs = options.jobs;
+    this.#service = options.service;
+    this.#workerId = options.workerId;
+    this.#leaseDurationMs = options.leaseDurationMs;
+    this.#heartbeatIntervalMs = options.heartbeatIntervalMs;
+  }
+
+  async runOnce(): Promise<boolean> {
+    const job = await this.#jobs.claimNext({
+      workerId: this.#workerId,
+      leaseDurationMs: this.#leaseDurationMs,
+    });
+    if (!job) return false;
+    if (!job.command) {
+      await this.#service.failAcceptedExecution(
+        job.tenantId,
+        job.executionId,
+        job.safeErrorCode ?? "execution_command_unavailable",
+      );
+      await this.#jobs.finish({
+        tenantId: job.tenantId,
+        executionId: job.executionId,
+        workerId: this.#workerId,
+        status: "failed",
+        safeErrorCode: job.safeErrorCode ?? "execution_command_unavailable",
+      });
+      return true;
+    }
+
+    const heartbeat = setInterval(() => {
+      void this.#jobs.heartbeat({
+        tenantId: job.tenantId,
+        executionId: job.executionId,
+        workerId: this.#workerId,
+        leaseDurationMs: this.#leaseDurationMs,
+      });
+    }, this.#heartbeatIntervalMs);
+    heartbeat.unref();
+    try {
+      const result = await this.#service.continueAcceptedExecution(
+        job.tenantId,
+        job.executionId,
+        job.command,
+      );
+      const ambiguous =
+        result.kind === "ambiguous" ||
+        result.execution.error?.code === "provider_call_outcome_unknown";
+      await this.#jobs.finish({
+        tenantId: job.tenantId,
+        executionId: job.executionId,
+        workerId: this.#workerId,
+        status: ambiguous
+          ? "ambiguous"
+          : result.execution.status === "failed"
+            ? "failed"
+            : "completed",
+        ...(result.execution.error ? { safeErrorCode: result.execution.error.code } : {}),
+      });
+    } catch {
+      await this.#service.failAcceptedExecution(
+        job.tenantId,
+        job.executionId,
+        "worker_internal_failure",
+      );
+      await this.#jobs.finish({
+        tenantId: job.tenantId,
+        executionId: job.executionId,
+        workerId: this.#workerId,
+        status: "failed",
+        safeErrorCode: "worker_internal_failure",
+      });
+    } finally {
+      clearInterval(heartbeat);
+    }
+    return true;
   }
 }
 
@@ -1203,4 +1495,16 @@ function stableStringify(value: unknown): string {
 
 function isTerminalStatus(status: ExecutionEnvelope["status"]): boolean {
   return ["succeeded", "degraded", "failed", "cancelled"].includes(status);
+}
+
+export function hasAmbiguousProviderAttempt(execution: ExecutionEnvelope): boolean {
+  return !isTerminalStatus(execution.status) && latestUnresolvedAttempt(execution) !== undefined;
+}
+
+function latestUnresolvedAttempt(execution: ExecutionEnvelope) {
+  const started = execution.events.filter(
+    (event): event is Extract<ExecutionEvent, { type: "attempt.started" }> =>
+      event.type === "attempt.started",
+  );
+  return started.at(-1);
 }

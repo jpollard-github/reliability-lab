@@ -181,13 +181,13 @@ Explanation
 
 The change classifications are:
 
-| Classification | Plain meaning |
-| --- | --- |
-| `improved` | Better for this specific dimension under an explicit rule |
-| `worsened` | Worse for this specific dimension under an explicit rule |
-| `unchanged` | The normalized evidence matched |
-| `mixed` | It changed, but the change is not inherently better or worse |
-| `unavailable` | The necessary evidence does not exist yet or was not recorded |
+| Classification | Plain meaning                                                 |
+| -------------- | ------------------------------------------------------------- |
+| `improved`     | Better for this specific dimension under an explicit rule     |
+| `worsened`     | Worse for this specific dimension under an explicit rule      |
+| `unchanged`    | The normalized evidence matched                               |
+| `mixed`        | It changed, but the change is not inherently better or worse  |
+| `unavailable`  | The necessary evidence does not exist yet or was not recorded |
 
 ---
 
@@ -330,7 +330,7 @@ Token changes are best treated as evidence or mixed tradeoffs unless a specific 
 
 It does not yet provide:
 
-- durable execution across API or worker restarts;
+- resumable continuation after an ambiguous provider call;
 - semantic answer evaluation;
 - an LLM judge;
 - batch experiment campaigns;
@@ -346,18 +346,18 @@ Those are separate horizons.
 
 ## Working vocabulary
 
-| Term | Plain meaning |
-| --- | --- |
-| Original execution | The recorded execution selected for comparison |
-| Variant execution | A normal replay-derived execution with controlled changed conditions |
-| Comparison experiment | The durable record linking original, requested variation, resolved variant, and variant execution |
-| Requested variation | Only the fields the operator wants to change |
-| Resolved configuration | The complete effective configuration after inheritance |
-| Comparison projection | The derived dimension-by-dimension differences |
-| Reproducibility check | An explicit same-conditions rerun |
-| No-op variation | A variation that resolves to no actual change |
-| Mixed change | A difference that is not inherently an improvement or regression |
-| Exact output match | Factual equality, not semantic quality |
+| Term                   | Plain meaning                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| Original execution     | The recorded execution selected for comparison                                                    |
+| Variant execution      | A normal replay-derived execution with controlled changed conditions                              |
+| Comparison experiment  | The durable record linking original, requested variation, resolved variant, and variant execution |
+| Requested variation    | Only the fields the operator wants to change                                                      |
+| Resolved configuration | The complete effective configuration after inheritance                                            |
+| Comparison projection  | The derived dimension-by-dimension differences                                                    |
+| Reproducibility check  | An explicit same-conditions rerun                                                                 |
+| No-op variation        | A variation that resolves to no actual change                                                     |
+| Mixed change           | A difference that is not inherently an improvement or regression                                  |
+| Exact output match     | Factual equality, not semantic quality                                                            |
 
 ---
 

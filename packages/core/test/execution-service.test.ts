@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { CreateExecutionBody } from "@reliability-lab/contracts";
 import {
+  DurableExecutionWorker,
   ExecutionService,
+  hasAmbiguousProviderAttempt,
   InMemoryCircuitBreaker,
   MapProviderRegistry,
+  MemoryComparisonExperimentRepository,
   MemoryExecutionRepository,
   MemoryReplayCapsuleStore,
+  type ClaimedExecutionJob,
+  type DurableAcceptanceInput,
+  type DurableAcceptancePort,
+  type DurableComparisonAcceptanceInput,
+  type DurableJobStore,
   type ReplayCapsuleStore,
 } from "../src/index.js";
 import { DeterministicFakeProvider, type LlmProvider } from "@reliability-lab/providers";
@@ -446,3 +454,197 @@ describe("ExecutionService replay", () => {
     expect(replay.replayable).toBe(false);
   });
 });
+
+describe("durable execution continuation", () => {
+  it("accepts a queued execution without running provider work in the API path", async () => {
+    let providerCalls = 0;
+    const provider: LlmProvider = {
+      id: "fake-primary",
+      kind: "fake",
+      execute: async () => {
+        providerCalls += 1;
+        throw new Error("provider should not run during acceptance");
+      },
+    };
+    const durable = durableHarness([provider]);
+    const submission = await durable.service.submit({ tenantId: "tenant-a", body: baseBody });
+
+    expect(submission.completion).toBeUndefined();
+    expect(submission.execution.status).toBe("queued");
+    expect(submission.execution.events.map((event) => event.type)).toEqual([
+      "execution.accepted",
+      "execution.queued",
+    ]);
+    expect(providerCalls).toBe(0);
+  });
+
+  it("refuses to rerun a terminal execution", async () => {
+    let providerCalls = 0;
+    const provider: LlmProvider = {
+      id: "fake-primary",
+      kind: "fake",
+      execute: async () => {
+        providerCalls += 1;
+        throw new Error("terminal execution must not run");
+      },
+    };
+    const durable = durableHarness([provider]);
+    const submission = await durable.service.submit({ tenantId: "tenant-a", body: baseBody });
+    const stored = await durable.repository.findById("tenant-a", submission.execution.executionId);
+    expect(stored).not.toBeNull();
+    stored!.status = "succeeded";
+    await durable.repository.update(stored!);
+
+    const result = await durable.service.continueAcceptedExecution(
+      "tenant-a",
+      submission.execution.executionId,
+      baseBody,
+    );
+    expect(result.kind).toBe("already_terminal");
+    expect(providerCalls).toBe(0);
+  });
+
+  it("classifies prior attempt activity as ambiguous and avoids a duplicate provider call", async () => {
+    let providerCalls = 0;
+    const provider: LlmProvider = {
+      id: "fake-primary",
+      kind: "fake",
+      execute: async () => {
+        providerCalls += 1;
+        throw new Error("ambiguous attempt must not run");
+      },
+    };
+    const durable = durableHarness([provider]);
+    const submission = await durable.service.submit({ tenantId: "tenant-a", body: baseBody });
+    const execution = (await durable.repository.findById(
+      "tenant-a",
+      submission.execution.executionId,
+    ))!;
+    execution.status = "running";
+    execution.attempts.push({
+      attemptNumber: 1,
+      provider: "fake-primary",
+      model: "deterministic-v1",
+      status: "running",
+      startedAt: "2026-01-01T00:00:00.000Z",
+    });
+    execution.events.push({
+      schemaVersion: 1,
+      eventId: "crash-event",
+      executionId: execution.executionId,
+      sequence: 3,
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      type: "attempt.started",
+      attemptNumber: 1,
+      provider: "fake-primary",
+      model: "deterministic-v1",
+    });
+    await durable.repository.update(execution);
+
+    expect(hasAmbiguousProviderAttempt(execution)).toBe(true);
+    const result = await durable.service.continueAcceptedExecution(
+      "tenant-a",
+      execution.executionId,
+      baseBody,
+    );
+    expect(result.kind).toBe("ambiguous");
+    expect(result.execution.error).toMatchObject({
+      code: "provider_call_outcome_unknown",
+      retryable: false,
+    });
+    expect(result.execution.events.map((event) => event.type)).toEqual(
+      expect.arrayContaining([
+        "execution.recovery_detected",
+        "attempt.outcome_ambiguous",
+        "execution.failed",
+      ]),
+    );
+    expect(providerCalls).toBe(0);
+  });
+
+  it("runs an accepted command through the existing engine and deletes it on terminal handling", async () => {
+    const durable = durableHarness([
+      new DeterministicFakeProvider({ id: "fake-primary", seed: 17 }),
+    ]);
+    const submission = await durable.service.submit({ tenantId: "tenant-a", body: baseBody });
+    const worker = new DurableExecutionWorker({
+      jobs: durable.acceptance,
+      service: durable.service,
+      workerId: "worker-a",
+      leaseDurationMs: 30_000,
+      heartbeatIntervalMs: 10_000,
+    });
+
+    await expect(worker.runOnce()).resolves.toBe(true);
+    expect(
+      await durable.repository.findById("tenant-a", submission.execution.executionId),
+    ).toMatchObject({ status: "succeeded" });
+    expect(durable.acceptance.finished).toEqual([expect.objectContaining({ status: "completed" })]);
+  });
+});
+
+function durableHarness(providers: LlmProvider[]) {
+  const repository = new MemoryExecutionRepository();
+  const comparisons = new MemoryComparisonExperimentRepository();
+  const acceptance = new MemoryDurableAcceptance(repository, comparisons);
+  const service = new ExecutionService({
+    repository,
+    comparisons,
+    replayCapsules: new MemoryReplayCapsuleStore(),
+    providers: new MapProviderRegistry(providers),
+    durableAcceptance: acceptance,
+    ids: new SequenceIds(),
+    clock: new FakeClock(),
+  });
+  return { service, repository, acceptance };
+}
+
+class MemoryDurableAcceptance implements DurableAcceptancePort, DurableJobStore {
+  readonly #repository: MemoryExecutionRepository;
+  readonly #comparisons: MemoryComparisonExperimentRepository;
+  readonly #jobs: ClaimedExecutionJob[] = [];
+  readonly finished: Array<{ status: string }> = [];
+
+  constructor(
+    repository: MemoryExecutionRepository,
+    comparisons: MemoryComparisonExperimentRepository,
+  ) {
+    this.#repository = repository;
+    this.#comparisons = comparisons;
+  }
+
+  async acceptExecution(input: DurableAcceptanceInput) {
+    await this.#repository.create(input.execution);
+    this.#jobs.push({
+      tenantId: input.execution.tenantId,
+      executionId: input.execution.executionId,
+      command: structuredClone(input.command),
+      reclaimed: false,
+    });
+    return input.execution.executionId;
+  }
+
+  async acceptComparison(input: DurableComparisonAcceptanceInput) {
+    await this.acceptExecution(input);
+    await this.#comparisons.create(input.experiment);
+    return input.execution.executionId;
+  }
+
+  async claimNext(): Promise<ClaimedExecutionJob | null> {
+    return this.#jobs.shift() ?? null;
+  }
+
+  async heartbeat() {
+    return true;
+  }
+
+  async finish(input: {
+    tenantId: string;
+    executionId: string;
+    workerId: string;
+    status: "completed" | "failed" | "ambiguous";
+    safeErrorCode?: string;
+  }) {
+    this.finished.push({ status: input.status });
+  }
+}

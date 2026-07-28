@@ -31,19 +31,27 @@ Implemented now:
   machines, and dimension-level evidence comparisons
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
   overrides, resolved non-sensitive conditions, linked variant executions, and read-time projections
+- explicit `in_process` and `postgres_worker` execution modes; durable mode atomically accepts
+  executions, idempotency records, encrypted transient commands, and comparison variants
+- separate PostgreSQL worker with exclusive leases, heartbeats, bounded concurrency, safe reclaim,
+  terminal reconciliation, conservative provider-call ambiguity, and command-payload cleanup
 - guarded repository and working-file export tools
 
 Not implemented as production infrastructure: managed KMS/envelope encryption, authenticated replay
 actors, authentication/authorization beyond the prototype tenant header, distributed circuit state,
-global rate limiting, queue workers, cost enforcement, physical backup erasure, or a multi-replica
-consistency model. Redis adapters remain explicit unwired skeletons.
+global rate limiting, cancellation, resumable ambiguous provider calls, cost enforcement, physical
+backup erasure, or a multi-replica consistency model. Redis adapters remain explicit unwired
+skeletons.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   Client[Application or dashboard] -->|validated HTTP + tenant| API[Fastify API]
-  API --> Service[Execution service / policy engine]
+  API -->|in-process mode| Service[Execution service / policy engine]
+  API -->|atomic durable acceptance| Jobs[(PostgreSQL jobs)]
+  Worker[Durable worker] -->|lease / heartbeat| Jobs
+  Worker --> Service
   Service --> Primary[Provider interface]
   Primary --> Fake[Deterministic fake]
   Primary --> Live[OpenAI-compatible HTTP]
@@ -65,35 +73,46 @@ Domain code has no Fastify, Next.js, Drizzle, Redis, or provider-SDK dependency.
 [`docs/architecture.md`](docs/architecture.md) for trust boundaries and scaling direction and the
 outcome-based [`docs/roadmap.md`](docs/roadmap.md) for what comes next.
 
+Plain-language guides:
+
+- [Reliability Lab basics](docs/reliability-lab-basics.md)
+- [Comparative Replay basics](docs/reliability-lab-comparative-replay-basics.md)
+- [Durable Execution basics](docs/reliability-lab-durable-execution-basics.md)
+
 ## Execution lifecycle
 
-1. The API validates the body and `X-Tenant-Id`, hashes the canonical request, and checks the
-   tenant/idempotency-key pair.
-2. The execution service records `execution.accepted`, persists a running envelope, and returns a
-   stable execution and trace ID to the API. The API responds `202` while continuation remains
-   in-process.
-3. The service retains replay material when policy permits, resolves the provider, and continues
-   asynchronously. Each call records `attempt.started`; failed attempts record normalized failure
-   evidence before retry, fallback, or stop.
-4. A configured fallback runs once after primary policy exhaustion and makes a successful outcome
+1. The API validates the body and `X-Tenant-Id`, hashes the canonical request, and selects the
+   explicit execution mode.
+2. In default `in_process` mode, it persists acceptance and continues asynchronously in the API
+   process.
+3. In `postgres_worker` mode, one transaction persists the queued envelope, accepted/queued events,
+   encrypted transient command, and optional concurrency-safe idempotency record before `202`.
+4. A separate worker claims the job under an exclusive lease, heartbeats it, decrypts the command,
+   and invokes the same core continuation engine.
+5. The engine retains replay material independently when policy permits, resolves the provider, and
+   records `attempt.started` before provider work. Failed attempts record normalized evidence before
+   retry, fallback, or stop.
+6. A configured fallback runs once after primary policy exhaustion and makes a successful outcome
    `degraded`.
-5. Structured output is validated with Ajv. Requested validation records either success or
+7. Structured output is validated with Ajv. Requested validation records either success or
    rejection; invalid output fails the execution.
-6. Terminal state, attempts, and normalized metadata are persisted; events remain append-only.
-7. Eligible requests retain a tenant-scoped capsule with explicit expiry. Memory mode is
+8. Terminal state, attempts, and normalized metadata are persisted; events remain append-only. The
+   worker marks safe terminal job metadata and clears command ciphertext, nonce, and tag.
+9. Eligible requests retain a tenant-scoped capsule with explicit expiry. Memory mode is
    process-local; PostgreSQL mode encrypts before persistence and appends lifecycle audit metadata.
-8. Tenant-scoped SSE reads events after a sequence cursor from persisted evidence, backfills
-   history, sends heartbeats while following, and closes after terminal evidence.
-9. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
-   disable replay. Replay creates a linked execution and records replay start/completion events.
-10. Comparative replay resolves a bounded provider/model/policy/budget variation against the
-    retained request, submits it through the same execution path, and compares the two envelopes.
+10. Tenant-scoped SSE reads events after a sequence cursor from persisted evidence, backfills
+    history, sends heartbeats while following, and closes after terminal evidence.
+11. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
+    disable replay. Replay creates a linked execution and records replay start/completion events.
+12. Comparative replay resolves a bounded variation against retained input. Durable mode atomically
+    commits the variant, linkage events, job, and experiment, then compares the terminal envelopes.
 
 ## Repository layout
 
 ```text
 apps/api          Fastify composition root, routes, injection tests
-apps/web          Next.js App Router console and Playwright smoke test
+apps/worker       PostgreSQL lease/heartbeat polling and durable continuation
+apps/web          Next.js App Router console and durable Playwright flow
 packages/contracts  TypeBox schemas and shared domain contracts
 packages/core       Policy engine, ports, in-memory adapters
 packages/providers  Fake and OpenAI-compatible providers
@@ -124,6 +143,17 @@ and reports those modes at `/readyz`. To exercise restart-durable replay, set
 `REPLAY_CAPSULE_STORE=postgres`, a valid active key version/keyring, and `DATABASE_URL`, then migrate
 before starting the API. The public keys in `.env.example` are intentionally unsafe examples; do not
 reuse them. The `.env` file is ignored and must never contain production credentials.
+
+For restart-durable execution, set `EXECUTION_MODE=postgres_worker`,
+`REPLAY_CAPSULE_STORE=postgres`, and valid independent command/replay keyrings, then run:
+
+```bash
+pnpm db:migrate
+pnpm dev:durable
+```
+
+The API is on port 4000, the worker exposes process health on port 4001, and the web console is on
+port 3000. Durable mode fails closed rather than falling back to in-process continuation.
 
 - Dashboard: <http://localhost:3000>
 - API: <http://localhost:4000>
@@ -227,22 +257,41 @@ Old rows use their stored key version while new rows use the active version. Kee
 configured until their rows expire or are deleted. Environment-variable keys are not production KMS
 or full envelope encryption.
 
+## Durable execution configuration
+
+| Variable                               | Behavior                                                 |
+| -------------------------------------- | -------------------------------------------------------- |
+| `EXECUTION_MODE`                       | `in_process` (default) or explicit `postgres_worker`     |
+| `EXECUTION_COMMAND_ACTIVE_KEY_VERSION` | Key version used for new transient command writes        |
+| `EXECUTION_COMMAND_KEYS_JSON`          | Independent map of base64-encoded 32-byte command keys   |
+| `WORKER_ID`                            | Optional identity; a unique local value is generated     |
+| `WORKER_CONCURRENCY`                   | Bounded parallel claims, 1–16; defaults to 1             |
+| `WORKER_POLL_INTERVAL_MS`              | Bounded idle polling interval; defaults to 250 ms        |
+| `WORKER_LEASE_DURATION_MS`             | Lease duration; defaults to 30 seconds                   |
+| `WORKER_HEARTBEAT_INTERVAL_MS`         | Heartbeat interval, which must be shorter than the lease |
+| `WORKER_HEALTH_PORT`                   | Local worker process-health port; defaults to 4001       |
+
+Worker mode also requires `DATABASE_URL`, a migrated schema, and PostgreSQL Replay Vault
+configuration so replay capabilities are shared across API and worker processes. Command and replay
+keyrings are intentionally separate. Both environment keyrings are prototype key management, not
+KMS.
+
 ## Commands
 
-| Command                                       | Purpose                                                      |
-| --------------------------------------------- | ------------------------------------------------------------ |
-| `pnpm dev`, `dev:api`, `dev:web`              | Run both apps or one app                                     |
-| `pnpm dev:infra`                              | Start healthy Postgres and Redis services                    |
-| `pnpm build`                                  | Build every workspace package                                |
-| `pnpm lint`, `format:check`, `typecheck`      | Static checks                                                |
-| `pnpm test:unit`                              | Docker-independent policy, provider, API, and export tests   |
-| `pnpm test:integration`                       | PostgreSQL repository test; requires migrated `DATABASE_URL` |
-| `pnpm test:e2e`                               | Dashboard list/detail smoke flow; requires the API           |
-| `pnpm verify`                                 | Format, lint, typecheck, unit tests, build                   |
-| `pnpm verify:full`                            | Verify plus integration and browser tests                    |
-| `pnpm audit:deps`, `audit:unused`, `audit`    | Read-only dependency/dead-code observation                   |
-| `pnpm db:generate`, `db:migrate`, `db:studio` | Drizzle workflows                                            |
-| `pnpm export:repo`, `export:working`          | Guarded compressed exports                                   |
+| Command                                          | Purpose                                                 |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| `pnpm dev`, `dev:api`, `dev:web`                 | Run infrastructure-free mode or one app                 |
+| `pnpm dev:durable`, `dev:worker`, `start:worker` | Run durable local mode or the separate worker           |
+| `pnpm dev:infra`                                 | Start healthy Postgres and Redis services               |
+| `pnpm build`                                     | Build every workspace package                           |
+| `pnpm lint`, `format:check`, `typecheck`         | Static checks                                           |
+| `pnpm test:unit`                                 | Docker-independent focused tests                        |
+| `pnpm test:integration`                          | PostgreSQL repository/job tests; requires migrated DB   |
+| `pnpm test:e2e`                                  | Separate API/worker durable browser and comparison flow |
+| `pnpm verify`, `verify:full`                     | Static/unit build checks, then DB and browser checks    |
+| `pnpm audit:deps`, `audit:unused`, `audit`       | Read-only dependency/dead-code observation              |
+| `pnpm db:generate`, `db:migrate`, `db:studio`    | Drizzle workflows                                       |
+| `pnpm export:repo`, `export:working`             | Guarded compressed exports                              |
 
 ## Testing strategy
 
@@ -250,11 +299,12 @@ Unit tests inject clocks, IDs, randomness, provider responses, and repositories;
 real delays. They cover encryption, nonces, authenticated context, expiry, deletion, tenant scope,
 key configuration, and live-retention failure. API and unit tests cover asynchronous acceptance,
 typed event ordering, SSE backfill/cursors/terminal close, machine projection, variation resolution,
-and conservative dimension-level comparison. PostgreSQL integration proves ciphertext-only
-persistence, audit metadata, key rotation, tenant isolation, replay after service reconstruction,
-and durable comparison definitions. Playwright observes a real retry while it is running, preserves
-replay deletion coverage, and exercises the original-to-variant comparison flow. There are
-deliberately no broad snapshots.
+and conservative dimension-level comparison. PostgreSQL integration proves atomic rollback,
+ciphertext-only command persistence, concurrent idempotency, lease exclusivity/reclaim, ambiguity
+without a duplicate call, command cleanup, key rotation, tenant isolation, replay lifecycle
+independence, and atomic comparison variants. Playwright starts separate API and worker processes,
+observes queue/claim evidence, preserves replay deletion, and exercises the durable
+original-to-variant flow. There are deliberately no broad snapshots.
 
 ## Observability
 
@@ -276,9 +326,10 @@ The environment keyring is a prototype, not managed production key infrastructur
 
 ## Design tradeoffs
 
-- Submission and execution are separated only inside one API process. The persisted running record
-  makes `202` honest for this prototype, but it is not durable queue acceptance: process failure can
-  lose in-flight work before terminal evidence is written.
+- `in_process` remains intentionally non-durable. In `postgres_worker`, `202` follows committed
+  execution/event/job state and work can survive API loss before a provider call.
+- Leases provide at-least-once job delivery, not exactly-once provider effects. Reclaimed
+  nonterminal executions with prior attempt activity fail conservatively as ambiguous.
 - Events are append-only, while the execution row is a query projection updated to its latest state.
 - The memory repository keeps unit tests and an infrastructure-free demo honest, but is not shared
   or durable.
@@ -288,16 +339,15 @@ The environment keyring is a prototype, not managed production key infrastructur
   state current for the small prototype but needs batching or a join before large pagination.
 - Capsule lifecycle/audit mutations are transactional inside the vault, but execution projection
   updates are a separate consistency boundary.
-- Variant acceptance and experiment persistence cross two repository operations. A persistence
-  failure after variant acceptance can leave a linked execution without an experiment row until
-  durable orchestration introduces a stronger boundary.
+- Variant acceptance and experiment persistence are atomic only in PostgreSQL worker mode.
+  In-process mode deliberately keeps the simpler two-operation boundary.
 
 ## Production-hardening direction
 
 - **Identity and tenancy:** authenticated principals, tenant membership, database row-level security,
   service-to-service authorization.
-- **Execution consistency:** durable queue, transactional outbox, concurrency-safe idempotency,
-  cancellation, leases, and recovery.
+- **Execution consistency:** resumable recovery, transactional outbox, cancellation, reconciliation
+  tooling, and provider-supported idempotency where available.
 - **Policy controls:** Redis-backed distributed rate limits and circuit state, model/provider health,
   cost budgets, and explicit policy versions.
 - **Replay experiments:** batch scenarios, saved policy versions, and aggregate analysis beyond the
@@ -320,9 +370,10 @@ always refused.
 
 ## Known limitations
 
-The API executes inline, so in-flight provider work cannot survive process loss. Readiness checks
-database connectivity and selected replay mode but not migration/schema version. Memory capsules
-disappear on restart. PostgreSQL deletion is a tombstone, not a claim of physical erasure from
-backups. Replay audits lack actors because the dashboard uses a fixed demo tenant and has no login.
-The environment keyring is not KMS. Redis implementations are skeletons only. Cost is normalized but
-not enforced, and circuit/rate state is process-local.
+In-process execution cannot survive API loss. Worker mode survives accepted work before provider
+activity, but cannot prove exactly-once calls or resume an ambiguous attempt; it intentionally stops
+instead of automatically duplicating the call. Readiness checks database tables and selected modes,
+not a full migration version or global worker liveness. Memory capsules disappear on restart.
+PostgreSQL replay deletion is a tombstone, not physical backup erasure. Audits lack authenticated
+actors, environment keyrings are not KMS, Redis implementations are skeletons, cost is normalized
+but not enforced, and circuit/rate state is process-local.

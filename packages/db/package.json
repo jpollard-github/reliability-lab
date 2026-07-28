@@ -16,6 +16,7 @@
   "dependencies": {
     "@reliability-lab/contracts": "workspace:*",
     "@reliability-lab/core": "workspace:*",
+    "@sinclair/typebox": "^0.34.0",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.0.0"
   },

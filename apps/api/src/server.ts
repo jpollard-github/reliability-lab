@@ -12,6 +12,7 @@ import {
 import {
   createDatabase,
   PostgresComparisonExperimentRepository,
+  PostgresDurableExecutionStore,
   PostgresExecutionRepository,
   PostgresReplayCapsuleStore,
 } from "@reliability-lab/db";
@@ -22,9 +23,10 @@ import {
   type LlmProvider,
 } from "@reliability-lab/providers";
 import { buildApp } from "./app.js";
-import { readReplayRuntimeConfig } from "./config.js";
+import { readExecutionRuntimeConfig, readReplayRuntimeConfig } from "./config.js";
 
 const replayConfig = readReplayRuntimeConfig(process.env);
+const executionConfig = readExecutionRuntimeConfig(process.env);
 const telemetry = startTelemetry({
   serviceName: process.env.OTEL_SERVICE_NAME ?? "reliability-lab-api",
   ...(process.env.OTEL_EXPORTER_OTLP_ENDPOINT
@@ -54,13 +56,28 @@ let databasePool: ReturnType<typeof createDatabase>["pool"] | undefined;
 let database: ReturnType<typeof createDatabase>["db"] | undefined;
 let repository: ExecutionRepository = new MemoryExecutionRepository();
 let comparisons: ComparisonExperimentRepository = new MemoryComparisonExperimentRepository();
+let durableStore: PostgresDurableExecutionStore | undefined;
 if (process.env.DATABASE_URL) {
   const { db, pool } = createDatabase(process.env.DATABASE_URL);
   database = db;
   databasePool = pool;
   repository = new PostgresExecutionRepository(db);
   comparisons = new PostgresComparisonExperimentRepository(db);
+  if (executionConfig.mode === "postgres_worker") {
+    if (!executionConfig.keyring) {
+      throw new Error("PostgreSQL worker command keyring is unavailable");
+    }
+    durableStore = new PostgresDurableExecutionStore(db, executionConfig.keyring);
+  }
   closeDatabase = async () => pool.end();
+}
+if (executionConfig.mode === "postgres_worker" && !durableStore) {
+  throw new Error("EXECUTION_MODE=postgres_worker requires PostgreSQL");
+}
+if (executionConfig.mode === "postgres_worker" && replayConfig.storeMode !== "postgres") {
+  throw new Error(
+    "EXECUTION_MODE=postgres_worker requires REPLAY_CAPSULE_STORE=postgres so API and worker share replay capsules",
+  );
 }
 
 let replayCapsules: ReplayCapsuleStore;
@@ -90,6 +107,7 @@ const service = new ExecutionService({
   tracer: new OpenTelemetryExecutionTracer(),
   allowLivePromptRetention: replayConfig.allowLivePromptRetention,
   replayRetentionMs: replayConfig.retentionMs,
+  ...(durableStore ? { durableAcceptance: durableStore } : {}),
 });
 
 const app = await buildApp({
@@ -98,6 +116,8 @@ const app = await buildApp({
   readiness: async () => {
     const checks: Record<string, string> = {
       repository: database ? "postgres:ok" : "memory:ok",
+      execution_mode: executionConfig.mode,
+      execution_jobs: durableStore ? "postgres:ok" : "not_configured",
       replay_store: `${replayConfig.storeMode}:ok`,
       redis: redis ? ((await redis.ping()) === "PONG" ? "ok" : "unexpected") : "not_configured",
     };
@@ -108,11 +128,13 @@ const app = await buildApp({
           await databasePool.query("select 1 from replay_capsules limit 0");
         }
         await databasePool.query("select 1 from comparison_experiments limit 0");
+        if (durableStore) await databasePool.query("select 1 from execution_jobs limit 0");
       } catch {
         checks.repository = "postgres:unavailable";
         if (replayConfig.storeMode === "postgres") {
           checks.replay_store = "postgres:unavailable";
         }
+        if (durableStore) checks.execution_jobs = "postgres:unavailable";
       }
     }
     return {
@@ -124,7 +146,10 @@ const app = await buildApp({
   },
 });
 
+let shuttingDown = false;
 const shutdown = async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
   await app.close();
   if (redis) await redis.quit();
   if (closeDatabase) await closeDatabase();

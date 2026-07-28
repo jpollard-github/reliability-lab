@@ -13,20 +13,30 @@ import {
   comparisonExperiments,
   executionAttempts,
   executionEvents,
+  executionJobs,
   executions,
   idempotencyRecords,
   replayCapsuleAudits,
   replayCapsules,
 } from "./schema.js";
 
+export * from "./durable-execution.js";
+export * from "./execution-commands.js";
 export * from "./replay-capsules.js";
-export { comparisonExperiments, replayCapsuleAudits, replayCapsules } from "./schema.js";
+export * from "./replay-runtime-config.js";
+export {
+  comparisonExperiments,
+  executionJobs,
+  replayCapsuleAudits,
+  replayCapsules,
+} from "./schema.js";
 
-type ReliabilityDatabase = NodePgDatabase<{
+export type ReliabilityDatabase = NodePgDatabase<{
   comparisonExperiments: typeof comparisonExperiments;
   executions: typeof executions;
   executionAttempts: typeof executionAttempts;
   executionEvents: typeof executionEvents;
+  executionJobs: typeof executionJobs;
   idempotencyRecords: typeof idempotencyRecords;
   replayCapsules: typeof replayCapsules;
   replayCapsuleAudits: typeof replayCapsuleAudits;
@@ -40,6 +50,7 @@ export function createDatabase(databaseUrl: string) {
       comparisonExperiments,
       executionAttempts,
       executionEvents,
+      executionJobs,
       idempotencyRecords,
       replayCapsules,
       replayCapsuleAudits,

@@ -25,6 +25,20 @@ does not provide KMS-backed envelope keys, automatic re-encryption, hardware iso
 key access policy, or cryptographic deletion. Production should use managed key infrastructure and
 document rotation, revocation, backup, and recovery procedures.
 
+## Transient execution commands
+
+PostgreSQL worker mode has a separate AES-256-GCM command store. Its AAD binds purpose
+`execution_command`, tenant ID, execution ID, payload schema version, and command key version.
+`EXECUTION_COMMAND_ACTIVE_KEY_VERSION` chooses new-write keys and
+`EXECUTION_COMMAND_KEYS_JSON` supplies read-old/write-current versions. Startup fails closed for an
+invalid keyring.
+
+Command ciphertext exists only so a worker can honor accepted work. Terminal handling clears
+ciphertext, nonce, and authentication tag and records `payloadDeletedAt`, retaining only safe lease
+and reconciliation metadata. Missing keys, malformed payloads, and authentication failures produce
+normalized safe failures without crypto detail or plaintext. This lifecycle is independent of
+Replay Vault expiry/deletion: deleting either payload never deletes the other.
+
 ## Retention, expiry, and deletion
 
 Capsules have explicit expiry timestamps. Expired and deleted rows become unavailable on the next
@@ -48,9 +62,9 @@ belong. The audit has no actor because authentication does not exist; inventing 
 misleading. The current tenant header should not be interpreted as proof of who performed an action.
 
 Pino redacts authorization, cookies, API keys, messages, and input. Spans contain identifiers and
-policy metadata, not prompt content. Capsule bodies, ciphertext, nonces, tags, and keys are absent
-from API contracts. `.env*` except `.env.example`, logs, exports, and local volumes are ignored or
-refused by export tooling.
+policy metadata, not prompt content. Capsule and execution-command bodies, ciphertext, nonces,
+tags, and keys are absent from API contracts. `.env*` except `.env.example`, logs, exports, and
+local volumes are ignored or refused by export tooling.
 
 ## Comparative replay
 
@@ -69,8 +83,8 @@ unavailable experiment; existing normalized execution evidence remains.
 
 ## Remaining risks
 
-Plaintext must exist transiently to call a provider and to encrypt or replay a capsule, so host and
-process compromise remain in scope. Database roles are not yet separated between execution evidence
-and replay data. There is no authenticated actor, RBAC, RLS, residency policy, legal-hold workflow,
-backup erasure guarantee, cloud KMS, bulk re-encryption, or isolated replay worker. Those controls
-must precede production use.
+Plaintext must exist transiently to encrypt a command and to call a provider or replay a capsule, so
+host and process compromise remain in scope. Database roles are not yet separated between execution
+jobs, evidence, and replay data. There is no authenticated actor, RBAC, RLS, residency policy,
+legal-hold workflow, backup erasure guarantee, cloud KMS, bulk re-encryption, or isolated replay
+worker. Those controls must precede production use.

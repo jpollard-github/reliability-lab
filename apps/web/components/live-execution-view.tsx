@@ -38,7 +38,7 @@ export function ExecutionMachineView({
   const [playbackCount, setPlaybackCount] = useState(initialExecution.events.length);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<PlaybackSpeed>(1);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.parse(initialExecution.createdAt));
   const cursorRef = useRef(events.at(-1)?.sequence ?? 0);
 
   const actualProjection = useMemo(() => projectExecutionEvents(events), [events]);

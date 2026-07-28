@@ -177,6 +177,28 @@ describe("comparative replay", () => {
     });
   });
 
+  it("treats token differences as factual rather than automatically improved", async () => {
+    const { service } = harness();
+    const original = await service.execute({
+      tenantId: "tenant-a",
+      body: { provider: "fake-primary", model: "v1", input: "a longer retained input" },
+    });
+    const variant = structuredClone(original);
+    variant.executionId = "variant";
+    variant.attempts[0]!.usage = {
+      ...variant.attempts[0]!.usage!,
+      inputTokens: Math.max(1, variant.attempts[0]!.usage!.inputTokens - 1),
+      outputTokens: Math.max(1, variant.attempts[0]!.usage!.outputTokens - 1),
+    };
+    const projection = projectComparison(original, variant);
+    expect(projection.dimensions.find((item) => item.key === "input_tokens")).toMatchObject({
+      change: "mixed",
+    });
+    expect(projection.dimensions.find((item) => item.key === "output_tokens")).toMatchObject({
+      change: "mixed",
+    });
+  });
+
   it("supports explicit fallback removal and validates configured providers", async () => {
     const { service } = harness();
     const original = await service.execute({

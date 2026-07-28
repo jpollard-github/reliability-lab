@@ -28,6 +28,16 @@ function EventDetails({ event }: { event: ExecutionEvent }) {
           {event.provider} / {event.model}, attempt {event.attemptNumber}
         </p>
       );
+    case "worker.claimed":
+      return <p>A durable worker acquired the execution lease.</p>;
+    case "execution.recovery_detected":
+      return <p>{event.reason}</p>;
+    case "attempt.outcome_ambiguous":
+      return (
+        <p>
+          Attempt {event.attemptNumber} on {event.provider} / {event.model} was not repeated.
+        </p>
+      );
     case "provider.response_received":
       return (
         <p>
@@ -72,7 +82,13 @@ function EventDetails({ event }: { event: ExecutionEvent }) {
         </p>
       );
     case "replay.completed":
-      return <p>Outcome {event.outcomeMatches ? "matched" : "differed"} from original.</p>;
+      return (
+        <p>
+          {event.outcomeMatches === null
+            ? "Outcome comparison is pending."
+            : `Outcome ${event.outcomeMatches ? "matched" : "differed"} from original.`}
+        </p>
+      );
     default:
       return null;
   }

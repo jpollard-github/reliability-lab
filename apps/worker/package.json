@@ -1,0 +1,23 @@
+{
+  "name": "@reliability-lab/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@reliability-lab/core": "workspace:*",
+    "@reliability-lab/db": "workspace:*",
+    "@reliability-lab/observability": "workspace:*",
+    "@reliability-lab/providers": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}
