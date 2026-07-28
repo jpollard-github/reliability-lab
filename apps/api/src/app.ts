@@ -7,6 +7,7 @@ import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import {
   CreateExecutionBodySchema,
   ExecutionStatusSchema,
+  ReplayCapabilityStateSchema,
   type ExecutionEnvelope,
 } from "@reliability-lab/contracts";
 import {
@@ -42,6 +43,16 @@ const ErrorSchema = Type.Object({
   message: Type.String(),
   statusCode: Type.Integer(),
 });
+const ReplayCapabilitySchema = Type.Object(
+  {
+    state: ReplayCapabilityStateSchema,
+    available: Type.Boolean(),
+    reason: Type.String(),
+    expiresAt: Type.Optional(Type.String()),
+    deletedAt: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
 const ExecutionEnvelopeSchema = Type.Unsafe<ExecutionEnvelope>({
   type: "object",
   required: [
@@ -59,6 +70,7 @@ const ExecutionEnvelopeSchema = Type.Unsafe<ExecutionEnvelope>({
     "events",
     "createdAt",
     "updatedAt",
+    "replayCapability",
     "replayable",
   ],
   additionalProperties: true,
@@ -77,6 +89,7 @@ const ExecutionEnvelopeSchema = Type.Unsafe<ExecutionEnvelope>({
     events: { type: "array" },
     createdAt: { type: "string" },
     updatedAt: { type: "string" },
+    replayCapability: ReplayCapabilitySchema,
     replayable: { type: "boolean" },
   },
 });
@@ -95,8 +108,14 @@ const ReplayResponseSchema = Type.Union([
     replayable: Type.Literal(false),
     originalExecutionId: Type.String(),
     reason: Type.String(),
+    capability: ReplayCapabilitySchema,
   }),
 ]);
+const DeleteReplayResponseSchema = Type.Object({
+  executionId: Type.String(),
+  deleted: Type.Boolean(),
+  replayCapability: ReplayCapabilitySchema,
+});
 
 interface AppOptions {
   service: ExecutionService;
@@ -118,6 +137,7 @@ export async function buildApp(options: AppOptions) {
 
   await app.register(cors, {
     origin: process.env.NODE_ENV === "production" ? false : true,
+    methods: ["GET", "HEAD", "POST", "DELETE"],
   });
   await app.register(swagger, {
     openapi: {
@@ -215,6 +235,33 @@ export async function buildApp(options: AppOptions) {
         "execution completed",
       );
       return reply.code(202).send(submission(execution));
+    },
+  );
+
+  app.delete(
+    "/v1/executions/:executionId/replay-capsule",
+    {
+      schema: {
+        tags: ["replay"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: ExecutionParamsSchema,
+        response: {
+          200: DeleteReplayResponseSchema,
+          404: ErrorSchema,
+        },
+      },
+    },
+    async (request) => {
+      const result = await options.service.deleteReplayCapsule(
+        request.headers["x-tenant-id"],
+        request.params.executionId,
+      );
+      return {
+        executionId: request.params.executionId,
+        deleted: result.deleted,
+        replayCapability: result.capability,
+      };
     },
   );
 

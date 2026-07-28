@@ -8,6 +8,7 @@ import type {
   ExecutionPolicy,
   ProviderError,
   ProviderRequest,
+  ReplayCapability,
   ReplayResult,
   TenantId,
 } from "@reliability-lab/contracts";
@@ -57,9 +58,28 @@ export interface ReplayCapsule {
   providerRequest: Omit<ProviderRequest, "executionId" | "attempt">;
 }
 
+export interface StoreReplayCapsule {
+  tenantId: TenantId;
+  executionId: ExecutionId;
+  capsule: ReplayCapsule;
+  payloadSchemaVersion: 1;
+  expiresAt: string;
+}
+
+export type ReplayCapsuleReadResult =
+  | { available: true; capability: ReplayCapability; capsule: ReplayCapsule }
+  | { available: false; capability: ReplayCapability };
+
+export interface ReplayCapsuleDeleteResult {
+  deleted: boolean;
+  capability: ReplayCapability;
+}
+
 export interface ReplayCapsuleStore {
-  put(executionId: ExecutionId, capsule: ReplayCapsule): Promise<void>;
-  get(executionId: ExecutionId): Promise<ReplayCapsule | null>;
+  put(input: StoreReplayCapsule): Promise<ReplayCapability>;
+  inspect(tenantId: TenantId, executionId: ExecutionId): Promise<ReplayCapability>;
+  getForReplay(tenantId: TenantId, executionId: ExecutionId): Promise<ReplayCapsuleReadResult>;
+  delete(tenantId: TenantId, executionId: ExecutionId): Promise<ReplayCapsuleDeleteResult>;
 }
 
 export interface ProviderRegistry {
@@ -92,6 +112,7 @@ export interface ExecutionServiceOptions {
   rateLimiter?: RateLimiter;
   tracer?: ExecutionTracer;
   allowLivePromptRetention?: boolean;
+  replayRetentionMs?: number;
 }
 
 const DEFAULT_POLICY: ExecutionPolicy = {
@@ -130,6 +151,7 @@ export class ExecutionService {
   readonly #rateLimiter: RateLimiter;
   readonly #tracer: ExecutionTracer;
   readonly #allowLivePromptRetention: boolean;
+  readonly #replayRetentionMs: number;
   readonly #ajv = new Ajv({ allErrors: true, strict: false });
 
   constructor(options: ExecutionServiceOptions) {
@@ -143,6 +165,7 @@ export class ExecutionService {
     this.#rateLimiter = options.rateLimiter ?? new InMemoryRateLimiter();
     this.#tracer = options.tracer ?? noOpTracer;
     this.#allowLivePromptRetention = options.allowLivePromptRetention ?? false;
+    this.#replayRetentionMs = options.replayRetentionMs ?? 24 * 60 * 60 * 1_000;
   }
 
   async execute(command: ExecuteCommand): Promise<ExecutionEnvelope> {
@@ -187,6 +210,7 @@ export class ExecutionService {
       events: [],
       createdAt,
       updatedAt: createdAt,
+      replayCapability: unavailableCapability("missing", "Replay capsule has not been retained"),
       replayable: false,
       ...(command.replayOfExecutionId ? { replayOfExecutionId: command.replayOfExecutionId } : {}),
     };
@@ -242,10 +266,37 @@ export class ExecutionService {
       },
     };
     if (primary.kind === "fake" || this.#allowLivePromptRetention) {
-      await this.#replayCapsules.put(execution.executionId, capsule);
-      execution.replayable = true;
+      const expiresAt = new Date(
+        this.#clock.now().getTime() + this.#replayRetentionMs,
+      ).toISOString();
+      try {
+        const capability = await this.#replayCapsules.put({
+          tenantId: command.tenantId,
+          executionId: execution.executionId,
+          capsule,
+          payloadSchemaVersion: 1,
+          expiresAt,
+        });
+        this.#setCapability(execution, capability);
+      } catch {
+        this.#setCapability(
+          execution,
+          unavailableCapability("missing", "Replay capsule persistence failed"),
+        );
+        if (primary.kind === "live") {
+          return this.#fail(execution, {
+            category: "provider_unavailable",
+            code: "replay_retention_failed",
+            message: "Required replay retention could not be established",
+            retryable: true,
+          });
+        }
+      }
     } else {
-      execution.replayUnavailableReason = "Live-provider request retention is disabled";
+      this.#setCapability(
+        execution,
+        unavailableCapability("retention_disabled", "Live-provider request retention is disabled"),
+      );
     }
 
     return this.#tracer.withSpan(
@@ -262,15 +313,25 @@ export class ExecutionService {
   async replay(tenantId: TenantId, originalExecutionId: ExecutionId): Promise<ReplayResult> {
     const original = await this.#repository.findById(tenantId, originalExecutionId);
     if (!original) throw new ExecutionNotFoundError();
-    const capsule = await this.#replayCapsules.get(originalExecutionId);
-    if (!capsule) {
+    if (original.replayCapability.state === "retention_disabled") {
       return {
         replayable: false,
         originalExecutionId,
-        reason: original.replayUnavailableReason ?? "Replay capsule is unavailable",
+        reason: original.replayCapability.reason,
+        capability: original.replayCapability,
       };
     }
-    const request = capsule.providerRequest;
+    const capsuleResult = await this.#replayCapsules.getForReplay(tenantId, originalExecutionId);
+    if (!capsuleResult.available) {
+      this.#setCapability(original, capsuleResult.capability);
+      return {
+        replayable: false,
+        originalExecutionId,
+        reason: capsuleResult.capability.reason,
+        capability: capsuleResult.capability,
+      };
+    }
+    const request = capsuleResult.capsule.providerRequest;
     const replayExecution = await this.execute({
       tenantId,
       replayOfExecutionId: originalExecutionId,
@@ -304,11 +365,24 @@ export class ExecutionService {
   async get(tenantId: TenantId, executionId: ExecutionId): Promise<ExecutionEnvelope> {
     const execution = await this.#repository.findById(tenantId, executionId);
     if (!execution) throw new ExecutionNotFoundError();
-    return execution;
+    return this.#withCurrentCapability(execution);
   }
 
-  list(tenantId?: TenantId): Promise<ExecutionEnvelope[]> {
-    return this.#repository.list(tenantId);
+  async list(tenantId?: TenantId): Promise<ExecutionEnvelope[]> {
+    const executions = await this.#repository.list(tenantId);
+    return Promise.all(executions.map((execution) => this.#withCurrentCapability(execution)));
+  }
+
+  async deleteReplayCapsule(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+  ): Promise<ReplayCapsuleDeleteResult> {
+    const execution = await this.#repository.findById(tenantId, executionId);
+    if (!execution) throw new ExecutionNotFoundError();
+    const result = await this.#replayCapsules.delete(tenantId, executionId);
+    this.#setCapability(execution, result.capability);
+    await this.#repository.update(execution);
+    return result;
   }
 
   async #runPolicy(
@@ -557,6 +631,26 @@ export class ExecutionService {
     const appended = execution.events.at(-1);
     if (appended) await this.#repository.appendEvent(appended);
   }
+
+  async #withCurrentCapability(execution: ExecutionEnvelope): Promise<ExecutionEnvelope> {
+    if (execution.replayCapability.state === "retention_disabled") return execution;
+    const capability = await this.#replayCapsules.inspect(
+      execution.tenantId,
+      execution.executionId,
+    );
+    this.#setCapability(execution, capability);
+    return execution;
+  }
+
+  #setCapability(execution: ExecutionEnvelope, capability: ReplayCapability): void {
+    execution.replayCapability = capability;
+    execution.replayable = capability.available;
+    if (capability.available) {
+      delete execution.replayUnavailableReason;
+    } else {
+      execution.replayUnavailableReason = capability.reason;
+    }
+  }
 }
 
 type EventGenerated = {
@@ -571,6 +665,32 @@ type EventPayload = ExecutionEvent extends infer Event
     ? Omit<Event, keyof EventGenerated>
     : never
   : never;
+
+export function availableCapability(expiresAt: string): ReplayCapability {
+  return {
+    state: "available",
+    available: true,
+    reason: "Replay capsule is available",
+    expiresAt,
+  };
+}
+
+export function unavailableCapability(
+  state: Exclude<ReplayCapability["state"], "available" | "deleted">,
+  reason: string,
+): ReplayCapability {
+  return { state, available: false, reason };
+}
+
+export function deletedCapability(deletedAt: string, expiresAt?: string): ReplayCapability {
+  return {
+    state: "deleted",
+    available: false,
+    reason: "Replay capsule was deleted",
+    deletedAt,
+    ...(expiresAt ? { expiresAt } : {}),
+  };
+}
 
 export class MemoryExecutionRepository implements ExecutionRepository {
   readonly #executions = new Map<string, ExecutionEnvelope>();
@@ -614,13 +734,111 @@ export class MemoryExecutionRepository implements ExecutionRepository {
 }
 
 export class MemoryReplayCapsuleStore implements ReplayCapsuleStore {
-  readonly #capsules = new Map<ExecutionId, ReplayCapsule>();
-  async put(executionId: ExecutionId, capsule: ReplayCapsule) {
-    this.#capsules.set(executionId, structuredClone(capsule));
+  readonly #capsules = new Map<
+    string,
+    {
+      capsule: ReplayCapsule;
+      expiresAt: string;
+      deletedAt?: string;
+    }
+  >();
+  readonly #audits: Array<{
+    tenantId: TenantId;
+    executionId: ExecutionId;
+    operation: "store" | "inspect" | "read_for_replay" | "delete";
+    outcome: string;
+    occurredAt: string;
+  }> = [];
+  readonly #now: () => Date;
+
+  constructor(now: () => Date = () => new Date()) {
+    this.#now = now;
   }
-  async get(executionId: ExecutionId) {
-    const capsule = this.#capsules.get(executionId);
-    return capsule ? structuredClone(capsule) : null;
+
+  async put(input: StoreReplayCapsule) {
+    this.#capsules.set(this.#key(input.tenantId, input.executionId), {
+      capsule: structuredClone(input.capsule),
+      expiresAt: input.expiresAt,
+    });
+    this.#audit(input.tenantId, input.executionId, "store", "stored");
+    return availableCapability(input.expiresAt);
+  }
+
+  async inspect(tenantId: TenantId, executionId: ExecutionId) {
+    const capability = this.#capability(tenantId, executionId);
+    this.#audit(tenantId, executionId, "inspect", capability.state);
+    return capability;
+  }
+
+  async getForReplay(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+  ): Promise<ReplayCapsuleReadResult> {
+    const capability = this.#capability(tenantId, executionId);
+    this.#audit(tenantId, executionId, "read_for_replay", capability.state);
+    if (!capability.available) return { available: false, capability };
+    const row = this.#capsules.get(this.#key(tenantId, executionId));
+    if (!row) {
+      return {
+        available: false,
+        capability: unavailableCapability("missing", "Replay capsule is unavailable"),
+      };
+    }
+    return { available: true, capability, capsule: structuredClone(row.capsule) };
+  }
+
+  async delete(tenantId: TenantId, executionId: ExecutionId): Promise<ReplayCapsuleDeleteResult> {
+    const row = this.#capsules.get(this.#key(tenantId, executionId));
+    if (!row) {
+      const capability = unavailableCapability("missing", "Replay capsule is unavailable");
+      this.#audit(tenantId, executionId, "delete", "already_absent");
+      return { deleted: false, capability };
+    }
+    if (row.deletedAt) {
+      const capability = deletedCapability(row.deletedAt, row.expiresAt);
+      this.#audit(tenantId, executionId, "delete", "already_deleted");
+      return { deleted: false, capability };
+    }
+    row.deletedAt = this.#now().toISOString();
+    const capability = deletedCapability(row.deletedAt, row.expiresAt);
+    this.#audit(tenantId, executionId, "delete", "deleted");
+    return { deleted: true, capability };
+  }
+
+  audits() {
+    return structuredClone(this.#audits);
+  }
+
+  #capability(tenantId: TenantId, executionId: ExecutionId): ReplayCapability {
+    const row = this.#capsules.get(this.#key(tenantId, executionId));
+    if (!row) return unavailableCapability("missing", "Replay capsule is unavailable");
+    if (row.deletedAt) return deletedCapability(row.deletedAt, row.expiresAt);
+    if (new Date(row.expiresAt).getTime() <= this.#now().getTime()) {
+      return {
+        ...unavailableCapability("expired", "Replay capsule retention has expired"),
+        expiresAt: row.expiresAt,
+      };
+    }
+    return availableCapability(row.expiresAt);
+  }
+
+  #audit(
+    tenantId: TenantId,
+    executionId: ExecutionId,
+    operation: "store" | "inspect" | "read_for_replay" | "delete",
+    outcome: string,
+  ) {
+    this.#audits.push({
+      tenantId,
+      executionId,
+      operation,
+      outcome,
+      occurredAt: this.#now().toISOString(),
+    });
+  }
+
+  #key(tenantId: TenantId, executionId: ExecutionId) {
+    return `${tenantId}\u0000${executionId}`;
   }
 }
 

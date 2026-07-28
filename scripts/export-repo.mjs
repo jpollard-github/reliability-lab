@@ -19,17 +19,20 @@ const dryRun = process.argv.includes("--dry-run");
 const exportDirectory = join(root, "artifacts", "exports");
 
 await requireRepositoryRoot();
-const candidates = (await git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"]))
+const listedCandidates = (
+  await git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
+)
   .split("\0")
   .filter(Boolean)
   .filter((path) => !path.startsWith("artifacts/exports/"))
   .filter((path) => !path.endsWith(".tar.gz"));
 
-if (candidates.length === 0) fail("No exportable repository files were found.");
-for (const path of candidates) {
+const candidates = [];
+for (const path of listedCandidates) {
   rejectUnsafeName(path);
-  await rejectUnsafePath(path);
+  if (await rejectUnsafePath(path)) candidates.push(path);
 }
+if (candidates.length === 0) fail("No exportable repository files were found.");
 
 if (dryRun) {
   process.stdout.write(
@@ -103,11 +106,20 @@ function rejectUnsafeName(path) {
 async function rejectUnsafePath(path) {
   if (isAbsolute(path) || path.split(/[\\/]/u).includes("..")) fail(`Unsafe export path: ${path}`);
   const source = join(root, path);
-  const metadata = await lstat(source);
+  let metadata;
+  try {
+    metadata = await lstat(source);
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
   if (metadata.isSymbolicLink()) {
     const target = await realpath(source);
     if (!isInside(root, target)) fail(`Symlink resolves outside the repository: ${path}`);
   }
+  return true;
 }
 
 function isInside(parent, child) {

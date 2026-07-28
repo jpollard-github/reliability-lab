@@ -20,4 +20,10 @@ test("lists an execution and opens its event timeline", async ({ page, request }
   await page.getByRole("link", { name: body.executionId.slice(0, 12) }).click();
   await expect(page.getByRole("heading", { name: "Event timeline" })).toBeVisible();
   await expect(page.getByText("execution · succeeded")).toBeVisible();
+  await expect(page.getByTitle("Replay capsule is available")).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete replay data" }).click();
+  await expect(page.getByTitle("Replay capsule was deleted")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Replay execution" })).toBeDisabled();
 });

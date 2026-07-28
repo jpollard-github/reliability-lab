@@ -42,7 +42,7 @@ export default async function ExecutionDetailPage({
             ) : null}
           </div>
         </div>
-        <ReplayButton executionId={execution.executionId} replayable={execution.replayable} />
+        <ReplayButton executionId={execution.executionId} capability={execution.replayCapability} />
       </section>
       <section className="detail-grid">
         <div className="panel facts">
@@ -58,13 +58,22 @@ export default async function ExecutionDetailPage({
             />
             <Fact label="Created" value={new Date(execution.createdAt).toLocaleString()} />
             <Fact
-              label="Replay"
-              value={
-                execution.replayable
-                  ? "capsule retained"
-                  : (execution.replayUnavailableReason ?? "unavailable")
-              }
+              label="Replay state"
+              value={execution.replayCapability.state.replaceAll("_", " ")}
             />
+            <Fact label="Replay detail" value={execution.replayCapability.reason} />
+            {execution.replayCapability.expiresAt ? (
+              <Fact
+                label="Expires"
+                value={new Date(execution.replayCapability.expiresAt).toLocaleString()}
+              />
+            ) : null}
+            {execution.replayCapability.deletedAt ? (
+              <Fact
+                label="Deleted"
+                value={new Date(execution.replayCapability.deletedAt).toLocaleString()}
+              />
+            ) : null}
           </dl>
         </div>
         <div className="panel">

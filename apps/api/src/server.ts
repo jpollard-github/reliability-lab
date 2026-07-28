@@ -4,8 +4,14 @@ import {
   MapProviderRegistry,
   MemoryExecutionRepository,
   MemoryReplayCapsuleStore,
+  type ExecutionRepository,
+  type ReplayCapsuleStore,
 } from "@reliability-lab/core";
-import { createDatabase, PostgresExecutionRepository } from "@reliability-lab/db";
+import {
+  createDatabase,
+  PostgresExecutionRepository,
+  PostgresReplayCapsuleStore,
+} from "@reliability-lab/db";
 import { OpenTelemetryExecutionTracer, startTelemetry } from "@reliability-lab/observability";
 import {
   DeterministicFakeProvider,
@@ -13,7 +19,9 @@ import {
   type LlmProvider,
 } from "@reliability-lab/providers";
 import { buildApp } from "./app.js";
+import { readReplayRuntimeConfig } from "./config.js";
 
+const replayConfig = readReplayRuntimeConfig(process.env);
 const telemetry = startTelemetry({
   serviceName: process.env.OTEL_SERVICE_NAME ?? "reliability-lab-api",
   ...(process.env.OTEL_EXPORTER_OTLP_ENDPOINT
@@ -39,11 +47,25 @@ if (
 }
 
 let closeDatabase: (() => Promise<void>) | undefined;
-let repository = new MemoryExecutionRepository();
+let databasePool: ReturnType<typeof createDatabase>["pool"] | undefined;
+let database: ReturnType<typeof createDatabase>["db"] | undefined;
+let repository: ExecutionRepository = new MemoryExecutionRepository();
 if (process.env.DATABASE_URL) {
   const { db, pool } = createDatabase(process.env.DATABASE_URL);
-  repository = new PostgresExecutionRepository(db) as unknown as MemoryExecutionRepository;
+  database = db;
+  databasePool = pool;
+  repository = new PostgresExecutionRepository(db);
   closeDatabase = async () => pool.end();
+}
+
+let replayCapsules: ReplayCapsuleStore;
+if (replayConfig.storeMode === "postgres") {
+  if (!database || !replayConfig.keyring) {
+    throw new Error("PostgreSQL replay store prerequisites are unavailable");
+  }
+  replayCapsules = new PostgresReplayCapsuleStore(database, replayConfig.keyring);
+} else {
+  replayCapsules = new MemoryReplayCapsuleStore();
 }
 
 let redis: RedisClientType | undefined;
@@ -57,10 +79,11 @@ if (process.env.REDIS_URL) {
 
 const service = new ExecutionService({
   repository,
-  replayCapsules: new MemoryReplayCapsuleStore(),
+  replayCapsules,
   providers: new MapProviderRegistry(providers),
   tracer: new OpenTelemetryExecutionTracer(),
-  allowLivePromptRetention: process.env.ALLOW_LIVE_PROMPT_RETENTION === "true",
+  allowLivePromptRetention: replayConfig.allowLivePromptRetention,
+  replayRetentionMs: replayConfig.retentionMs,
 });
 
 const app = await buildApp({
@@ -68,10 +91,29 @@ const app = await buildApp({
   enableFailureInjection: process.env.ENABLE_FAILURE_INJECTION === "true",
   readiness: async () => {
     const checks: Record<string, string> = {
-      repository: process.env.DATABASE_URL ? "postgres:ok" : "memory:ok",
+      repository: database ? "postgres:ok" : "memory:ok",
+      replay_store: `${replayConfig.storeMode}:ok`,
       redis: redis ? ((await redis.ping()) === "PONG" ? "ok" : "unexpected") : "not_configured",
     };
-    return { ready: !Object.values(checks).includes("unexpected"), checks };
+    if (databasePool) {
+      try {
+        await databasePool.query("select 1");
+        if (replayConfig.storeMode === "postgres") {
+          await databasePool.query("select 1 from replay_capsules limit 0");
+        }
+      } catch {
+        checks.repository = "postgres:unavailable";
+        if (replayConfig.storeMode === "postgres") {
+          checks.replay_store = "postgres:unavailable";
+        }
+      }
+    }
+    return {
+      ready: !Object.values(checks).some(
+        (value) => value === "unexpected" || value.endsWith(":unavailable"),
+      ),
+      checks,
+    };
   },
 });
 

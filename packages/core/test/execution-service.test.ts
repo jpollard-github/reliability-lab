@@ -16,10 +16,14 @@ const baseBody: CreateExecutionBody = {
   input: "A deterministic incident fixture",
 };
 
-function harness(providers?: LlmProvider[], capsules?: ReplayCapsuleStore) {
+function harness(
+  providers?: LlmProvider[],
+  capsules?: ReplayCapsuleStore,
+  replayRetentionMs?: number,
+) {
   const repository = new MemoryExecutionRepository();
-  const replayCapsules = capsules ?? new MemoryReplayCapsuleStore();
   const clock = new FakeClock();
+  const replayCapsules = capsules ?? new MemoryReplayCapsuleStore(() => clock.now());
   const service = new ExecutionService({
     repository,
     replayCapsules,
@@ -32,6 +36,7 @@ function harness(providers?: LlmProvider[], capsules?: ReplayCapsuleStore) {
     clock,
     random: new FixedRandom(),
     ids: new SequenceIds(),
+    ...(replayRetentionMs === undefined ? {} : { replayRetentionMs }),
   });
   return { service, repository, replayCapsules, clock };
 }
@@ -186,6 +191,99 @@ describe("ExecutionService replay", () => {
       replayable: false,
       originalExecutionId: original.executionId,
       reason: "Live-provider request retention is disabled",
+      capability: {
+        state: "retention_disabled",
+        available: false,
+        reason: "Live-provider request retention is disabled",
+      },
     });
+  });
+
+  it("does not call a live provider when required durable retention fails", async () => {
+    let providerCalls = 0;
+    const liveProvider: LlmProvider = {
+      id: "live",
+      kind: "live",
+      execute: async () => {
+        providerCalls += 1;
+        throw new Error("provider must not be called");
+      },
+    };
+    const unavailable = {
+      state: "missing" as const,
+      available: false,
+      reason: "Replay capsule is unavailable",
+    };
+    const failingCapsules: ReplayCapsuleStore = {
+      put: async () => {
+        throw new Error("storage unavailable");
+      },
+      inspect: async () => unavailable,
+      getForReplay: async () => ({ available: false, capability: unavailable }),
+      delete: async () => ({ deleted: false, capability: unavailable }),
+    };
+    const service = new ExecutionService({
+      repository: new MemoryExecutionRepository(),
+      replayCapsules: failingCapsules,
+      providers: new MapProviderRegistry([liveProvider]),
+      allowLivePromptRetention: true,
+    });
+
+    const execution = await service.execute({
+      tenantId: "tenant-a",
+      body: { ...baseBody, provider: "live" },
+    });
+    expect(execution.status).toBe("failed");
+    expect(execution.error?.code).toBe("replay_retention_failed");
+    expect(execution.replayable).toBe(false);
+    expect(providerCalls).toBe(0);
+  });
+
+  it("enforces tenant scope at the replay capsule boundary", async () => {
+    const { service } = harness();
+    const original = await service.execute({ tenantId: "tenant-a", body: baseBody });
+
+    await expect(service.replay("tenant-b", original.executionId)).rejects.toThrow(
+      "Execution not found",
+    );
+    await expect(service.deleteReplayCapsule("tenant-b", original.executionId)).rejects.toThrow(
+      "Execution not found",
+    );
+    const ownDetail = await service.get("tenant-a", original.executionId);
+    expect(ownDetail.replayCapability.state).toBe("available");
+  });
+
+  it("expires replay capability and blocks replay without sleeping", async () => {
+    const { service, clock } = harness(undefined, undefined, 1_000);
+    const original = await service.execute({ tenantId: "tenant-a", body: baseBody });
+    clock.advance(1_001);
+
+    const detail = await service.get("tenant-a", original.executionId);
+    expect(detail.replayCapability.state).toBe("expired");
+    expect(detail.replayable).toBe(false);
+    const replay = await service.replay("tenant-a", original.executionId);
+    expect(replay.replayable).toBe(false);
+    if (!replay.replayable) expect(replay.capability.state).toBe("expired");
+  });
+
+  it("deletes replay data idempotently, audits it, and blocks replay immediately", async () => {
+    const clock = new FakeClock();
+    const capsules = new MemoryReplayCapsuleStore(() => clock.now());
+    const { service } = harness(undefined, capsules);
+    const original = await service.execute({ tenantId: "tenant-a", body: baseBody });
+
+    const first = await service.deleteReplayCapsule("tenant-a", original.executionId);
+    const second = await service.deleteReplayCapsule("tenant-a", original.executionId);
+    expect(first.deleted).toBe(true);
+    expect(second.deleted).toBe(false);
+    expect(second.capability.state).toBe("deleted");
+    expect(
+      capsules
+        .audits()
+        .filter((audit) => audit.operation === "delete")
+        .map((audit) => audit.outcome),
+    ).toEqual(["deleted", "already_deleted"]);
+    const replay = await service.replay("tenant-a", original.executionId);
+    expect(replay.replayable).toBe(false);
   });
 });

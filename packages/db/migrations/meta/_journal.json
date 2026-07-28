@@ -8,6 +8,20 @@
       "when": 1785168000000,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785178800000,
+      "tag": "0001_replay_vault",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785182400000,
+      "tag": "0002_replay_unreadable_state",
+      "breakpoints": true
     }
   ]
 }

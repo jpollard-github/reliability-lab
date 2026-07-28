@@ -355,6 +355,23 @@ tbody tr:hover {
   max-width: 320px;
   text-align: right;
 }
+.replay-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.danger-button {
+  border-color: #713b40;
+  background: #2c171b;
+  color: #ffb4b9;
+}
+.danger-button:hover {
+  background: #3a1d22;
+}
+.form-message {
+  color: var(--accent);
+  margin: 0;
+  font-size: 0.82rem;
+}
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -82,6 +82,7 @@ describe("Reliability Lab API", () => {
     });
     expect(detail.statusCode).toBe(200);
     expect(detail.json().tenantId).toBe("tenant-a");
+    expect(detail.json().replayCapability.state).toBe("available");
 
     const replay = await app.inject({
       method: "POST",
@@ -90,6 +91,31 @@ describe("Reliability Lab API", () => {
     });
     expect(replay.statusCode).toBe(202);
     expect(replay.json().replayExecution.replayOfExecutionId).toBe(executionId);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: `/v1/executions/${executionId}/replay-capsule`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toMatchObject({
+      executionId,
+      deleted: true,
+      replayCapability: { state: "deleted", available: false },
+    });
+    const deletedAgain = await app.inject({
+      method: "DELETE",
+      url: `/v1/executions/${executionId}/replay-capsule`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(deletedAgain.json().deleted).toBe(false);
+    const replayAfterDelete = await app.inject({
+      method: "POST",
+      url: `/v1/executions/${executionId}/replay`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(replayAfterDelete.statusCode).toBe(409);
+    expect(replayAfterDelete.json().capability.state).toBe("deleted");
   });
 
   it("rejects cross-tenant reads", async () => {
@@ -105,5 +131,11 @@ describe("Reliability Lab API", () => {
       headers: { "x-tenant-id": "tenant-b" },
     });
     expect(detail.statusCode).toBe(404);
+    const deletion = await app.inject({
+      method: "DELETE",
+      url: `/v1/executions/${create.json().executionId as string}/replay-capsule`,
+      headers: { "x-tenant-id": "tenant-b" },
+    });
+    expect(deletion.statusCode).toBe(404);
   });
 });

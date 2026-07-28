@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -26,6 +26,19 @@ describe("export-repo", () => {
     const result = await run(process.execPath, [script, "--dry-run"], directory, true);
     expect(result.code).not.toBe(0);
     expect(result.stderr).toContain("likely secret file");
+  });
+
+  it("skips a tracked path deleted from the working tree", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "export-repo-deleted-test-"));
+    await run("git", ["init", "-b", "main"], directory);
+    await writeFile(join(directory, "deleted.txt"), "deleted");
+    await writeFile(join(directory, "remaining.txt"), "remaining");
+    await run("git", ["add", "deleted.txt", "remaining.txt"], directory);
+    await rm(join(directory, "deleted.txt"));
+
+    const result = await run(process.execPath, [script, "--dry-run"], directory);
+    expect(result.stdout).not.toContain("deleted.txt");
+    expect(result.stdout).toContain("remaining.txt");
   });
 });
 

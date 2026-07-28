@@ -23,15 +23,17 @@ Implemented now:
   redacted Pino logging
 - Drizzle PostgreSQL schema, migration, and repository for executions, attempts, events, and
   idempotency records
+- tenant-scoped PostgreSQL Replay Vault with AES-256-GCM encryption, expiry, deletion,
+  metadata-only lifecycle audit, and read-old/write-current key versions
 - OpenTelemetry spans with console export by default and optional OTLP export
 - Next.js operator console with execution list/detail, attempt summaries, event timeline, replay
   control, and development failure-injection form
 - guarded repository and working-file export tools
 
-Not implemented as production infrastructure: distributed circuit state, global rate limiting,
-durable/encrypted replay capsules, authentication/authorization beyond the prototype tenant header,
-queue workers, cost enforcement, or a multi-replica consistency model. Redis adapters are explicit
-unwired skeletons. Replay capsules remain process-local even when execution metadata uses Postgres.
+Not implemented as production infrastructure: managed KMS/envelope encryption, authenticated replay
+actors, authentication/authorization beyond the prototype tenant header, distributed circuit state,
+global rate limiting, queue workers, cost enforcement, physical backup erasure, or a multi-replica
+consistency model. Redis adapters remain explicit unwired skeletons.
 
 ## Architecture
 
@@ -46,6 +48,8 @@ flowchart LR
   Repo --> Memory[In-memory development store]
   Repo --> PG[(PostgreSQL)]
   Service --> Capsule[Replay capsule port]
+  Capsule --> Vault[(Encrypted PostgreSQL vault)]
+  Capsule --> CapsuleMemory[Process-local memory]
   Service --> OTel[OpenTelemetry]
   API --> Pino[Redacted structured logs]
   Web[Next.js operator console] --> API
@@ -53,7 +57,8 @@ flowchart LR
 ```
 
 Domain code has no Fastify, Next.js, Drizzle, Redis, or provider-SDK dependency. See
-[`docs/architecture.md`](docs/architecture.md) for trust boundaries and scaling direction.
+[`docs/architecture.md`](docs/architecture.md) for trust boundaries and scaling direction and the
+outcome-based [`docs/roadmap.md`](docs/roadmap.md) for what comes next.
 
 ## Execution lifecycle
 
@@ -68,8 +73,10 @@ Domain code has no Fastify, Next.js, Drizzle, Redis, or provider-SDK dependency.
 5. Structured output is validated with Ajv. Invalid output records a rejection and fails the
    execution.
 6. Terminal state, attempts, and normalized metadata are persisted; events remain append-only.
-7. Fake requests retain an in-process replay capsule. Replay creates a linked execution and records
-   replay start/completion events. Live requests default to non-replayable.
+7. Eligible requests retain a tenant-scoped capsule with explicit expiry. Memory mode is
+   process-local; PostgreSQL mode encrypts before persistence and appends lifecycle audit metadata.
+8. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
+   disable replay. Replay creates a linked execution and records replay start/completion events.
 
 ## Repository layout
 
@@ -101,8 +108,11 @@ ENABLE_FAILURE_INJECTION=true pnpm dev
 ```
 
 The development tenant is the transparent header value `demo-tenant`; no tenant row is seeded.
-Without `DATABASE_URL` and `REDIS_URL`, the API runs with process-local execution storage and reports
-those modes at `/readyz`. The `.env` file is ignored and must never contain production credentials.
+Without `DATABASE_URL` and `REDIS_URL`, the API runs with process-local execution and replay storage
+and reports those modes at `/readyz`. To exercise restart-durable replay, set
+`REPLAY_CAPSULE_STORE=postgres`, a valid active key version/keyring, and `DATABASE_URL`, then migrate
+before starting the API. The public keys in `.env.example` are intentionally unsafe examples; do not
+reuse them. The `.env` file is ignored and must never contain production credentials.
 
 - Dashboard: <http://localhost:3000>
 - API: <http://localhost:4000>
@@ -154,8 +164,31 @@ curl -sS -X POST http://localhost:4000/v1/executions/EXECUTION_ID/replay \
   -H 'x-tenant-id: demo-tenant'
 ```
 
+Delete retained replay data idempotently:
+
+```bash
+curl -sS -X DELETE http://localhost:4000/v1/executions/EXECUTION_ID/replay-capsule \
+  -H 'x-tenant-id: demo-tenant'
+```
+
 Inspect with `GET /v1/executions` or `GET /v1/executions/:executionId`, always with
-`X-Tenant-Id`.
+`X-Tenant-Id`. Execution detail includes `replayCapability` with current state, safe reason, and
+expiry/deletion timestamps when applicable; capsule content and cryptographic fields are never
+returned.
+
+## Replay configuration
+
+| Variable                            | Behavior                                                        |
+| ----------------------------------- | --------------------------------------------------------------- |
+| `REPLAY_CAPSULE_STORE`              | `memory` (default) or explicit `postgres` durable vault         |
+| `REPLAY_CAPSULE_RETENTION_HOURS`    | Positive retention duration; defaults to 24                     |
+| `REPLAY_CAPSULE_ACTIVE_KEY_VERSION` | Key version used for new PostgreSQL capsule writes              |
+| `REPLAY_CAPSULE_KEYS_JSON`          | Prototype JSON map of versions to base64-encoded 32-byte keys   |
+| `ALLOW_LIVE_PROMPT_RETENTION`       | Defaults false; true requires a valid PostgreSQL vault at start |
+
+Old rows use their stored key version while new rows use the active version. Keep historical keys
+configured until their rows expire or are deleted. Environment-variable keys are not production KMS
+or full envelope encryption.
 
 ## Commands
 
@@ -177,10 +210,11 @@ Inspect with `GET /v1/executions` or `GET /v1/executions/:executionId`, always w
 ## Testing strategy
 
 Unit tests inject clocks, IDs, randomness, provider responses, and repositories; they do not require
-Docker or real delays. Fastify injection covers validation, tenant isolation, idempotency, OpenAPI,
-inspection, and replay. The PostgreSQL integration test verifies persistence when infrastructure is
-available. Playwright creates an API execution and follows the dashboard into its event timeline.
-There are deliberately no broad snapshots.
+real delays. They cover encryption, nonces, authenticated context, expiry, deletion, tenant scope,
+key configuration, and live-retention failure. Fastify injection covers capability and deletion
+contracts. PostgreSQL integration proves ciphertext-only persistence, audit metadata, key rotation,
+tenant isolation, and replay after service reconstruction. Playwright exercises dashboard detail
+and confirmed deletion. There are deliberately no broad snapshots.
 
 ## Observability
 
@@ -192,11 +226,12 @@ Prompt bodies and messages are excluded from span attributes and redacted from P
 
 ## Security and retention
 
-Tenant filtering is enforced in repository reads and idempotency keys are scoped by tenant, but the
-prototype header is not authentication. Authorization, cookies, API keys, messages, and input use
-log-redaction paths. OpenAI-compatible keys stay inside the HTTP adapter. Fake executions retain
-canonical input in a process-local capsule. Live retention defaults off; the API returns an explicit
-non-replayable result. No faux encryption is present. See
+Tenant filtering is enforced in execution and vault adapters, but the prototype header is not
+authentication. Authorization, cookies, API keys, messages, and input use log-redaction paths.
+PostgreSQL capsules use AES-256-GCM with tenant/execution/schema/key authenticated context; audit
+rows contain metadata only. Expiry and deletion revoke replay immediately while normalized evidence
+remains. Live retention defaults off and fails closed unless the durable encrypted path is valid.
+The environment keyring is a prototype, not managed production key infrastructure. See
 [`docs/security-and-retention.md`](docs/security-and-retention.md).
 
 ## Design tradeoffs
@@ -208,8 +243,10 @@ non-replayable result. No faux encryption is present. See
   or durable.
 - The narrow live adapter avoids SDK/domain coupling but supports only chat completions and focused
   JSON Schema response formatting.
-- Replay capsules are intentionally ephemeral until encrypted durable retention has a threat model
-  and key-rotation design.
+- Execution list capability hydration uses bounded parallel per-row vault inspection. This keeps
+  state current for the small prototype but needs batching or a join before large pagination.
+- Capsule lifecycle/audit mutations are transactional inside the vault, but execution projection
+  updates are a separate consistency boundary.
 
 ## Production-hardening direction
 
@@ -219,8 +256,9 @@ non-replayable result. No faux encryption is present. See
   cancellation, leases, and recovery.
 - **Policy controls:** Redis-backed distributed rate limits and circuit state, model/provider health,
   cost budgets, and explicit policy versions.
-- **Replay storage:** managed encrypted blobs or AES-256-GCM field encryption with envelope keys,
-  rotation, deletion, access auditing, and residency controls.
+- **Replay experiments:** versioned policy/provider variants and normalized replay comparison.
+- **Replay security:** managed envelope keys/KMS, authenticated actors, physical purge/backup
+  semantics, residency controls, and isolated replay credentials.
 - **Observability:** sampled OTLP pipelines, metrics, baggage policy, log/trace joining, and SLOs.
 - **Operations:** multi-replica readiness, migration automation, backups, restore exercises, and
   incident runbooks.
@@ -237,8 +275,9 @@ always refused.
 
 ## Known limitations
 
-The API executes inline; in-flight state cannot survive process loss. Replay capsules are not stored
-in Postgres and disappear on restart. Readiness checks configured dependencies but does not validate
-schema version. Redis implementations are skeletons only. The dashboard uses the demo tenant and has
-no login. Live-provider behavior is not exercised by the default test suite. Cost is normalized but
-not enforced. The circuit breaker is deliberately simple and process-local.
+The API executes inline, so in-flight provider work cannot survive process loss. Readiness checks
+database connectivity and selected replay mode but not migration/schema version. Memory capsules
+disappear on restart. PostgreSQL deletion is a tombstone, not a claim of physical erasure from
+backups. Replay audits lack actors because the dashboard uses a fixed demo tenant and has no login.
+The environment keyring is not KMS. Redis implementations are skeletons only. Cost is normalized but
+not enforced, and circuit/rate state is process-local.

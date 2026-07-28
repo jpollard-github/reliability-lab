@@ -13,6 +13,25 @@ export const ExecutionStatusSchema = Type.Union([
 ]);
 export type ExecutionStatus = Static<typeof ExecutionStatusSchema>;
 
+export const ReplayCapabilityStateSchema = Type.Union([
+  Type.Literal("available"),
+  Type.Literal("retention_disabled"),
+  Type.Literal("expired"),
+  Type.Literal("deleted"),
+  Type.Literal("missing"),
+  Type.Literal("key_unavailable"),
+  Type.Literal("unreadable"),
+]);
+export type ReplayCapabilityState = Static<typeof ReplayCapabilityStateSchema>;
+
+export interface ReplayCapability {
+  state: ReplayCapabilityState;
+  available: boolean;
+  reason: string;
+  expiresAt?: string;
+  deletedAt?: string;
+}
+
 export const AttemptStatusSchema = Type.Union([
   Type.Literal("running"),
   Type.Literal("succeeded"),
@@ -191,7 +210,10 @@ export interface ExecutionEnvelope {
   outputJson?: unknown;
   error?: ProviderError;
   replayOfExecutionId?: ExecutionId;
+  replayCapability: ReplayCapability;
+  /** Compatibility projection of replayCapability.available. */
   replayable: boolean;
+  /** Compatibility projection of replayCapability.reason when unavailable. */
   replayUnavailableReason?: string;
 }
 
@@ -226,4 +248,5 @@ export type ReplayResult =
       replayable: false;
       originalExecutionId: ExecutionId;
       reason: string;
+      capability: ReplayCapability;
     };

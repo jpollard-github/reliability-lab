@@ -8,19 +8,38 @@ import type {
   TenantId,
 } from "@reliability-lab/contracts";
 import type { ExecutionRepository } from "@reliability-lab/core";
-import { executionAttempts, executionEvents, executions, idempotencyRecords } from "./schema.js";
+import {
+  executionAttempts,
+  executionEvents,
+  executions,
+  idempotencyRecords,
+  replayCapsuleAudits,
+  replayCapsules,
+} from "./schema.js";
+
+export * from "./replay-capsules.js";
+export { replayCapsuleAudits, replayCapsules } from "./schema.js";
 
 type ReliabilityDatabase = NodePgDatabase<{
   executions: typeof executions;
   executionAttempts: typeof executionAttempts;
   executionEvents: typeof executionEvents;
   idempotencyRecords: typeof idempotencyRecords;
+  replayCapsules: typeof replayCapsules;
+  replayCapsuleAudits: typeof replayCapsuleAudits;
 }>;
 
 export function createDatabase(databaseUrl: string) {
   const pool = new Pool({ connectionString: databaseUrl, max: 10 });
   const db = drizzle(pool, {
-    schema: { executions, executionAttempts, executionEvents, idempotencyRecords },
+    schema: {
+      executions,
+      executionAttempts,
+      executionEvents,
+      idempotencyRecords,
+      replayCapsules,
+      replayCapsuleAudits,
+    },
   });
   return { db, pool };
 }
@@ -136,6 +155,20 @@ export class PostgresExecutionRepository implements ExecutionRepository {
       events: eventRows.map((event) => event.data),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      replayCapability: row.replayable
+        ? {
+            state: "available",
+            available: true,
+            reason: "Replay capsule is available",
+          }
+        : {
+            state:
+              row.replayUnavailableReason === "Live-provider request retention is disabled"
+                ? "retention_disabled"
+                : "missing",
+            available: false,
+            reason: row.replayUnavailableReason ?? "Replay capsule is unavailable",
+          },
       replayable: row.replayable,
       ...(row.outputText === null ? {} : { outputText: row.outputText }),
       ...(row.outputJson === null ? {} : { outputJson: row.outputJson }),
