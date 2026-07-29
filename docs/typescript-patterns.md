@@ -75,6 +75,24 @@ const event = {
 Previously, payloads were derived by a distributive conditional `Omit`. That was shorter but
 required advanced compiler knowledge. The explicit model is longer and directly readable.
 
+## When to prefer explicit types over derived types
+
+Prefer an explicit named type when the shape is central domain vocabulary, appears in public
+contracts, has required evidence fields, or must be reviewed without reconstructing a compiler
+transformation. Prefer a derived type when the relationship itself is the important fact and the
+derivation stays local and familiar.
+
+Execution events are the concrete example. A caller records `AttemptFailedEventPayload`; only
+`ExecutionEventRecorder` adds `ExecutionEventMetadata`; persisted code reads a named
+`AttemptFailedEvent`. These concepts could be expressed as a conditional `Omit` over the stored
+union, but that would hide which fields the decision owner must supply and which fields the recorder
+guarantees. The named payload/stored pairs in `packages/contracts/src/execution/events.ts` make that
+boundary reviewable, while `satisfies ExecutionEvent` verifies the construction.
+
+Local row derivation such as `typeof executions.$inferInsert` remains appropriate because the
+desired relationship is “match this Drizzle table,” the pattern is confined to a persistence
+mapper, and it does not define domain vocabulary.
+
 ## JavaScript `#private`
 
 Classes such as `ExecutionService`, `ExecutionRunner`, and `LeaseHeartbeatController` use runtime

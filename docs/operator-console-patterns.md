@@ -72,8 +72,9 @@ concept. Other components stay with the workflow that owns them.
 4. prepares the exact return URL and canonical saved scope;
 5. returns a presentation-oriented `InvestigationWorkbenchModel`.
 
-The loader imports `server-only` and never exposes server tenant configuration to browser code.
-Fetch caching and error propagation remain unchanged.
+The loader imports Next's `server-only` marker and never exposes server tenant configuration to
+browser code. The marker is a development/build-time boundary dependency; it does not add a browser
+runtime capability. Fetch caching and error propagation remain unchanged.
 
 ## URL-backed investigation state
 
@@ -130,8 +131,9 @@ Presentation is split into `playback-controls.tsx`, `machine-readout.tsx`, `mach
 
 ## Browser versus server API calls
 
-`lib/server-api.ts` imports `server-only`. It owns current server reads, server tenant configuration,
-`cache: "no-store"`, and established not-found behavior.
+`lib/server-api.ts` imports the `server-only` marker. It owns current server reads, server tenant
+configuration, `cache: "no-store"`, and established not-found behavior. Importing it from a Client
+Component is a trust-boundary error, not merely a bundling preference.
 
 `lib/client-api.ts` exposes only browser-safe `NEXT_PUBLIC_` configuration, tenant headers, JSON
 requests, and safe error extraction. Feature-specific mutation names remain in their feature:
@@ -229,3 +231,7 @@ Visible labels are compatibility contracts. Preserve:
 - readable empty and error states.
 
 Playwright continues to locate the interface by these semantics rather than implementation classes.
+
+Representative UI modifications are mapped in
+[Change recipes](change-recipes.md#9-add-an-operator-console-section) and
+[the Playwright workflow recipe](change-recipes.md#10-add-a-playwright-workflow).

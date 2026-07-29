@@ -149,3 +149,7 @@ polling iterator and formatter.
 `PostgresExecutionRepository.list` remains unbounded for existing package/API compatibility. New
 scalable operator reads should use the bounded Investigation Workbench queries. Phase 2 deliberately
 did not change this legacy behavior.
+
+Use [Change recipes](change-recipes.md) before extending a contract, query, transaction, evidence
+type, or read endpoint. It identifies the adjacent persistence, API, web, test, and documentation
+boundaries that must remain aligned.

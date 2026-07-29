@@ -18,6 +18,18 @@ symbol.
 | `apps/worker`            | Durable worker composition and polling loop                           |
 | `apps/web`               | Next.js operator console                                              |
 
+## Ownership documentation map
+
+| Question                                   | Primary document                                                 |
+| ------------------------------------------ | ---------------------------------------------------------------- |
+| What is the product and its vocabulary?    | `README.md`, `docs/reliability-lab-basics.md`                    |
+| How would the owner explain and defend it? | `docs/design-review-walkthrough.md`                              |
+| How does one operation cross boundaries?   | `docs/system-flows.md`                                           |
+| Where does one responsibility live?        | This codebase tour                                               |
+| Where would a representative change begin? | `docs/change-recipes.md`                                         |
+| Which conventions apply locally?           | TypeScript, persistence/API, and operator-console pattern guides |
+| What is established versus future?         | `docs/roadmap.md`                                                |
+
 ## Contracts source map
 
 ```text
@@ -257,6 +269,8 @@ Route pages compose server-rendered evidence and focused client islands. `server
 - `packages/contracts/src/index.ts` preserves `@reliability-lab/contracts`.
 - `packages/core/src/index.ts` preserves `@reliability-lab/core`.
 - `packages/db/src/index.ts` preserves `@reliability-lab/db`.
+- `packages/providers/src/index.ts`, `packages/observability/src/index.ts`, and
+  `packages/testkit/src/index.ts` are their package entrypoints.
 - `apps/api/src/server.ts` selects memory or PostgreSQL adapters and constructs `ExecutionService`,
   investigation reads, and `InvestigationCaseService`.
 - `apps/worker/src/server.ts` constructs `ExecutionService`, `DurableExecutionWorker`, and the
@@ -265,20 +279,20 @@ Route pages compose server-rendered evidence and focused client islands. `server
 
 ## Where do I find…?
 
-| Question                           | File and symbol                                                                                                                              |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `attempt.failed` payload           | `packages/contracts/src/execution/events.ts` — `AttemptFailedEventPayload`                                                                   |
-| Generated execution event metadata | `packages/core/src/execution/execution-events.ts` — `ExecutionEventRecorder`                                                                 |
-| Execution preparation              | `packages/core/src/execution/execution-builder.ts` — `prepareExecution`                                                                      |
-| Provider attempt loop              | `packages/core/src/execution/execution-runner.ts` — `ExecutionRunner.#runPolicy`                                                             |
-| Retry delay                        | `packages/core/src/execution/retry-backoff.ts` — `calculateRetryDelay`                                                                       |
-| Structured-output validation       | `packages/core/src/execution/structured-output-validator.ts` — `StructuredOutputValidator`                                                   |
-| Replay capability inspection       | `packages/core/src/replay/replay-store.ts` — `ReplayCapsuleStore.inspect`                                                                    |
-| Comparison projection              | `packages/core/src/comparison/comparison-projection.ts` — `projectComparison`                                                                |
-| Durable claim fencing              | `packages/core/src/durable/job-store.ts` — `JobClaim.claimVersion`; PostgreSQL enforcement remains in `packages/db/src/durable-execution.ts` |
-| Heartbeat lease cancellation       | `packages/core/src/durable/lease-heartbeat-controller.ts` — `LeaseHeartbeatController`                                                       |
-| Fallback dependence signal         | `packages/core/src/investigation/signals.ts` — `deriveInvestigationSignals`                                                                  |
-| Saved-scope canonicalization       | `packages/core/src/investigation-cases/saved-scope.ts` — `canonicalizeSavedScope`                                                            |
+| Question                           | File and symbol                                                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attempt.failed` payload           | `packages/contracts/src/execution/events.ts` — `AttemptFailedEventPayload`                                                                                     |
+| Generated execution event metadata | `packages/core/src/execution/execution-events.ts` — `ExecutionEventRecorder`                                                                                   |
+| Execution preparation              | `packages/core/src/execution/execution-builder.ts` — `prepareExecution`                                                                                        |
+| Provider attempt loop              | `packages/core/src/execution/execution-runner.ts` — `ExecutionRunner.#runPolicy`                                                                               |
+| Retry delay                        | `packages/core/src/execution/retry-backoff.ts` — `calculateRetryDelay`                                                                                         |
+| Structured-output validation       | `packages/core/src/execution/structured-output-validator.ts` — `StructuredOutputValidator`                                                                     |
+| Replay capability inspection       | `packages/core/src/replay/replay-store.ts` — `ReplayCapsuleStore.inspect`                                                                                      |
+| Comparison projection              | `packages/core/src/comparison/comparison-projection.ts` — `projectComparison`                                                                                  |
+| Durable claim fencing              | `packages/core/src/durable/job-store.ts` — `JobClaim.claimVersion`; PostgreSQL enforcement is in `packages/db/src/durable/postgres-durable-execution-store.ts` |
+| Heartbeat lease cancellation       | `packages/core/src/durable/lease-heartbeat-controller.ts` — `LeaseHeartbeatController`                                                                         |
+| Fallback dependence signal         | `packages/core/src/investigation/signals.ts` — `deriveInvestigationSignals`                                                                                    |
+| Saved-scope canonicalization       | `packages/core/src/investigation-cases/saved-scope.ts` — `canonicalizeSavedScope`                                                                              |
 
 ## Persistence and API “find it” drill
 
@@ -332,7 +346,7 @@ Route pages compose server-rendered evidence and focused client islands. `server
 | 12  | Machine route rendering                | `apps/web/features/live-machine/machine-route.tsx` — `MachineRoute`                                                             |
 | 13  | Comparison presets                     | `apps/web/features/comparisons/comparison-presets.ts` — `comparisonPresets`, `applyComparisonPreset`                            |
 | 14  | Comparison draft parsing               | `apps/web/features/comparisons/comparison-draft.ts` — `toReplayVariation`                                                       |
-| 15  | Replay deletion mutation               | `apps/web/features/executions/replay-controls.tsx` — `ReplayControls.deleteCapsule`                                             |
+| 15  | Replay deletion mutation               | `apps/web/features/executions/replay-controls.tsx` — `ReplayControls`, inner `deleteCapsule` handler                            |
 | 16  | Case note mutation                     | `apps/web/features/investigation-cases/case-mutations.ts` — `addInvestigationCaseNote`                                          |
 | 17  | Case evidence rendering                | `apps/web/features/investigation-cases/case-evidence.tsx` — `CaseEvidence`                                                      |
 | 18  | Case timeline rendering                | `apps/web/features/investigation-cases/case-timeline.tsx` — `CaseTimeline`                                                      |
@@ -344,16 +358,33 @@ Route pages compose server-rendered evidence and focused client islands. `server
 
 ## Recommended reading order
 
-1. `docs/reliability-lab-basics.md`
-2. `packages/contracts/src/execution/events.ts` and `execution/envelope.ts`
-3. `packages/core/src/execution/execution-service.ts`
-4. `packages/core/src/execution/execution-builder.ts` and `execution-runner.ts`
-5. `packages/core/src/execution/execution-events.ts`
-6. `packages/core/src/durable/`
-7. `packages/core/src/replay/` and `comparison/`
-8. `packages/core/src/investigation/` and `investigation-cases/`
-9. `packages/db/src/database/database.ts`, then the relevant feature adapter/query
-10. `apps/api/src/app.ts`, then the route family named for the endpoint
-11. `apps/web/app/investigations/page.tsx`, then its named feature component or controller
+1. `README.md`, then `docs/reliability-lab-basics.md`
+2. `docs/design-review-walkthrough.md`
+3. `packages/contracts/src/execution/events.ts` and `execution/envelope.ts`
+4. `packages/core/src/execution/execution-service.ts`
+5. `packages/core/src/execution/execution-builder.ts`, `execution-runner.ts`, and
+   `execution-events.ts`
+6. `packages/core/src/durable/`, then the PostgreSQL durable adapter
+7. `packages/core/src/replay/` and `comparison/`, then their PostgreSQL adapters
+8. `packages/core/src/investigation/` and `investigation-cases/`, then their query/transaction
+   adapters
+9. `apps/api/src/app.ts`, then the route family named for the endpoint
+10. `apps/web/app/investigations/page.tsx`, then its named feature component or controller
+11. `docs/change-recipes.md` before planning a representative modification
 
 The companion [system flows](system-flows.md) follows concrete calls across those boundaries.
+
+## Where would I change…?
+
+| Proposed change             | First owner to open                                 | Complete recipe                                                                            |
+| --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Execution event             | `packages/contracts/src/execution/events.ts`        | [Add an execution event](change-recipes.md#1-add-an-execution-event)                       |
+| Normalized failure category | `packages/contracts/src/execution/status.ts`        | [Add a normalized failure category](change-recipes.md#2-add-a-normalized-failure-category) |
+| Provider adapter            | `packages/providers/src/`                           | [Add a provider adapter](change-recipes.md#3-add-a-provider-adapter)                       |
+| Reliability-policy input    | `packages/contracts/src/execution/policy.ts`        | [Add a reliability-policy input](change-recipes.md#4-add-a-reliability-policy-input)       |
+| Workbench filter            | `packages/contracts/src/investigation/workbench.ts` | [Add a Workbench filter](change-recipes.md#5-add-an-investigation-workbench-filter)        |
+| Investigation signal        | `packages/core/src/investigation/signals.ts`        | [Add an investigation signal](change-recipes.md#6-add-an-investigation-signal)             |
+| Saved-case evidence type    | `packages/contracts/src/investigation/cases.ts`     | [Add a saved-case evidence type](change-recipes.md#7-add-a-saved-case-evidence-type)       |
+| API read endpoint           | `apps/api/src/routes/`                              | [Add an API read endpoint](change-recipes.md#8-add-an-api-read-endpoint)                   |
+| Operator-console section    | `apps/web/features/`                                | [Add an operator-console section](change-recipes.md#9-add-an-operator-console-section)     |
+| Playwright workflow         | `apps/web/tests/`                                   | [Add a Playwright workflow](change-recipes.md#10-add-a-playwright-workflow)                |

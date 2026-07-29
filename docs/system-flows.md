@@ -21,6 +21,13 @@ gives transport routes, persistence adapters, queries, mapping, and transactions
 8. `ExecutionEventRecorder.append` assigns metadata, appends to the envelope, and persists the
    event. `ExecutionFailureRecorder` owns budget and terminal failure projection.
 
+**Boundary/evidence review:** the entrypoint is `executionRoutes`; transport crosses into core,
+then the execution/replay/provider ports, then a memory or PostgreSQL adapter. Acceptance writes the
+initial envelope; continuation writes attempts, append-only events, and current projection.
+`execution.succeeded` or `execution.failed` plus terminal envelope state is the final evidence.
+Relevant tests are `packages/core/test/execution-service.test.ts`,
+`packages/core/test/execution-events.test.ts`, and `apps/api/test/executions.test.ts`.
+
 ## 2. PostgreSQL worker execution
 
 1. `ExecutionService.submit` prepares the same envelope but delegates acceptance to the
@@ -38,6 +45,14 @@ gives transport routes, persistence adapters, queries, mapping, and transactions
    before persistence. Lease loss aborts continuation without becoming a provider timeout.
 8. Only the current claim version can finish the job and delete transient command ciphertext.
 
+**Boundary/evidence review:** the API enters through the same route but crosses the durable
+acceptance port into one PostgreSQL transaction before the worker process claims the job. Durable
+rows include the queued envelope/events and encrypted command; continuation writes ordinary
+attempt/event/projection evidence. Terminal job state and cleared command fields must match the
+current claim version. Relevant tests are `packages/core/test/lease-safety.test.ts`,
+`packages/db/test/durable-execution.integration.test.ts`, and
+`apps/web/tests/execution-lifecycle.spec.ts`.
+
 ## 3. Replay
 
 1. `ExecutionService.replay` reads the original execution and asks `ReplayCapsuleStore.getForReplay`
@@ -53,6 +68,15 @@ gives transport routes, persistence adapters, queries, mapping, and transactions
 Durable execution commands and replay capsules are separate concepts: commands are transient worker
 inputs, while replay capsules are governed retention capabilities.
 
+**Boundary/evidence review:** the entrypoint is `ExecutionService.replay`, reached through
+`replayRoutes`. Core crosses the tenant-scoped replay port; PostgreSQL decrypts only inside
+`PostgresReplayCapsuleStore.getForReplay`; available input returns to the normal execution path.
+Vault writes are encrypted capsule plus metadata-only audit. Terminal evidence is the linked
+execution's normal terminal event plus `replay.completed`; unavailable capability is an explicit
+result rather than a fabricated run. Relevant tests are the replay section of
+`packages/core/test/execution-service.test.ts`, `packages/db/test/replay-crypto.test.ts`,
+`packages/db/test/replay-vault.integration.test.ts`, and `apps/api/test/executions.test.ts`.
+
 ## 4. Comparative Replay
 
 1. `ExecutionService.createComparison` reads the original and current replay capability.
@@ -63,6 +87,16 @@ inputs, while replay capsules are governed retention capabilities.
 4. `ExecutionService.getComparison` reads both ordinary envelopes.
 5. `projectComparison` in `comparison/comparison-projection.ts` produces conservative dimensions.
    Token changes and route changes remain tradeoffs; unavailable evidence stays unavailable.
+
+**Boundary/evidence review:** `comparisonRoutes` calls `ExecutionService.createComparison`; core
+crosses replay capability, execution, comparison repository, and optional durable-acceptance
+boundaries. PostgreSQL worker mode atomically stores the experiment, linked variant, replay
+linkage, and job; in-process mode stores variant and experiment separately. Completion is two
+ordinary terminal envelopes plus a completed experiment; `projectComparison` is the read-time
+evidence. Relevant tests are `packages/core/test/comparison.test.ts`,
+`packages/db/test/comparison-repository.integration.test.ts`,
+`packages/db/test/durable-execution.integration.test.ts`,
+`apps/api/test/comparisons.test.ts`, and `apps/web/tests/comparative-replay.spec.ts`.
 
 ## 5. Investigation Workbench read path
 
@@ -78,6 +112,19 @@ inputs, while replay capsules are governed retention capabilities.
 6. PostgreSQL search, aggregate/trend, and provider observations use the separately named fixed
    query modules under `packages/db/src/investigation/`.
 7. The API returns compact contracts from `packages/contracts/src/investigation/workbench.ts`.
+
+`execution-search-query.ts` owns the bounded execution page and fixed count.
+`reliability-summary-query.ts` owns both aggregate and trend statements.
+`provider-observations-query.ts` owns attempt-level provider/model evidence.
+
+**Boundary/evidence review:** entrypoints are the three routes in `investigationRoutes`. Transport
+crosses the read port into memory projection or purpose-built PostgreSQL SQL under tenant and exact
+`[from,to)` bounds. These are reads only; no replay capability or full envelope is hydrated.
+Terminal evidence is the returned resolved range, compact rows, aggregate/trend buckets, and sample
+metadata—not a provider-health verdict. Relevant tests are
+`packages/core/test/investigation.test.ts`,
+`packages/db/test/investigation-read.integration.test.ts`,
+`apps/api/test/investigations.test.ts`, and `apps/api/test/query-values.test.ts`.
 
 ## 6. Saved Investigation Cases
 
@@ -95,6 +142,16 @@ inputs, while replay capsules are governed retention capabilities.
    `case-list-query.ts` and `case-detail-query.ts`, while command transactions live in
    `packages/db/src/investigation-cases/case-command-transactions.ts`.
 
+**Boundary/evidence review:** `investigationCaseRoutes` enters
+`InvestigationCaseService`, which crosses case, execution, and comparison repository ports.
+PostgreSQL transactions write current case state together with lifecycle metadata; notes append,
+and evidence rows store typed identities only. The detail read returns current interpretation,
+ordered notes/evidence/timeline, and `savedWorkbench`. Relevant tests are
+`packages/core/test/investigation-cases.test.ts`,
+`packages/db/test/investigation-cases.integration.test.ts`,
+`apps/api/test/investigation-cases.test.ts`, and
+`apps/web/tests/saved-investigation-cases.spec.ts`.
+
 ## 7. API composition and errors
 
 1. `apps/api/src/server.ts` constructs memory or PostgreSQL services and calls the stable
@@ -105,6 +162,13 @@ inputs, while replay capsules are governed retention capabilities.
 4. Typed route plugins receive only their composed service dependencies.
 5. `routes/execution-events.ts` owns SSE headers/cursor/client cleanup while `event-stream.ts` owns
    persisted-event polling and formatting.
+
+**Boundary/evidence review:** process entry is `apps/api/src/server.ts`; `buildApp` is the stable
+composition entrypoint. Fastify validation/error/status boundaries cross only through typed service
+options. Persistence is reached through composed core ports, never from route SQL. Terminal
+transport evidence is a typed HTTP response or safely mapped error; OpenAPI comes from the same
+registered schemas. Relevant tests are `apps/api/test/*.test.ts`, especially
+`config.test.ts`, `operations.test.ts`, and the feature route suites.
 
 ## 8. Operator console reads and URL state
 
@@ -119,6 +183,13 @@ inputs, while replay capsules are governed retention capabilities.
 6. Named Server Components render summary cards, save controls, trend, provider observations, and
    the execution explorer in page order.
 
+**Boundary/evidence review:** an App Router page is the entrypoint. It crosses the Next server/API
+boundary through `server-api.ts`; the Workbench loader then calls the three bounded HTTP reads
+concurrently. It writes nothing. Rendered terminal evidence is the resolved window, aggregate cards,
+trend, provider observations, compact executions, and exact URL/saved scope. Relevant tests are
+`apps/web/features/investigations/search-state.test.ts` and
+`apps/web/tests/investigation-workbench.spec.ts`.
+
 ## 9. Live Machine and browser mutations
 
 1. `useExecutionStream` opens the established header-bearing fetch stream after the latest persisted
@@ -132,3 +203,11 @@ inputs, while replay capsules are governed retention capabilities.
    variations in `features/comparisons/comparison-draft.ts`.
 6. Saved-case mutation names live in `features/investigation-cases/case-mutations.ts`; notes append,
    evidence remains linked, and route refreshes re-read authoritative state.
+
+**Boundary/evidence review:** Live Machine enters through `useExecutionStream`; mutations enter
+through focused Client Components. Browser requests cross only `client-api.ts` public
+configuration, while route refreshes return to server reads. The event stream is read-only;
+replay/comparison/case operations write through their existing API/core/persistence paths.
+Terminal UI evidence remains authoritative persisted events or refreshed API state. Relevant tests
+are live-machine unit tests plus `apps/web/tests/live-machine.spec.ts`,
+`comparative-replay.spec.ts`, and `saved-investigation-cases.spec.ts`.

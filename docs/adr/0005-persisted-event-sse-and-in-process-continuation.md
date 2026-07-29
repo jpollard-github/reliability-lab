@@ -22,3 +22,8 @@ and provider call live in one API process; process failure can leave a persisted
 without terminal evidence. Repository polling also creates per-stream read load and has no
 multi-replica wake-up optimization. A durable queue, workers, leases, transactional outbox,
 recovery, and distributed controls remain a later horizon.
+
+Current status: the persisted-event SSE and default in-process boundary remain implemented.
+[ADR 0007](0007-durable-postgres-execution-foundation.md) adds an explicit PostgreSQL-worker mode
+that refines the durable-acceptance limitation without rewriting this decision's in-process
+semantics.

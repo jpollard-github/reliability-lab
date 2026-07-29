@@ -23,3 +23,8 @@ A failure after execution acceptance can leave a linked variant without its expe
 durable-execution horizon must add reconciliation and a stronger transaction or workflow boundary.
 This decision does not add a queue, worker, cancellation, leases, generic A/B framework, LLM judge,
 weighted ranking, or batch experiments.
+
+Current status: the ordinary-envelope and read-projection decision remains implemented.
+[ADR 0007](0007-durable-postgres-execution-foundation.md) refines the transaction boundary:
+comparison variant, linkage evidence, encrypted job, and experiment are atomic in PostgreSQL-worker
+mode, while the documented two-operation boundary remains in in-process mode.

@@ -130,8 +130,8 @@ Those remain possible future work, not prerequisites for Horizon 5.
 **Established movement: Saved Investigation Cases.** Investigation now persists beyond one browser
 session without becoming a generic ticketing system. The cross-cutting Human-Comprehension and
 Ownership Pass has established Phase 1 contracts/core and Phase 2 persistence/API composition.
-Phase 3 operator-console/test organization is also established. Phase 4 ownership documentation and
-the interview walkthrough remain before Horizon 5 product development resumes.
+Phase 3 operator-console/test organization and Phase 4 ownership documentation/design review are
+also established. The Human-Comprehension and Ownership Pass is complete.
 
 The console supports useful filtering and search, trace/log correlation, replay comparisons, scenario catalogs, policy experiments, provider health views, and aggregate reliability metrics. The system begins to expose service-level signals such as success, degraded success, retry recovery, fallback dependence, latency-budget failures, and replay reproducibility.
 
@@ -195,7 +195,7 @@ Investigation Workbench Foundation
         ↓
 Saved Investigation Cases
         ↓
-Human-Comprehension Phase 4
+Human-Comprehension and Ownership Pass complete
         ↓
 Product Tour and Operator Guidance
         ↓
@@ -206,10 +206,11 @@ Comparative Replay now turns a retained case and its live evidence into a contro
 The **Horizon 4 Durable Execution Foundation** now makes acceptance restart-durable in PostgreSQL
 worker mode and fences stale claims without overstating exactly-once provider behavior. The
 Investigation Workbench Foundation and Saved Investigation Cases are established. Contracts/core
-(Phase 1), persistence/API composition (Phase 2), and operator-console/test organization (Phase 3)
-now make those capabilities easier to locate, explain, and safely modify. Phase 4 remains the next
-comprehension step, followed by future Product Tour and Operator Guidance. This is not a new product
-horizon and does not advance Horizon 6 claims. A scenario catalog and explicitly configured
+(Phase 1), persistence/API composition (Phase 2), operator-console/test organization (Phase 3), and
+ownership documentation/design review (Phase 4) now make those capabilities easier to locate,
+explain, defend, and safely modify. The cross-cutting pass is complete; future Product Tour and
+Operator Guidance is next. This is not a new product horizon and does not advance Horizon 6 claims.
+A scenario catalog and explicitly configured
 trace/log integrations remain later Horizon 5 work. Cancellation, Redis coordination, generic
 outbox tooling, resumable workflow machinery, and cloud infrastructure are not prerequisites for
 that movement.

@@ -13,26 +13,40 @@ is safe to retain.
 
 ## Start here
 
-For a first pass through the repository:
+Choose the path that matches the question you are trying to answer.
 
-1. [Reliability Lab basics](docs/reliability-lab-basics.md) explains the product vocabulary.
-2. [From Working Software to Owned Software](docs/reliability-lab-owned-software-basics.md) explains
-   the reason for the comprehension pass.
-3. [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
-   explains database and HTTP boundaries in plain language.
-4. [Operator Console Composition basics](docs/reliability-lab-operator-console-basics.md) explains
-   App Router, feature, interaction, CSS, and workflow-test boundaries in plain language.
-5. [TypeScript patterns](docs/typescript-patterns.md) explains the central type techniques without
-   assuming compiler-theory knowledge.
-6. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
-7. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
+**Understand the product**
+
+1. [Reliability Lab basics](docs/reliability-lab-basics.md) defines the product vocabulary.
+2. [Roadmap](docs/roadmap.md) separates established outcomes from future movements.
+3. [Ownership and Design Review basics](docs/reliability-lab-ownership-and-design-review-basics.md)
+   explains how to present, defend, modify, and verify the system.
+
+**Understand the implementation**
+
+1. [Design-review walkthrough](docs/design-review-walkthrough.md) presents the complete
+   evidence-based architecture and its limits.
+2. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
+3. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
    saved-case paths.
-8. [Persistence and API patterns](docs/persistence-and-api-patterns.md) documents the concrete
-   PostgreSQL, Fastify, TypeBox, error, and SSE module boundaries.
-9. [Operator Console patterns](docs/operator-console-patterns.md) maps current pages, controllers,
-   feature components, API boundaries, styles, and Playwright workflows.
-10. [Human-comprehension refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
-    records the staged boundaries and later phases.
+4. [Architecture](docs/architecture.md) defines process, trust, consistency, and security
+   boundaries.
+
+**Modify the system**
+
+1. [Change recipes](docs/change-recipes.md) maps representative changes across owners and tests.
+2. [TypeScript patterns](docs/typescript-patterns.md) explains central type techniques.
+3. [Persistence and API patterns](docs/persistence-and-api-patterns.md) documents PostgreSQL,
+   Fastify, TypeBox, error, and SSE conventions.
+4. [Operator Console patterns](docs/operator-console-patterns.md) documents pages, controllers,
+   browser/server APIs, styles, and Playwright workflows.
+5. [AGENTS guide](AGENTS.md) defines repository working and verification rules.
+
+The [Owned Software basics](docs/reliability-lab-owned-software-basics.md),
+[Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md),
+[Operator Console Composition basics](docs/reliability-lab-operator-console-basics.md), and
+[Human-Comprehension Refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
+preserve the rationale and staged history behind these paths.
 
 ## Current status
 
@@ -66,6 +80,8 @@ Implemented now:
   lease-aware continuation, fenced terminal cleanup, bounded concurrency, safe reclaim, terminal
   reconciliation, and conservative provider-call ambiguity
 - guarded repository and working-file export tools
+- a verified ownership teaching surface with design-review, change-recipe, structure, and
+  documentation audits
 
 Not implemented as production infrastructure: managed KMS/envelope encryption, authenticated replay
 actors, authentication/authorization beyond the prototype tenant header, distributed circuit state,
@@ -119,6 +135,9 @@ Plain-language guides:
 - [Persistence and API patterns](docs/persistence-and-api-patterns.md)
 - [Operator Console Composition basics](docs/reliability-lab-operator-console-basics.md)
 - [Operator Console patterns](docs/operator-console-patterns.md)
+- [Ownership and Design Review basics](docs/reliability-lab-ownership-and-design-review-basics.md)
+- [Design-review walkthrough](docs/design-review-walkthrough.md)
+- [Change recipes](docs/change-recipes.md)
 - [Human-Comprehension Refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
 
 ## Execution lifecycle
@@ -348,6 +367,7 @@ KMS.
 | `pnpm dev:infra`                                 | Start healthy Postgres and Redis services               |
 | `pnpm build`                                     | Build every workspace package                           |
 | `pnpm lint`, `format:check`, `typecheck`         | Static checks                                           |
+| `pnpm audit:docs`, `audit:structure`             | Documentation and source-ownership checks               |
 | `pnpm test:unit`                                 | Docker-independent focused tests                        |
 | `pnpm test:integration`                          | PostgreSQL repository/job tests; requires migrated DB   |
 | `pnpm test:e2e`                                  | Separate API/worker durable browser and comparison flow |

@@ -561,11 +561,17 @@ The goal is to make its sophistication legible.
 
 ## Where the ownership map lives now
 
-Phase 1 expresses the contracts and core architecture directly in the source tree:
+The completed four-phase pass expresses responsibility in both the source tree and its teaching
+surface:
 
-- [Codebase tour](codebase-tour.md) maps questions to files and symbols.
-- [System flows](system-flows.md) follows the established execution and investigation paths.
+- [Design-review walkthrough](design-review-walkthrough.md) connects product purpose, architecture,
+  complete flows, guarantees, tradeoffs, tests, and limitations.
+- [Change recipes](change-recipes.md) maps representative modifications to owners and verification.
+- [Codebase tour](codebase-tour.md) maps questions to current files and symbols.
+- [System flows](system-flows.md) follows execution, worker, replay, comparison, investigation,
+  preservation, API, and browser paths.
 - [TypeScript patterns](typescript-patterns.md) explains explicit event payloads, TypeBox/Ajv,
   discriminated unions, exact optional properties, `satisfies`, and runtime-private fields.
 
-The structural audit runs as `pnpm audit:structure` and is part of `pnpm verify`.
+`pnpm audit:structure` protects source ownership and `pnpm audit:docs` protects the portable
+documentation entrypoints and links. Both run as part of `pnpm verify`.

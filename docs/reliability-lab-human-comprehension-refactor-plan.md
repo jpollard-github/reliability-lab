@@ -52,6 +52,8 @@ Saved Investigation Cases established
         ↓
 Human-Comprehension and Ownership Pass
         ↓
+Product Tour and Operator Guidance
+        ↓
 Resume Horizon 5 product work
 ```
 
@@ -216,22 +218,32 @@ cycles.
 The exact final source map and locate-by-name drill are in [the codebase tour](codebase-tour.md).
 Web conventions are explained in [Operator Console Patterns](operator-console-patterns.md).
 
-## Phase 4: Ownership documentation and interview walkthrough
+## Phase 4: Ownership documentation and design-review walkthrough
 
-Final documentation should include:
+**Established.** The repository now has one primary evidence-based
+[design-review walkthrough](design-review-walkthrough.md), one practical
+[change-recipes guide](change-recipes.md), three README reading paths, and a dependency-free
+documentation audit in `scripts/check-documentation.mjs`.
 
-- `docs/codebase-tour.md`
-- `docs/system-flows.md`
-- `docs/typescript-patterns.md`
-- updated `docs/architecture.md`
-- updated README “Start here” links
-- current source tree examples
-- deliberate limitations and tradeoffs
-- a short design-review walkthrough
+The walkthrough connects the product loop to current packages, processes, complete execution and
+worker traces, replay encryption, Comparative Replay, bounded investigation, saved cases,
+server/client UI boundaries, verification layers, guarantees, non-guarantees, limitations, and
+honest interview answers. The recipes map ten representative modifications to their primary owner,
+adjacent boundaries, contracts, persistence, API, web, tests, documentation, invariants, and unsafe
+shortcuts.
+
+The codebase tour, system flows, architecture, TypeScript/persistence/operator patterns, README,
+AGENTS guide, roadmap, and supplied ownership basics agree with current files and symbols. ADR
+history remains intact, with status notes only where durable execution materially refined the
+earlier in-process/comparison boundaries.
 
 Completion signal:
 
-> The repository itself teaches a new engineer how to understand it.
+> The repository itself teaches a new engineer how to understand, evaluate, and safely modify it.
+
+All four phases are established. The Human-Comprehension and Ownership Pass is complete as a
+cross-cutting interlude, not a product horizon. Horizon 5 remains incomplete; future Product Tour
+and Operator Guidance is next.
 
 ## Structural conventions
 

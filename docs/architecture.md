@@ -18,7 +18,9 @@ feature route plugins.
 See the [codebase tour](codebase-tour.md) for the current tree and the
 [system-flow guide](system-flows.md) for concrete call paths. Phase 3 now establishes named web
 features, server/client API boundaries, split stream/playback controllers, ordered feature styles,
-and workflow-named Playwright specs. Phase 4 ownership review remains separate.
+and workflow-named Playwright specs. Phase 4 establishes the evidence-based
+[design review](design-review-walkthrough.md), [change recipes](change-recipes.md), and portable
+documentation audit without changing runtime architecture.
 
 ## Components and data flow
 
@@ -178,6 +180,16 @@ share replay capabilities.
 
 ## Failure and consistency boundaries
 
+| Guarantee                                                  | Evidence                                                                          | Non-guarantee                                       | Reason                                                                  |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| Atomic durable acceptance in PostgreSQL worker mode        | `PostgresDurableExecutionStore.acceptExecution` and its rollback integration test | In-process acceptance survives API loss             | In-process continuation deliberately remains process-local              |
+| Current-claim heartbeat, finish, and cleanup are fenced    | `JobClaim.claimVersion`, exact PostgreSQL predicates, lease tests                 | Exactly-once provider calls                         | PostgreSQL and a remote provider share no transaction                   |
+| Execution decisions are append-only evidence               | `ExecutionEventRecorder`, repository/event tests                                  | Universal event/projection/outbox atomicity         | Continuation writes retain explicit consistency boundaries              |
+| PostgreSQL replay capsules are encrypted at rest           | `encryptReplayCapsule`, replay crypto and vault tests                             | Production KMS or physical backup erasure           | Environment keyrings and tombstones are prototype boundaries            |
+| Repository reads and evidence references are tenant scoped | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
+| Investigation reads are tenant/range bounded               | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
+| Saved notes append and evidence remains referenced         | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |
+
 Worker mode makes acceptance durable, including comparison variants and concurrency-safe
 idempotency. Claim fencing prevents an older claim from extending, finishing, or deleting the
 current claim, and the post-provider ownership assertion prevents a known-stale worker from
@@ -195,3 +207,12 @@ recovery remain on the [roadmap](roadmap.md).
 The compatibility `/v1/executions` route still hydrates full envelopes and replay capability and is
 not an analytics path. The root page and Investigation Workbench use the bounded investigation read
 model, avoiding that route's unpaginated replay-capability hydration pattern.
+
+## Deliberate future boundaries
+
+Authentication, authorization, PostgreSQL row-level security, managed KMS, physical purge
+semantics, distributed rate/circuit state, cancellation, resumable ambiguous work, a general
+transactional outbox, operator recovery tooling, and multi-replica operating procedures remain
+future architecture. Product Tour and Operator Guidance is the next product movement, not an
+implemented UI or security boundary. Horizon 5 remains incomplete, and no Horizon 6 guarantee is
+inferred from tenant-scoped repository predicates.

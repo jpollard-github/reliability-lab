@@ -28,6 +28,9 @@ Prefer targeted tests while editing, then run the appropriate repository verific
 
 ## Comprehension and module structure
 
+- Start product work with `docs/design-review-walkthrough.md`, then use `docs/codebase-tour.md` and
+  `docs/system-flows.md` to locate the owner. Use `docs/change-recipes.md` before representative
+  cross-layer changes; pattern guides define local conventions.
 - Package-root `src/index.ts` files are public export maps, not implementation files.
 - Within `packages/contracts`, `packages/core`, and `packages/db`, import the module that directly
   owns a symbol; never import through the same package root or its root `index.ts`.
@@ -53,6 +56,9 @@ Prefer targeted tests while editing, then run the appropriate repository verific
   client/server boundaries, detectable web-feature cycles, CSS/test organization, and production
   file ceilings.
 - Keep public package-root exports stable unless a task explicitly authorizes a breaking change.
+- Update `docs/change-recipes.md` when an architectural change moves an owner, adjacent boundary,
+  invariant, or expected test layer. Documentation claims must be checked against current code,
+  symbols, and tests; roadmap language never proves that a capability exists.
 
 ## Completion contract
 
@@ -60,14 +66,17 @@ For code changes:
 
 1. Inspect relevant code and documentation before editing.
 2. Implement the smallest coherent change.
-3. Add or update tests.
-4. Run targeted checks.
-5. Run `pnpm verify` when practical.
-6. Run integration or e2e checks when the change crosses those boundaries and infrastructure is
-   available.
+3. Add or update tests and ownership documentation where responsibility changes.
+4. Run focused checks for the changed owner.
+5. Run `pnpm audit:docs` for documentation/path changes and `pnpm audit:structure` for source
+   ownership changes.
+6. Run `pnpm verify` when practical. Run integration tests for PostgreSQL queries, transactions,
+   encryption persistence, or durable jobs; run E2E for routes, process boundaries, SSE, URL state,
+   accessibility, or operator workflows.
 7. Review the diff for regressions, leaked secrets, accidental generated files, and false
    documentation claims.
-8. Report exactly which commands ran and whether they passed.
+8. Report exactly which commands ran and whether they passed. Create exports only after edits and
+   verification are complete.
 
 Never state that a test, build, migration, audit, or runtime path passed unless it actually ran
 successfully.
