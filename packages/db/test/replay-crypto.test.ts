@@ -4,7 +4,7 @@ import {
   decryptReplayCapsule,
   encryptReplayCapsule,
   type ReplayContext,
-} from "../src/replay-capsules.js";
+} from "../src/replay/postgres-replay-capsule-store.js";
 
 const key = Buffer.alloc(32, 7);
 const context: ReplayContext = {

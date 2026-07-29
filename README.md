@@ -18,12 +18,16 @@ For a first pass through the repository:
 1. [Reliability Lab basics](docs/reliability-lab-basics.md) explains the product vocabulary.
 2. [From Working Software to Owned Software](docs/reliability-lab-owned-software-basics.md) explains
    the reason for the comprehension pass.
-3. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
-4. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
-   saved-case paths.
-5. [TypeScript patterns](docs/typescript-patterns.md) explains the central type techniques without
+3. [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
+   explains database and HTTP boundaries in plain language.
+4. [TypeScript patterns](docs/typescript-patterns.md) explains the central type techniques without
    assuming compiler-theory knowledge.
-6. [Human-comprehension refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
+5. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
+6. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
+   saved-case paths.
+7. [Persistence and API patterns](docs/persistence-and-api-patterns.md) documents the concrete
+   PostgreSQL, Fastify, TypeBox, error, and SSE module boundaries.
+8. [Human-comprehension refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
    records the staged boundaries and later phases.
 
 ## Current status
@@ -107,6 +111,8 @@ Plain-language guides:
 - [Investigation Workbench basics](docs/reliability-lab-investigation-workbench-basics.md)
 - [Saved Investigation Cases basics](docs/reliability-lab-saved-investigation-cases-basics.md)
 - [Owned Software basics](docs/reliability-lab-owned-software-basics.md)
+- [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
+- [Persistence and API patterns](docs/persistence-and-api-patterns.md)
 - [Human-Comprehension Refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
 
 ## Execution lifecycle
@@ -149,13 +155,13 @@ Plain-language guides:
 ## Repository layout
 
 ```text
-apps/api          Fastify composition root, routes, injection tests
+apps/api          Fastify composition root, typed route plugins, schemas, injection tests
 apps/worker       PostgreSQL lease/heartbeat polling and durable continuation
 apps/web          Next.js App Router console and durable Playwright flow
 packages/contracts  TypeBox schemas and shared domain contracts
 packages/core       Policy engine, ports, in-memory adapters
 packages/providers  Fake and OpenAI-compatible providers
-packages/db         Drizzle schema, migration, PostgreSQL repository
+packages/db         Domain schema modules, PostgreSQL adapters, queries, crypto, migrations
 packages/observability  OpenTelemetry bridge and log redaction
 packages/testkit    Deterministic clocks, IDs, and randomness
 docs/               Architecture, envelope, failure, security, ADRs

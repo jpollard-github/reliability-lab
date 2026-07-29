@@ -1,4 +1,8 @@
-import { assertReplayKey, type ReplayKeyring } from "./replay-capsules.js";
+/**
+ * Owns fail-closed replay-vault runtime configuration parsing.
+ * It does not create database connections or perform capsule persistence.
+ */
+import { assertReplayKey, type ReplayKeyring } from "./postgres-replay-capsule-store.js";
 
 export interface ReplayRuntimeConfig {
   storeMode: "memory" | "postgres";

@@ -118,3 +118,34 @@ The saved-case `canonicalArray<T extends string>` preserves a specific string-un
 while trimming, deduplicating, and sorting values. The simpler alternative returns `string[]` and
 requires casts at every caller. The generic is local, small, and names a familiar collection
 operation; no central domain model depends on conditional-type machinery.
+
+## Drizzle inferred row types
+
+Persistence mappers use Drizzle's table-owned row types:
+
+```ts
+function toExecutionInsert(execution: ExecutionEnvelope): typeof executions.$inferInsert;
+```
+
+`$inferInsert` and `$inferSelect` keep mapping functions aligned with the declared schema without a
+second handwritten row interface. The schema still does not become a domain model: the mapper names
+the translation boundary, and `ExecutionEnvelope` remains contract-owned.
+
+## Typed Fastify route plugins
+
+Each API route module calls:
+
+```ts
+const api = app.withTypeProvider<TypeBoxTypeProvider>();
+```
+
+Fastify then derives request header, parameter, query, body, and reply types from the TypeBox route
+schema in that module. Plugin options use `Pick<AppOptions, ...>` so a route family receives only
+the composed service it needs.
+
+With `exactOptionalPropertyTypes`, `app.ts` omits absent optional plugin settings instead of passing
+properties whose value is `undefined`. This preserves both compile-time and runtime shapes.
+
+`Type.Unsafe` remains explicit for `ExecutionEnvelopeSchema` and `ComparisonViewSchema` because
+those established interfaces do not have complete runtime TypeBox schemas. It preserves the
+existing OpenAPI contract without pretending that an incomplete runtime schema is domain-complete.

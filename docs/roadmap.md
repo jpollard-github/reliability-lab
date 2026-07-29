@@ -128,8 +128,9 @@ Those remain possible future work, not prerequisites for Horizon 5.
 ### Horizon 5: An operator’s reliability lab
 
 **Established movement: Saved Investigation Cases.** Investigation now persists beyond one browser
-session without becoming a generic ticketing system. Current engineering work is a cross-cutting
-Human-Comprehension and Ownership Pass before Horizon 5 product development resumes.
+session without becoming a generic ticketing system. The cross-cutting Human-Comprehension and
+Ownership Pass has established Phase 1 contracts/core and Phase 2 persistence/API composition.
+Phase 3 web/test organization remains before Horizon 5 product development resumes.
 
 The console supports useful filtering and search, trace/log correlation, replay comparisons, scenario catalogs, policy experiments, provider health views, and aggregate reliability metrics. The system begins to expose service-level signals such as success, degraded success, retry recovery, fallback dependence, latency-budget failures, and replay reproducibility.
 
@@ -195,9 +196,10 @@ Scenario Catalog and External Correlation Integrations
 Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
 The **Horizon 4 Durable Execution Foundation** now makes acceptance restart-durable in PostgreSQL
 worker mode and fences stale claims without overstating exactly-once provider behavior. The
-Investigation Workbench Foundation and Saved Investigation Cases are established. The current
-cross-cutting engineering interlude makes those capabilities easier to locate, explain, and safely
-modify; it is not a new product horizon and does not advance Horizon 6 claims. A scenario catalog
-and explicitly configured trace/log integrations remain later Horizon 5 work. Cancellation, Redis
-coordination, generic outbox tooling, resumable workflow machinery, and cloud infrastructure are not
-prerequisites for that movement.
+Investigation Workbench Foundation and Saved Investigation Cases are established. Contracts/core
+(Phase 1) and persistence/API composition (Phase 2) now make those capabilities easier to locate,
+explain, and safely modify; Phase 3 remains the next comprehension step. This is not a new product
+horizon and does not advance Horizon 6 claims. A scenario catalog and explicitly configured
+trace/log integrations remain later Horizon 5 work. Cancellation, Redis coordination, generic
+outbox tooling, resumable workflow machinery, and cloud infrastructure are not prerequisites for
+that movement.

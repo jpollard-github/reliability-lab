@@ -3,23 +3,27 @@
 ## Code organization
 
 The architecture is reflected in named source modules rather than implemented inside package
-barrels. `packages/contracts/src/index.ts` and `packages/core/src/index.ts` are public export maps.
-Internal contract and core modules import the file that directly owns each symbol.
+barrels. The contracts, core, and DB package roots are public export maps. Internal modules import
+the file that directly owns each symbol.
 
 Contracts are grouped into execution, replay, comparison, Investigation Workbench, and saved-case
 families. Core separates the public `ExecutionService` facade from execution preparation, event
 construction, guarded provider policy, structured-output validation, backoff, durable lease
 control, replay retention, comparison projection, investigation reads, and saved-case behavior.
+DB separates connection creation, domain schema definitions, repositories, mapping, fixed read
+queries, transactions, runtime configuration, and cryptographic lifecycles. API separates a small
+Fastify composition root, platform plugins, safe error mapping, TypeBox schemas, query parsing, and
+feature route plugins.
 
 See the [codebase tour](codebase-tour.md) for the current tree and the
-[system-flow guide](system-flows.md) for concrete call paths. This Phase 1 organization deliberately
-does not split the large API, PostgreSQL investigation, or Workbench page files; those are later
-comprehension phases.
+[system-flow guide](system-flows.md) for concrete call paths. Phase 2 establishes the persistence
+and API structure; web component and Playwright-suite reorganization remains Phase 3.
 
 ## Components and data flow
 
-`apps/api` validates transport contracts, extracts the tenant boundary, and maps domain errors to
-HTTP. `apps/worker` is the separate durable continuation process. `packages/core` owns acceptance
+`apps/api/src/app.ts` composes platform and feature route plugins. Those plugins validate transport
+contracts, extract the tenant boundary, and map domain errors to HTTP. `apps/worker` is the separate
+durable continuation process. `packages/core` owns acceptance
 preparation, continuation, provider policy, events, replay capability, and comparison behavior
 through ports. `packages/providers` implements deterministic fake and focused OpenAI-compatible
 HTTP adapters. `packages/db` stores execution evidence, durable jobs, comparison experiments, saved
@@ -41,7 +45,8 @@ job, and experiment definition commit in one transaction. The original and varia
 execution envelopes; comparison is a pure read projection, not a second event system or a winner
 score.
 
-The Live Machine View uses tenant-scoped SSE. The API reads ordered events after a sequence cursor,
+The Live Machine View uses tenant-scoped SSE. `routes/execution-events.ts` owns HTTP cursor,
+headers, abort, and close behavior; `event-stream.ts` reads ordered events after a sequence cursor,
 backfills persisted history, polls for new evidence, sends heartbeat comments, and closes after
 terminal evidence. The browser uses fetch streaming rather than native `EventSource` because the
 prototype tenant boundary is a request header. Worker-produced queue, claim, attempt, terminal, and
@@ -55,6 +60,11 @@ adapter selects compact execution fields, uses event `EXISTS` projections for de
 aggregates attempt JSONB by provider/model, and calculates p50/p95 with PostgreSQL percentile
 functions. Search uses an opaque cursor ordered by `created_at DESC, id DESC`; every query includes
 tenant and half-open time predicates.
+
+The PostgreSQL shell delegates to `execution-search-query.ts`,
+`reliability-summary-query.ts`, and `provider-observations-query.ts`. Search conditions and signal
+predicates live in `investigation-conditions.ts`; row mapping and raw SQL value conversion remain
+separate named boundaries.
 
 The focused `/v1/investigations/executions`, `/summary`, and `/providers` endpoints return the exact
 resolved range. Execution search uses one bounded page statement plus one fixed count statement,
@@ -87,6 +97,9 @@ events are transactional; note/evidence mutations and their lifecycle events are
 Evidence rows contain typed identifiers or a canonical provider/model/range reference, never copied
 execution envelopes. Case pages use `updated_at DESC, id DESC`, an opaque two-field cursor, and a
 separate fixed total query so an empty terminal page still reports all matching cases.
+
+`case-list-query.ts` owns paging/count SQL, `case-detail-query.ts` owns hydration, and
+`case-command-transactions.ts` owns current-state, note, evidence, and timeline transactions.
 
 The current case record holds title, question, status, optional importance, finding, resolution, and
 resolved time. Notes have no update/delete path. Timeline metadata records IDs, evidence types,

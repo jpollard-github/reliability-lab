@@ -6,8 +6,8 @@ import {
   encryptExecutionCommand,
   readExecutionRuntimeConfig,
   type ExecutionCommandContext,
-} from "../src/execution-commands.js";
-import { encryptReplayCapsule } from "../src/replay-capsules.js";
+} from "../src/durable/execution-command-crypto.js";
+import { encryptReplayCapsule } from "../src/replay/postgres-replay-capsule-store.js";
 
 const key = Buffer.alloc(32, 9);
 const context: ExecutionCommandContext = {

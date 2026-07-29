@@ -117,7 +117,7 @@ live in discoverable feature folders.
 
 The exact current map is maintained in [the codebase tour](codebase-tour.md), with concrete call
 paths in [system flows](system-flows.md). Phase 2 API and persistence splitting remains deliberately
-out of scope.
+separate from the completed Phase 1 change set.
 
 ## Phase 2: Persistence and API composition
 
@@ -145,6 +145,30 @@ Outcomes:
 Completion signal:
 
 > A route or SQL read model can be found by feature name, and API composition no longer requires scanning a thousand-line file.
+
+### Implemented Phase 2 structure
+
+`packages/db/src/index.ts` is now a 19-line export-only public map. Pool/Drizzle construction lives
+in `database/database.ts`; schema definitions are grouped by execution, durable execution,
+comparison, saved-case, and replay domains. Execution and comparison mapping have named modules.
+Durable and replay persistence live under separate feature folders with independent command and
+capsule cryptographic configuration.
+
+The PostgreSQL Investigation Workbench shell delegates to separately named execution search,
+reliability aggregate/trend, and provider observation query modules. Saved cases separate stable
+list/count SQL, detail hydration, row/reference mapping, and command transactions. Query counts,
+tenant/time predicates, cursor totals, encryption, and transaction boundaries remain established
+behavior.
+
+`apps/api/src/app.ts` is a small composition root. Platform registration, error mapping, query
+normalization, transport schemas, execution SSE, and each domain route family have discoverable
+modules. `buildApp(options)`, normalized OpenAPI, and the Fastify route inventory remain unchanged.
+API and database tests are grouped by behavior with shared setup.
+
+The structural audit now covers DB and API export maps, direct imports, required feature-name
+boundaries, composition-root behavior, and production line ceilings. The exact current maps and
+manual locate-by-name drill live in [the codebase tour](codebase-tour.md); persistence conventions
+are explained in [Persistence and API Patterns](persistence-and-api-patterns.md).
 
 ## Phase 3: Operator console and test organization
 

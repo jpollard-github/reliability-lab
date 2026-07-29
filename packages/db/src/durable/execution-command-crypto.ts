@@ -1,3 +1,7 @@
+/**
+ * Owns transient durable-command encryption and runtime keyring parsing.
+ * Replay capsule encryption is intentionally separate under replay/.
+ */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { Value } from "@sinclair/typebox/value";
 import {

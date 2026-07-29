@@ -1,11 +1,11 @@
 # System Flows
 
-These walkthroughs name the files and functions that execute each established workflow. Transport
-and persistence files remain intentionally unsplit in Phase 1.
+These walkthroughs name the files and functions that execute each established workflow. Phase 2
+gives transport routes, persistence adapters, queries, mapping, and transactions distinct homes.
 
 ## 1. In-process execution
 
-1. `apps/api/src/app.ts` validates `POST /v1/executions` and calls
+1. `apps/api/src/routes/executions.ts` validates `POST /v1/executions` and calls
    `ExecutionService.submit`.
 2. `packages/core/src/execution/execution-service.ts` hashes the request, checks idempotency and
    rate limits, and calls `prepareExecution`.
@@ -25,8 +25,8 @@ and persistence files remain intentionally unsplit in Phase 1.
 
 1. `ExecutionService.submit` prepares the same envelope but delegates acceptance to the
    `DurableAcceptancePort`.
-2. `packages/db/src/durable-execution.ts` atomically stores queued evidence, encrypted transient
-   command data, and optional idempotency state.
+2. `packages/db/src/durable/postgres-durable-execution-store.ts` atomically stores queued evidence,
+   encrypted transient command data, and optional idempotency state.
 3. `apps/worker/src/server.ts` polls through `DurableExecutionWorker.runOnce`.
 4. `DurableExecutionWorker` calls `DurableJobStore.claimNext`; the returned `JobClaim.claimVersion`
    is the fencing token.
@@ -43,7 +43,8 @@ and persistence files remain intentionally unsplit in Phase 1.
 1. `ExecutionService.replay` reads the original execution and asks `ReplayCapsuleStore.getForReplay`
    for current capability and retained input.
 2. `packages/core/src/replay/replay-store.ts` defines that tenant-scoped port. Memory behavior is in
-   `memory-replay-store.ts`; PostgreSQL encryption remains in `packages/db/src/replay-capsules.ts`.
+   `memory-replay-store.ts`; PostgreSQL lifecycle and encryption live in
+   `packages/db/src/replay/postgres-replay-capsule-store.ts`.
 3. If unavailable, replay returns the current explicit capability reason.
 4. If available, the facade submits an ordinary linked execution through the normal acceptance and
    runner path.
@@ -65,19 +66,22 @@ inputs, while replay capsules are governed retention capabilities.
 
 ## 5. Investigation Workbench read path
 
-1. `apps/api/src/app.ts` resolves a bounded exact range and calls `InvestigationReadRepository`.
-2. The memory adapter is `investigation/memory-read-repository.ts`; the PostgreSQL adapter remains
-   `packages/db/src/investigation.ts`.
+1. `apps/api/src/routes/investigations.ts` resolves a bounded exact range and calls
+   `InvestigationReadRepository`.
+2. The memory adapter is `investigation/memory-read-repository.ts`; the PostgreSQL shell is
+   `packages/db/src/investigation/postgres-investigation-read-repository.ts`.
 3. `range.ts` resolves exact ranges and stable cursors.
 4. `signals.ts` derives retry recovery, fallback dependence, latency-budget failure, structured
    rejection, ambiguity, and replay-derived signals.
 5. `reliability-summary.ts` and `provider-observations.ts` aggregate bounded evidence without
    replay hydration or provider-health scoring.
-6. The API returns compact contracts from `packages/contracts/src/investigation/workbench.ts`.
+6. PostgreSQL search, aggregate/trend, and provider observations use the separately named fixed
+   query modules under `packages/db/src/investigation/`.
+7. The API returns compact contracts from `packages/contracts/src/investigation/workbench.ts`.
 
 ## 6. Saved Investigation Cases
 
-1. The API calls `InvestigationCaseService` in
+1. `apps/api/src/routes/investigation-cases.ts` calls `InvestigationCaseService` in
    `investigation-cases/investigation-case-service.ts`.
 2. `canonicalizeSavedScope` stores exact `from`/`to` instants and canonical filters, excluding
    moving presets, cursors, limits, and anchors.
@@ -87,5 +91,17 @@ inputs, while replay capsules are governed retention capabilities.
    or replay payload is copied.
 5. Notes append through the case repository. Updates replace current interpretation while
    metadata-only timeline events record changed fields, IDs, and presence flags.
-6. Memory behavior lives in `memory-repository.ts`; transactional PostgreSQL behavior remains in
-   `packages/db/src/investigation-cases.ts`.
+6. Memory behavior lives in `memory-repository.ts`; PostgreSQL pagination/hydration lives in
+   `case-list-query.ts` and `case-detail-query.ts`, while command transactions live in
+   `packages/db/src/investigation-cases/case-command-transactions.ts`.
+
+## 7. API composition and errors
+
+1. `apps/api/src/server.ts` constructs memory or PostgreSQL services and calls the stable
+   `buildApp(options)` entrypoint.
+2. `apps/api/src/app.ts` creates Fastify, installs redacted logging, and delegates CORS/Swagger to
+   `plugins/platform.ts`.
+3. `http/error-mapper.ts` installs the shared safe error handler before feature plugins.
+4. Typed route plugins receive only their composed service dependencies.
+5. `routes/execution-events.ts` owns SSE headers/cursor/client cleanup while `event-stream.ts` owns
+   persisted-event polling and formatting.

@@ -1,3 +1,7 @@
+/**
+ * Owns the tenant-scoped PostgreSQL replay-vault lifecycle and metadata-only audit trail.
+ * Cryptographic helpers remain explicit beside the store until independently changed.
+ */
 import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -12,7 +16,7 @@ import {
   type StoreReplayCapsule,
   unavailableCapability,
 } from "@reliability-lab/core";
-import { replayCapsuleAudits, replayCapsules } from "./schema.js";
+import { replayCapsuleAudits, replayCapsules } from "../schema/index.js";
 
 export interface ReplayKeyring {
   activeVersion: string;

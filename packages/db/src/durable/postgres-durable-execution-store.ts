@@ -1,3 +1,7 @@
+/**
+ * Owns PostgreSQL durable acceptance, claims, fencing, heartbeats, and completion.
+ * Command cryptography and schema declarations remain separate collaborators.
+ */
 import { and, asc, eq, gt, lte, or, sql } from "drizzle-orm";
 import type {
   ComparisonExperiment,
@@ -16,15 +20,15 @@ import {
   decryptExecutionCommand,
   encryptExecutionCommand,
   type ExecutionCommandKeyring,
-} from "./execution-commands.js";
-import type { ReliabilityDatabase } from "./index.js";
+} from "./execution-command-crypto.js";
+import type { ReliabilityDatabase } from "../database/database.js";
 import {
   comparisonExperiments,
   executionEvents,
   executionJobs,
   executions,
   idempotencyRecords,
-} from "./schema.js";
+} from "../schema/index.js";
 
 export class PostgresDurableExecutionStore implements DurableAcceptancePort, DurableJobStore {
   readonly #db: ReliabilityDatabase;

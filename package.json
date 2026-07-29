@@ -23,7 +23,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm test:unit",
     "test:unit": "vitest run --exclude '**/*.integration.test.ts' --exclude 'apps/web/tests/**' --exclude '**/dist/**'",
-    "test:integration": "vitest run packages/db/test/repository.integration.test.ts packages/db/test/durable-execution.integration.test.ts",
+    "test:integration": "vitest run packages/db/test/*.integration.test.ts",
     "test:e2e": "pnpm --filter @reliability-lab/web test:e2e",
     "verify": "pnpm format:check && pnpm lint && pnpm audit:structure && pnpm typecheck && pnpm test:unit && pnpm build",
     "verify:full": "pnpm verify && pnpm test:integration && pnpm test:e2e",
