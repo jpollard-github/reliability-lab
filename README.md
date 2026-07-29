@@ -11,6 +11,21 @@ decisions, timing, trace correlation, and—only when retention permits—a cano
 That lets engineers reproduce a production-shaped failure without pretending that every live prompt
 is safe to retain.
 
+## Start here
+
+For a first pass through the repository:
+
+1. [Reliability Lab basics](docs/reliability-lab-basics.md) explains the product vocabulary.
+2. [From Working Software to Owned Software](docs/reliability-lab-owned-software-basics.md) explains
+   the reason for the comprehension pass.
+3. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
+4. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
+   saved-case paths.
+5. [TypeScript patterns](docs/typescript-patterns.md) explains the central type techniques without
+   assuming compiler-theory knowledge.
+6. [Human-comprehension refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
+   records the staged boundaries and later phases.
+
 ## Current status
 
 Implemented now:
@@ -91,6 +106,8 @@ Plain-language guides:
 - [Lease Safety and Fencing basics](docs/reliability-lab-lease-safety-basics.md)
 - [Investigation Workbench basics](docs/reliability-lab-investigation-workbench-basics.md)
 - [Saved Investigation Cases basics](docs/reliability-lab-saved-investigation-cases-basics.md)
+- [Owned Software basics](docs/reliability-lab-owned-software-basics.md)
+- [Human-Comprehension Refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
 
 ## Execution lifecycle
 

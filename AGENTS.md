@@ -26,6 +26,20 @@ Use pnpm only; never use npm or Yarn to modify this workspace.
 
 Prefer targeted tests while editing, then run the appropriate repository verification command.
 
+## Comprehension and module structure
+
+- Package-root `src/index.ts` files are public export maps, not implementation files.
+- Within `packages/contracts` and `packages/core`, import the module that directly owns a symbol;
+  never import through the same package root or its root `index.ts`.
+- Keep TypeBox schemas beside their `Static<>` types.
+- Prefer cohesive feature modules over god files or one-function file confetti.
+- Add a short ownership/invariant comment to non-trivial production modules.
+- Preserve the explicit execution event distinction: callers provide `ExecutionEventPayload`, while
+  `ExecutionEventRecorder` alone adds stored metadata.
+- Run `pnpm audit:structure` after changing contracts/core layout. The audit enforces export-only
+  root barrels, direct internal imports, and the production-file hard ceiling.
+- Keep public package-root exports stable unless a task explicitly authorizes a breaking change.
+
 ## Completion contract
 
 For code changes:

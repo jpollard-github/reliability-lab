@@ -1,5 +1,21 @@
 # Architecture
 
+## Code organization
+
+The architecture is reflected in named source modules rather than implemented inside package
+barrels. `packages/contracts/src/index.ts` and `packages/core/src/index.ts` are public export maps.
+Internal contract and core modules import the file that directly owns each symbol.
+
+Contracts are grouped into execution, replay, comparison, Investigation Workbench, and saved-case
+families. Core separates the public `ExecutionService` facade from execution preparation, event
+construction, guarded provider policy, structured-output validation, backoff, durable lease
+control, replay retention, comparison projection, investigation reads, and saved-case behavior.
+
+See the [codebase tour](codebase-tour.md) for the current tree and the
+[system-flow guide](system-flows.md) for concrete call paths. This Phase 1 organization deliberately
+does not split the large API, PostgreSQL investigation, or Workbench page files; those are later
+comprehension phases.
+
 ## Components and data flow
 
 `apps/api` validates transport contracts, extracts the tenant boundary, and maps domain errors to
