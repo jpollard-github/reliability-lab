@@ -2,40 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type {
-  ExecutionEnvelope,
-  ReplayCapability,
-  ReplayVariation,
-  ReplayVariationPolicy,
-} from "@reliability-lab/contracts";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
-interface Draft {
-  provider: string;
-  model: string;
-  maxAttempts: string;
-  baseBackoffMs: string;
-  maxBackoffMs: string;
-  jitterRatio: string;
-  fallbackProvider: string;
-  fallbackModel: string;
-  maxLatencyMs: string;
-  reproducibilityCheck: boolean;
-}
-
-const emptyDraft: Draft = {
-  provider: "",
-  model: "",
-  maxAttempts: "",
-  baseBackoffMs: "",
-  maxBackoffMs: "",
-  jitterRatio: "",
-  fallbackProvider: "",
-  fallbackModel: "",
-  maxLatencyMs: "",
-  reproducibilityCheck: false,
-};
+import type { ExecutionEnvelope, ReplayCapability } from "@reliability-lab/contracts";
+import { browserApiUrl, browserTenantId, isRecord } from "@/lib/client-api";
+import { emptyComparisonDraft, toReplayVariation, type ComparisonDraft } from "./comparison-draft";
+import {
+  applyComparisonPreset,
+  comparisonPresets,
+  type ComparisonPreset,
+} from "./comparison-presets";
 
 export function ComparisonBuilder({
   execution,
@@ -46,59 +20,20 @@ export function ComparisonBuilder({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [draft, setDraft] = useState<ComparisonDraft>(emptyComparisonDraft);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-
-  function applyPreset(value: string) {
-    const inherited = execution.policy;
-    switch (value) {
-      case "same":
-        setDraft({ ...emptyDraft, reproducibilityCheck: true });
-        break;
-      case "fewer":
-        setDraft({
-          ...emptyDraft,
-          maxAttempts: String(Math.max(1, inherited.maxAttempts - 1)),
-        });
-        break;
-      case "fallback":
-        setDraft({
-          ...emptyDraft,
-          maxAttempts: "1",
-          fallbackProvider: "fake-fallback",
-          fallbackModel: "deterministic-v1",
-        });
-        break;
-      case "tighter":
-        setDraft({
-          ...emptyDraft,
-          maxLatencyMs: String(Math.max(1, Math.floor(execution.budget.maxLatencyMs / 2))),
-        });
-        break;
-      case "patient":
-        setDraft({
-          ...emptyDraft,
-          maxAttempts: String(Math.min(5, inherited.maxAttempts + 1)),
-          baseBackoffMs: String(Math.min(30_000, Math.max(100, inherited.baseBackoffMs * 2))),
-          maxBackoffMs: String(
-            Math.min(60_000, Math.max(inherited.maxBackoffMs, inherited.baseBackoffMs * 4)),
-          ),
-        });
-        break;
-    }
-  }
 
   async function createComparison() {
     setBusy(true);
     setMessage(null);
     try {
-      const variation = toVariation(draft);
+      const variation = toReplayVariation(draft);
       const response = await fetch(
-        `${apiUrl}/v1/executions/${encodeURIComponent(execution.executionId)}/comparisons`,
+        `${browserApiUrl}/v1/executions/${encodeURIComponent(execution.executionId)}/comparisons`,
         {
           method: "POST",
-          headers: { "content-type": "application/json", "x-tenant-id": "demo-tenant" },
+          headers: { "content-type": "application/json", "x-tenant-id": browserTenantId },
           body: JSON.stringify({ variation }),
         },
       );
@@ -148,16 +83,18 @@ export function ComparisonBuilder({
             <select
               aria-label="Comparison preset"
               defaultValue=""
-              onChange={(event) => applyPreset(event.target.value)}
+              onChange={(event) =>
+                setDraft(applyComparisonPreset(event.target.value as ComparisonPreset, execution))
+              }
             >
               <option value="" disabled>
                 Choose a preset
               </option>
-              <option value="same">Same conditions</option>
-              <option value="fewer">Fewer retries</option>
-              <option value="fallback">Immediate fallback</option>
-              <option value="tighter">Tighter budget</option>
-              <option value="patient">More patient retry</option>
+              {comparisonPresets.map((preset) => (
+                <option key={preset.value} value={preset.value}>
+                  {preset.label}
+                </option>
+              ))}
             </select>
           </label>
           <div className="comparison-fields">
@@ -273,34 +210,6 @@ export function ComparisonBuilder({
   );
 }
 
-function toVariation(draft: Draft): ReplayVariation {
-  const policy: ReplayVariationPolicy = {};
-  addNumber(policy, "maxAttempts", draft.maxAttempts);
-  addNumber(policy, "baseBackoffMs", draft.baseBackoffMs);
-  addNumber(policy, "maxBackoffMs", draft.maxBackoffMs);
-  addNumber(policy, "jitterRatio", draft.jitterRatio);
-  if (draft.fallbackProvider === "_remove") policy.fallbackProvider = null;
-  else if (draft.fallbackProvider) policy.fallbackProvider = draft.fallbackProvider;
-  if (draft.fallbackModel) policy.fallbackModel = draft.fallbackModel;
-
-  const variation: ReplayVariation = {
-    ...(draft.provider ? { provider: draft.provider } : {}),
-    ...(draft.model ? { model: draft.model } : {}),
-    ...(Object.keys(policy).length ? { policy } : {}),
-    ...(draft.maxLatencyMs ? { budget: { maxLatencyMs: Number(draft.maxLatencyMs) } } : {}),
-    ...(draft.reproducibilityCheck ? { reproducibilityCheck: true } : {}),
-  };
-  return variation;
-}
-
-function addNumber(
-  target: ReplayVariationPolicy,
-  key: "maxAttempts" | "baseBackoffMs" | "maxBackoffMs" | "jitterRatio",
-  value: string,
-) {
-  if (value) target[key] = Number(value);
-}
-
 function TextField({
   label,
   value,
@@ -351,8 +260,4 @@ function NumberField({
       />
     </label>
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

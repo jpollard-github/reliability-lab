@@ -6,9 +6,7 @@ import type {
   InvestigationCaseEvidenceInput,
   InvestigationCaseSummary,
 } from "@reliability-lab/contracts";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const tenantId = process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "demo-tenant";
+import { addInvestigationCaseEvidence } from "./case-mutations";
 
 export function AddToCase({
   cases,
@@ -28,16 +26,7 @@ export function AddToCase({
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch(
-        `${apiUrl}/v1/investigation-cases/${encodeURIComponent(caseId)}/evidence`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-tenant-id": tenantId },
-          body: JSON.stringify(evidence),
-        },
-      );
-      if (!response.ok) throw new Error(`Evidence link failed with HTTP ${response.status}`);
-      const result = (await response.json()) as { added: boolean };
+      const result = await addInvestigationCaseEvidence(caseId, evidence);
       setMessage(result.added ? "Evidence linked." : "Evidence was already linked.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Evidence could not be linked");

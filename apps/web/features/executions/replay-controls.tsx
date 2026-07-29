@@ -3,11 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ExecutionEnvelope, ReplayCapability } from "@reliability-lab/contracts";
-import { ComparisonBuilder } from "@/components/comparison-builder";
+import { ComparisonBuilder } from "@/features/comparisons/comparison-builder";
+import { browserApiUrl, browserTenantId, isRecord } from "@/lib/client-api";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-
-export function ReplayButton({
+export function ReplayControls({
   executionId,
   execution,
   capability: initialCapability,
@@ -30,10 +29,10 @@ export function ReplayButton({
     setMessage(null);
     try {
       const response = await fetch(
-        `${apiUrl}/v1/executions/${encodeURIComponent(executionId)}/replay`,
+        `${browserApiUrl}/v1/executions/${encodeURIComponent(executionId)}/replay`,
         {
           method: "POST",
-          headers: { "x-tenant-id": "demo-tenant" },
+          headers: { "x-tenant-id": browserTenantId },
         },
       );
       const body: unknown = await response.json();
@@ -69,10 +68,10 @@ export function ReplayButton({
     setMessage(null);
     try {
       const response = await fetch(
-        `${apiUrl}/v1/executions/${encodeURIComponent(executionId)}/replay-capsule`,
+        `${browserApiUrl}/v1/executions/${encodeURIComponent(executionId)}/replay-capsule`,
         {
           method: "DELETE",
-          headers: { "x-tenant-id": "demo-tenant" },
+          headers: { "x-tenant-id": browserTenantId },
         },
       );
       const body: unknown = await response.json();
@@ -124,10 +123,6 @@ export function ReplayButton({
       ) : null}
     </div>
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function isReplayCapability(value: unknown): value is ReplayCapability {

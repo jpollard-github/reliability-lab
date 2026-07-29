@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LiveExecutionView } from "@/components/live-execution-view";
-import { ReplayButton } from "@/components/replay-button";
+import { LiveExecutionView } from "@/features/live-machine/live-execution-view";
+import { ReplayControls } from "@/features/executions/replay-controls";
 import { StatusBadge } from "@/components/status-badge";
-import { AddToCase } from "@/components/add-to-case";
-import { getExecution, getInvestigationCases } from "@/lib/api";
+import { AddToCase } from "@/features/investigation-cases/add-to-case";
+import { getExecution, getInvestigationCases } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,7 @@ export default async function ExecutionDetailPage({
             ) : null}
           </div>
         </div>
-        <ReplayButton
+        <ReplayControls
           executionId={execution.executionId}
           execution={execution}
           capability={execution.replayCapability}

@@ -192,6 +192,30 @@ Completion signal:
 
 > A developer can find the component or test for one visible feature by its product name.
 
+### Implemented Phase 3 structure
+
+The App Router pages are now composition roots over operator-named feature folders. Investigation
+URL interpretation and saved-scope preparation live in `features/investigations/search-state.ts`;
+the server-only `workbench-loader.ts` performs the three established bounded reads concurrently.
+Summary cards, trend, provider observations, filters, and the execution explorer have separately
+locatable components.
+
+The Live Machine separates stream/reconnect/event merge from recorded playback state and from
+readout, controls, route, and raw timeline presentation. Comparative Replay separates form-string
+draft parsing and preset values from submission and detail presentation. Saved cases separate
+typed browser mutations, controls, evidence, notes, timeline, overview, creation, linking, and list
+state.
+
+`app/globals.css` is an ordered import map over feature-named styles whose concatenated,
+whitespace-normalized content matches the former stylesheet. The catch-all dashboard spec has been replaced by five workflow-named specs
+that preserve all eight established journeys, use unique idempotency keys, and explicitly drain
+worker-produced evidence. The web structural audit enforces production/test ceilings, required
+feature boundaries, the CSS import map, client/server imports, and detectable same-feature runtime
+cycles.
+
+The exact final source map and locate-by-name drill are in [the codebase tour](codebase-tour.md).
+Web conventions are explained in [Operator Console Patterns](operator-console-patterns.md).
+
 ## Phase 4: Ownership documentation and interview walkthrough
 
 Final documentation should include:

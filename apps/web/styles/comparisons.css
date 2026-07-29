@@ -1,0 +1,78 @@
+.live-machine {
+  margin: 0 0 1rem;
+}
+.comparison-configs,
+.comparison-machines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.comparison-configs .panel,
+.comparison-machines .panel {
+  margin-top: 0;
+}
+.comparison-configs {
+  margin-bottom: 1rem;
+}
+.comparison-machines .machine-step {
+  flex-basis: 200px;
+}
+.comparison-machines .machine-readout {
+  grid-template-columns: repeat(2, 1fr);
+}
+.comparison-machines .machine-readout > div {
+  border-bottom: 1px solid var(--border);
+}
+.comparison-machines .machine-readout > div:last-child {
+  grid-column: 1 / -1;
+  border-bottom: 0;
+}
+.comparison-links {
+  display: flex;
+  gap: 0.6rem;
+}
+.comparison-links a {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.65rem 0.9rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+.comparison-status,
+.comparison-change {
+  display: inline-block;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.18rem 0.42rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.comparison-running,
+.change-mixed,
+.change-unavailable {
+  color: var(--warning);
+}
+.comparison-completed,
+.change-improved {
+  color: var(--success);
+}
+.comparison-unavailable,
+.change-worsened {
+  color: var(--danger);
+}
+.change-unchanged {
+  color: var(--muted);
+}
+.comparison-unavailable p {
+  margin: 0;
+  padding: 1rem 1.2rem;
+}
+.comparison-summary th[scope="row"] {
+  color: var(--text);
+}
+.comparison-explanation {
+  max-width: 420px;
+  color: var(--muted);
+  white-space: normal;
+}

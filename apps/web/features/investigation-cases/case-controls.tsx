@@ -2,41 +2,28 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import type {
   InvestigationCaseDetail,
   InvestigationCaseEvidenceInput,
 } from "@reliability-lab/contracts";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const tenantId = process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "demo-tenant";
+import { CaseEvidence } from "./case-evidence";
+import {
+  addInvestigationCaseEvidence,
+  addInvestigationCaseNote,
+  removeInvestigationCaseEvidence,
+  updateInvestigationCase,
+} from "./case-mutations";
 
 export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
 
-  async function mutate(
-    operation: string,
-    resource: string,
-    method: "POST" | "PATCH" | "DELETE",
-    body?: unknown,
-  ) {
+  async function mutate(operation: string, action: () => Promise<unknown>) {
     setBusy(operation);
     setMessage("");
     try {
-      const response = await fetch(`${apiUrl}${resource}`, {
-        method,
-        headers: {
-          ...(body === undefined ? {} : { "content-type": "application/json" }),
-          "x-tenant-id": tenantId,
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      });
-      if (!response.ok) {
-        const error = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(error?.message ?? `${operation} failed with HTTP ${response.status}`);
-      }
+      await action();
       setMessage(`${operation} complete.`);
       router.refresh();
       return true;
@@ -51,18 +38,15 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
   async function updateCase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await mutate(
-      "Case update",
-      `/v1/investigation-cases/${encodeURIComponent(detail.case.caseId)}`,
-      "PATCH",
-      {
+    await mutate("Case update", () =>
+      updateInvestigationCase(detail.case.caseId, {
         title: String(form.get("title") ?? ""),
         question: String(form.get("question") ?? ""),
         status: String(form.get("status") ?? ""),
         importance: String(form.get("importance") ?? "") || null,
         finding: String(form.get("finding") ?? "") || null,
         resolution: String(form.get("resolution") ?? "") || null,
-      },
+      }),
     );
   }
 
@@ -70,11 +54,8 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    const ok = await mutate(
-      "Note addition",
-      `/v1/investigation-cases/${encodeURIComponent(detail.case.caseId)}/notes`,
-      "POST",
-      { body: String(data.get("body") ?? "") },
+    const ok = await mutate("Note addition", () =>
+      addInvestigationCaseNote(detail.case.caseId, String(data.get("body") ?? "")),
     );
     if (ok) form.reset();
   }
@@ -97,11 +78,8 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
         range: detail.case.savedScope.range,
       };
     }
-    const ok = await mutate(
-      "Evidence addition",
-      `/v1/investigation-cases/${encodeURIComponent(detail.case.caseId)}/evidence`,
-      "POST",
-      evidence,
+    const ok = await mutate("Evidence addition", () =>
+      addInvestigationCaseEvidence(detail.case.caseId, evidence),
     );
     if (ok) form.reset();
   }
@@ -221,52 +199,15 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
         {message}
       </span>
 
-      <section className="panel" aria-labelledby="linked-evidence-heading">
-        <div className="panel-heading">
-          <div>
-            <h2 id="linked-evidence-heading">Linked evidence</h2>
-            <p>Removing a link keeps the authoritative execution or comparison intact.</p>
-          </div>
-        </div>
-        {detail.evidence.length ? (
-          <ul className="evidence-list">
-            {detail.evidence.map((evidence) => (
-              <li key={evidence.evidenceId}>
-                <div>
-                  <strong>{evidence.type.replaceAll("_", " ")}</strong>
-                  <span className="mono">
-                    {evidence.type === "execution"
-                      ? evidence.executionId
-                      : evidence.type === "comparison"
-                        ? evidence.experimentId
-                        : `${evidence.provider} / ${evidence.model}`}
-                  </span>
-                </div>
-                <div>
-                  <Link href={evidence.url}>Open evidence</Link>
-                  <button
-                    disabled={Boolean(busy)}
-                    onClick={() =>
-                      void mutate(
-                        "Evidence removal",
-                        `/v1/investigation-cases/${encodeURIComponent(detail.case.caseId)}/evidence/${encodeURIComponent(evidence.evidenceId)}`,
-                        "DELETE",
-                      )
-                    }
-                    type="button"
-                  >
-                    Remove link
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="empty-state">
-            <p>No evidence references are linked yet.</p>
-          </div>
-        )}
-      </section>
+      <CaseEvidence
+        busy={Boolean(busy)}
+        detail={detail}
+        removeEvidence={(evidenceId) =>
+          void mutate("Evidence removal", () =>
+            removeInvestigationCaseEvidence(detail.case.caseId, evidenceId),
+          )
+        }
+      />
     </>
   );
 }

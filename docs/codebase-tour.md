@@ -177,6 +177,81 @@ apps/api/src/
   server.ts                    memory/PostgreSQL service composition
 ```
 
+## Web source map
+
+```text
+apps/web/
+  app/
+    page.tsx
+    investigations/page.tsx
+    executions/[executionId]/page.tsx
+    comparisons/[experimentId]/page.tsx
+    investigation-cases/page.tsx
+    investigation-cases/[caseId]/page.tsx
+    globals.css                         ordered style import map
+  features/
+    executions/
+      execution-form.tsx
+      execution-table.tsx
+      replay-controls.tsx
+    live-machine/
+      live-execution-view.tsx
+      use-execution-stream.ts
+      event-stream-state.ts
+      use-event-playback.ts
+      playback-controls.tsx
+      machine-readout.tsx
+      machine-route.tsx
+      event-timeline.tsx
+      execution-machine.ts
+    comparisons/
+      comparison-builder.tsx
+      comparison-draft.ts
+      comparison-presets.ts
+      comparison-configurations.tsx
+      comparison-machines.tsx
+      comparison-summary.tsx
+    investigations/
+      search-state.ts
+      workbench-loader.ts
+      workbench-header.tsx
+      time-window-toolbar.tsx
+      reliability-summary-cards.tsx
+      save-investigation-panel.tsx
+      outcome-trend.tsx
+      provider-observations.tsx
+      execution-filters.tsx
+      execution-explorer.tsx
+    investigation-cases/
+      case-list-state.ts
+      case-list.tsx
+      create-case-form.tsx
+      add-to-case.tsx
+      case-controls.tsx
+      case-mutations.ts
+      case-evidence.tsx
+      case-overview.tsx
+      case-notes.tsx
+      case-timeline.tsx
+  lib/
+    server-api.ts
+    client-api.ts
+  styles/
+    tokens.css, base.css, shell.css, forms.css, tables.css
+    executions.css, comparisons.css, live-machine.css
+    investigations.css, investigation-cases.css, responsive.css
+  tests/
+    execution-lifecycle.spec.ts
+    live-machine.spec.ts
+    comparative-replay.spec.ts
+    investigation-workbench.spec.ts
+    saved-investigation-cases.spec.ts
+    support/
+```
+
+Route pages compose server-rendered evidence and focused client islands. `server-api.ts` imports
+`server-only`; browser mutations use the public-only `client-api.ts` boundary.
+
 ## Public entrypoints and composition roots
 
 - `packages/contracts/src/index.ts` preserves `@reliability-lab/contracts`.
@@ -239,6 +314,34 @@ apps/api/src/
 - Operator workflows: `apps/web/tests/`
 - Structural rules: `scripts/check-source-structure.mjs`
 
+## Operator console “find it” drill
+
+| #   | Responsibility                         | Final file and symbol                                                                                                           |
+| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Workbench range resolution             | `apps/web/features/investigations/search-state.ts` — `resolveRange`                                                             |
+| 2   | Workbench URL/filter state             | `apps/web/features/investigations/search-state.ts` — `toUrlSearchParams`, `filterHref`, `withoutParam`                          |
+| 3   | Workbench server data loader           | `apps/web/features/investigations/workbench-loader.ts` — `loadInvestigationWorkbench`                                           |
+| 4   | Reliability summary cards              | `apps/web/features/investigations/reliability-summary-cards.tsx` — `ReliabilitySummaryCards`                                    |
+| 5   | Outcome trend                          | `apps/web/features/investigations/outcome-trend.tsx` — `OutcomeTrend`                                                           |
+| 6   | Provider observations                  | `apps/web/features/investigations/provider-observations.tsx` — `ProviderObservations`                                           |
+| 7   | Execution explorer                     | `apps/web/features/investigations/execution-explorer.tsx` — `ExecutionExplorer`                                                 |
+| 8   | Saved-scope preparation                | `apps/web/features/investigations/search-state.ts` — `toSavedScope`                                                             |
+| 9   | SSE browser connection                 | `apps/web/features/live-machine/use-execution-stream.ts` — `useExecutionStream`                                                 |
+| 10  | Live event merge                       | `apps/web/features/live-machine/event-stream-state.ts` — `mergeExecutionEvents`                                                 |
+| 11  | Playback state                         | `apps/web/features/live-machine/use-event-playback.ts` — `playbackReducer`, `useEventPlayback`                                  |
+| 12  | Machine route rendering                | `apps/web/features/live-machine/machine-route.tsx` — `MachineRoute`                                                             |
+| 13  | Comparison presets                     | `apps/web/features/comparisons/comparison-presets.ts` — `comparisonPresets`, `applyComparisonPreset`                            |
+| 14  | Comparison draft parsing               | `apps/web/features/comparisons/comparison-draft.ts` — `toReplayVariation`                                                       |
+| 15  | Replay deletion mutation               | `apps/web/features/executions/replay-controls.tsx` — `ReplayControls.deleteCapsule`                                             |
+| 16  | Case note mutation                     | `apps/web/features/investigation-cases/case-mutations.ts` — `addInvestigationCaseNote`                                          |
+| 17  | Case evidence rendering                | `apps/web/features/investigation-cases/case-evidence.tsx` — `CaseEvidence`                                                      |
+| 18  | Case timeline rendering                | `apps/web/features/investigation-cases/case-timeline.tsx` — `CaseTimeline`                                                      |
+| 19  | Retry Playwright fixture               | `apps/web/tests/support/executions.ts` — `createRetryExecution`                                                                 |
+| 20  | Comparative Replay Playwright workflow | `apps/web/tests/comparative-replay.spec.ts` — `compares a retrying execution with an immediate-fallback variant`                |
+| 21  | Saved Investigation Cases workflow     | `apps/web/tests/saved-investigation-cases.spec.ts` — `saves a complete investigation case and reopens its exact evidence scope` |
+| 22  | Investigation styles                   | `apps/web/styles/investigations.css`                                                                                            |
+| 23  | Responsive styles                      | `apps/web/styles/responsive.css`                                                                                                |
+
 ## Recommended reading order
 
 1. `docs/reliability-lab-basics.md`
@@ -251,5 +354,6 @@ apps/api/src/
 8. `packages/core/src/investigation/` and `investigation-cases/`
 9. `packages/db/src/database/database.ts`, then the relevant feature adapter/query
 10. `apps/api/src/app.ts`, then the route family named for the endpoint
+11. `apps/web/app/investigations/page.tsx`, then its named feature component or controller
 
 The companion [system flows](system-flows.md) follows concrete calls across those boundaries.

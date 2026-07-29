@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ExecutionSummary } from "@reliability-lab/contracts";
-import { StatusBadge } from "./status-badge";
+import { StatusBadge } from "@/components/status-badge";
 
 export function ExecutionTable({
   executions,

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ExecutionForm } from "@/components/execution-form";
-import { ExecutionTable } from "@/components/execution-table";
-import { getInvestigationSummary, searchInvestigationExecutions } from "@/lib/api";
+import { ExecutionForm } from "@/features/executions/execution-form";
+import { ExecutionTable } from "@/features/executions/execution-table";
+import { getInvestigationSummary, searchInvestigationExecutions } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 

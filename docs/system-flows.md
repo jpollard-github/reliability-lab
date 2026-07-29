@@ -105,3 +105,30 @@ inputs, while replay capsules are governed retention capabilities.
 4. Typed route plugins receive only their composed service dependencies.
 5. `routes/execution-events.ts` owns SSE headers/cursor/client cleanup while `event-stream.ts` owns
    persisted-event polling and formatting.
+
+## 8. Operator console reads and URL state
+
+1. An App Router `page.tsx` awaits route/search parameters and calls a server read or named loader.
+2. `apps/web/lib/server-api.ts` owns server-only tenant configuration, `cache: "no-store"`, typed
+   reads, and established not-found behavior.
+3. The Workbench route calls `loadInvestigationWorkbench` in
+   `features/investigations/workbench-loader.ts`.
+4. `search-state.ts` resolves the range and filter/query state, then the loader starts summary,
+   provider, and execution reads concurrently.
+5. The loader prepares a presentation model, exact return URL, and saved-scope input.
+6. Named Server Components render summary cards, save controls, trend, provider observations, and
+   the execution explorer in page order.
+
+## 9. Live Machine and browser mutations
+
+1. `useExecutionStream` opens the established header-bearing fetch stream after the latest persisted
+   sequence, parses SSE frames, merges events without duplicates, reconnects, and refreshes the
+   terminal snapshot.
+2. `projectExecutionEvents` remains the pure authority for machine steps and actual event span.
+3. `useEventPlayback` changes only presentation state; readout, controls, machine route, and raw
+   timeline render the selected persisted prefix.
+4. Browser mutations use `lib/client-api.ts` public configuration plus feature-specific requests.
+5. Replay deletion remains in `features/executions/replay-controls.tsx`; comparison drafts become
+   variations in `features/comparisons/comparison-draft.ts`.
+6. Saved-case mutation names live in `features/investigation-cases/case-mutations.ts`; notes append,
+   evidence remains linked, and route refreshes re-read authoritative state.

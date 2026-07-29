@@ -16,8 +16,9 @@ Fastify composition root, platform plugins, safe error mapping, TypeBox schemas,
 feature route plugins.
 
 See the [codebase tour](codebase-tour.md) for the current tree and the
-[system-flow guide](system-flows.md) for concrete call paths. Phase 2 establishes the persistence
-and API structure; web component and Playwright-suite reorganization remains Phase 3.
+[system-flow guide](system-flows.md) for concrete call paths. Phase 3 now establishes named web
+features, server/client API boundaries, split stream/playback controllers, ordered feature styles,
+and workflow-named Playwright specs. Phase 4 ownership review remains separate.
 
 ## Components and data flow
 
@@ -30,6 +31,13 @@ HTTP adapters. `packages/db` stores execution evidence, durable jobs, comparison
 investigation cases, and the separately encrypted PostgreSQL Replay Vault. `apps/web` talks only to
 the API and never
 receives command or capsule bodies.
+
+The web route pages remain server-rendered composition roots. `lib/server-api.ts` is server-only and
+owns initial reads; `lib/client-api.ts` exposes browser-safe public configuration for focused
+mutation islands. The Investigation Workbench uses a pure URL-state module plus a server-only loader
+that starts its three bounded reads concurrently. Live stream and recorded playback state are
+separate browser controllers. Presentation is grouped under execution, live-machine, comparison,
+investigation, and saved-case feature folders.
 
 `EXECUTION_MODE=in_process` is the infrastructure-free default: the API persists acceptance,
 returns `202`, and continues in that process. In `postgres_worker`, one PostgreSQL transaction

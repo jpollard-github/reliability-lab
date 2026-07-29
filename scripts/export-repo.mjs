@@ -91,6 +91,7 @@ async function requireRepositoryRoot() {
 function rejectUnsafeName(path) {
   const normalized = path.toLowerCase();
   const safeExample = normalized.endsWith(".env.example");
+  const safeStyleTokens = /(^|\/)(design-)?tokens?\.css$/u.test(normalized);
   const secretPatterns = [
     /(^|\/)\.env($|\.)(?!example$)/,
     /(^|\/)(id_rsa|id_ed25519|credentials?|secrets?|tokens?)(\.|$)/,
@@ -98,7 +99,11 @@ function rejectUnsafeName(path) {
     /(^|\/)(cookies|login data)$/,
     /(credential|secret|token)[-_]?dump/,
   ];
-  if (!safeExample && secretPatterns.some((pattern) => pattern.test(normalized))) {
+  if (
+    !safeExample &&
+    !safeStyleTokens &&
+    secretPatterns.some((pattern) => pattern.test(normalized))
+  ) {
     fail(`Refusing to export likely secret file: ${path}`);
   }
 }

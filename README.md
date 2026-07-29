@@ -20,15 +20,19 @@ For a first pass through the repository:
    the reason for the comprehension pass.
 3. [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
    explains database and HTTP boundaries in plain language.
-4. [TypeScript patterns](docs/typescript-patterns.md) explains the central type techniques without
+4. [Operator Console Composition basics](docs/reliability-lab-operator-console-basics.md) explains
+   App Router, feature, interaction, CSS, and workflow-test boundaries in plain language.
+5. [TypeScript patterns](docs/typescript-patterns.md) explains the central type techniques without
    assuming compiler-theory knowledge.
-5. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
-6. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
+6. [Codebase tour](docs/codebase-tour.md) maps responsibilities to current files and symbols.
+7. [System flows](docs/system-flows.md) traces execution, worker, replay, comparison, Workbench, and
    saved-case paths.
-7. [Persistence and API patterns](docs/persistence-and-api-patterns.md) documents the concrete
+8. [Persistence and API patterns](docs/persistence-and-api-patterns.md) documents the concrete
    PostgreSQL, Fastify, TypeBox, error, and SSE module boundaries.
-8. [Human-comprehension refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
-   records the staged boundaries and later phases.
+9. [Operator Console patterns](docs/operator-console-patterns.md) maps current pages, controllers,
+   feature components, API boundaries, styles, and Playwright workflows.
+10. [Human-comprehension refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
+    records the staged boundaries and later phases.
 
 ## Current status
 
@@ -113,6 +117,8 @@ Plain-language guides:
 - [Owned Software basics](docs/reliability-lab-owned-software-basics.md)
 - [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
 - [Persistence and API patterns](docs/persistence-and-api-patterns.md)
+- [Operator Console Composition basics](docs/reliability-lab-operator-console-basics.md)
+- [Operator Console patterns](docs/operator-console-patterns.md)
 - [Human-Comprehension Refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
 
 ## Execution lifecycle
@@ -157,7 +163,7 @@ Plain-language guides:
 ```text
 apps/api          Fastify composition root, typed route plugins, schemas, injection tests
 apps/worker       PostgreSQL lease/heartbeat polling and durable continuation
-apps/web          Next.js App Router console and durable Playwright flow
+apps/web          App Router composition, operator feature folders, styles, workflow Playwright specs
 packages/contracts  TypeBox schemas and shared domain contracts
 packages/core       Policy engine, ports, in-memory adapters
 packages/providers  Fake and OpenAI-compatible providers
@@ -359,9 +365,11 @@ typed event ordering, SSE backfill/cursors/terminal close, machine projection, v
 and conservative dimension-level comparison. PostgreSQL integration proves atomic rollback,
 ciphertext-only command persistence, concurrent idempotency, lease exclusivity/reclaim, ambiguity
 without a duplicate call, command cleanup, key rotation, tenant isolation, replay lifecycle
-independence, and atomic comparison variants. Playwright starts separate API and worker processes,
-observes queue/claim evidence, preserves replay deletion, and exercises the durable
-original-to-variant flow. There are deliberately no broad snapshots.
+independence, and atomic comparison variants. Playwright starts separate API and worker processes.
+Five workflow-named specs preserve eight operator journeys across durable execution, Live Machine,
+Comparative Replay, Investigation Workbench, and Saved Investigation Cases. Unique idempotency keys
+and explicit terminal drains keep the workflows independent. There are deliberately no broad
+snapshots.
 Saved-case tests cover canonical exact scopes, status/resolved-time behavior, append-only notes,
 idempotent tenant-owned evidence links, empty terminal cursor totals, PostgreSQL restart reads,
 metadata-only timelines, and the browser save/reopen/update workflow.

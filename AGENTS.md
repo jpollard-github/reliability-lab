@@ -41,9 +41,17 @@ Prefer targeted tests while editing, then run the appropriate repository verific
   transaction module.
 - Keep `apps/api/src/app.ts` as composition. Route plugins own transport schemas/status/log mapping;
   core owns policy and DB owns persistence.
-- Run `pnpm audit:structure` after changing contracts/core/DB/API layout. The audit enforces
-  export-only roots, direct internal imports, feature-name boundaries, API composition, and the
-  production-file hard ceiling.
+- Keep `apps/web/app/**/page.tsx` as route composition. Server reads use `lib/server-api.ts`; browser
+  mutations use `lib/client-api.ts` and feature-specific helpers. Keep URL state, live stream state,
+  playback state, and form drafts in their named feature modules.
+- Keep global CSS in the ordered `app/globals.css` import map. Preserve selector names, declaration
+  values, and cascade order when moving feature styles.
+- Organize Playwright by operator workflow under `apps/web/tests`; shared setup uses domain names,
+  unique idempotency keys, and explicit terminal drains.
+- Run `pnpm audit:structure` after changing contracts/core/DB/API/web layout. The audit enforces
+  export-only roots, direct internal imports, feature-name boundaries, API/page composition,
+  client/server boundaries, detectable web-feature cycles, CSS/test organization, and production
+  file ceilings.
 - Keep public package-root exports stable unless a task explicitly authorizes a breaking change.
 
 ## Completion contract

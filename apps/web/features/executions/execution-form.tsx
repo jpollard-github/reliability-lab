@@ -2,8 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import { browserApiUrl, browserTenantId, isRecord } from "@/lib/client-api";
 const scenarios = [
   { value: "success", label: "Successful structured output" },
   { value: "retry", label: "Retry after rate limit" },
@@ -24,11 +23,11 @@ export function ExecutionForm() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch(`${apiUrl}/v1/executions`, {
+      const response = await fetch(`${browserApiUrl}/v1/executions`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-tenant-id": "demo-tenant",
+          "x-tenant-id": browserTenantId,
           "idempotency-key": crypto.randomUUID(),
         },
         body: JSON.stringify({
@@ -123,8 +122,4 @@ function scenarioConfiguration(scenario: Scenario): Record<string, unknown> {
         budget: { maxLatencyMs: 10 },
       };
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

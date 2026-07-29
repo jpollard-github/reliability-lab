@@ -13,7 +13,7 @@ type MachineStepKind =
   | "replay"
   | "decision";
 
-interface MachineStep {
+export interface MachineStep {
   id: string;
   sequence: number;
   kind: MachineStepKind;
@@ -24,7 +24,7 @@ interface MachineStep {
   attemptNumber?: number;
 }
 
-interface ExecutionMachineProjection {
+export interface ExecutionMachineProjection {
   steps: MachineStep[];
   latestSequence: number;
   terminal: boolean;

@@ -3,13 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type {
-  InvestigationCaseDetail,
   InvestigationCaseEvidenceInput,
   SavedInvestigationScope,
 } from "@reliability-lab/contracts";
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-const tenantId = process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "demo-tenant";
+import { addInvestigationCaseEvidence, createInvestigationCase } from "./case-mutations";
 
 export function CreateCaseForm({
   scope,
@@ -40,21 +37,12 @@ export function CreateCaseForm({
       .map(String)
       .flatMap((index) => optionalEvidence[Number(index)]?.evidence ?? []);
     try {
-      const response = await fetch(`${apiUrl}/v1/investigation-cases`, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-tenant-id": tenantId },
-        body: JSON.stringify({
-          title,
-          question,
-          ...(importance ? { importance } : {}),
-          savedScope: scope,
-        }),
+      const detail = await createInvestigationCase({
+        title,
+        question,
+        ...(importance ? { importance } : {}),
+        savedScope: scope,
       });
-      if (!response.ok) {
-        const error = (await response.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(error?.message ?? `Case creation failed with HTTP ${response.status}`);
-      }
-      const detail = (await response.json()) as InvestigationCaseDetail;
       const evidence: InvestigationCaseEvidenceInput[] = [
         ...initialEvidence,
         ...selectedOptionalEvidence,
@@ -64,16 +52,11 @@ export function CreateCaseForm({
         })),
       ];
       for (const item of evidence) {
-        const link = await fetch(
-          `${apiUrl}/v1/investigation-cases/${encodeURIComponent(detail.case.caseId)}/evidence`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json", "x-tenant-id": tenantId },
-            body: JSON.stringify(item),
-          },
-        );
-        if (!link.ok)
-          throw new Error(`Case was saved, but one evidence link failed with HTTP ${link.status}`);
+        try {
+          await addInvestigationCaseEvidence(detail.case.caseId, item);
+        } catch {
+          throw new Error("Case was saved, but one evidence link failed");
+        }
       }
       router.push(`/investigation-cases/${detail.case.caseId}`);
       router.refresh();
