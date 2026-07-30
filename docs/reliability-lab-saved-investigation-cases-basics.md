@@ -487,6 +487,8 @@ It implements:
 - five fixed conclusion-readiness checks without a score;
 - a resolved-state invariant requiring non-empty finding and resolution;
 - a tenant-scoped deterministic Markdown review packet with exclusions and internal trace links;
+- one case-driven controlled comparison from linked replay-capable execution evidence, with
+  automatic evidence linking and explicit link-only recovery;
 - memory and PostgreSQL persistence;
 - no actor fields.
 
@@ -499,6 +501,7 @@ The tenant header is still not authentication. A timestamp says when an operatio
 system cannot truthfully say who performed it. See
 [ADR 0009](adr/0009-saved-investigation-cases-and-evidence-references.md) for the persistence and
 reference decision, [ADR 0010](adr/0010-derived-case-evidence-review-and-safe-review-packets.md) for
-the derived-review decision, and
+the derived-review decision,
+[ADR 0011](adr/0011-case-driven-policy-experiments.md) for the case-experiment boundary, and
 [Evidence-Backed Case Conclusions Basics](reliability-lab-evidence-backed-case-conclusions-basics.md)
 for the review/readiness/packet model.

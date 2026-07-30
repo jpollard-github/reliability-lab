@@ -21,6 +21,15 @@ import type { InvestigationCaseRepository } from "./repository.js";
 
 const EVIDENCE_READ_CONCURRENCY = 5;
 
+export interface InvestigationCaseReviewDiagnostic {
+  caseId: string;
+  evidenceId: string;
+  evidenceType: InvestigationCaseEvidence["type"];
+  operation:
+    "read_execution_evidence" | "read_comparison_evidence" | "read_provider_observation_evidence";
+  errorName: string;
+}
+
 /**
  * Resolves linked case references from their authoritative ports into a bounded review projection.
  * Reads run in fixed-size batches; item order always matches the case's persisted evidence order.
@@ -32,6 +41,7 @@ export class InvestigationCaseReviewService {
   readonly #investigations: InvestigationReadRepository;
   readonly #replayCapsules: ReplayCapsuleStore;
   readonly #now: () => Date;
+  readonly #onDiagnostic: ((diagnostic: InvestigationCaseReviewDiagnostic) => void) | undefined;
 
   constructor(options: {
     cases: InvestigationCaseRepository;
@@ -40,6 +50,7 @@ export class InvestigationCaseReviewService {
     investigations: InvestigationReadRepository;
     replayCapsules: ReplayCapsuleStore;
     now?: () => Date;
+    onDiagnostic?: (diagnostic: InvestigationCaseReviewDiagnostic) => void;
   }) {
     this.#cases = options.cases;
     this.#executions = options.executions;
@@ -47,6 +58,7 @@ export class InvestigationCaseReviewService {
     this.#investigations = options.investigations;
     this.#replayCapsules = options.replayCapsules;
     this.#now = options.now ?? (() => new Date());
+    this.#onDiagnostic = options.onDiagnostic;
   }
 
   async get(tenantId: TenantId, caseId: string): Promise<InvestigationCaseReview> {
@@ -78,11 +90,32 @@ export class InvestigationCaseReviewService {
     evidence: InvestigationCaseEvidence,
   ): Promise<CaseEvidenceReviewItem> {
     try {
-      if (evidence.type === "execution") return this.#execution(tenantId, evidence);
-      if (evidence.type === "comparison") return this.#comparison(tenantId, evidence);
-      return this.#providerObservation(tenantId, evidence);
-    } catch {
+      if (evidence.type === "execution") return await this.#execution(tenantId, evidence);
+      if (evidence.type === "comparison") return await this.#comparison(tenantId, evidence);
+      return await this.#providerObservation(tenantId, evidence);
+    } catch (error) {
+      this.#diagnose(evidence, error);
       return unavailable(evidence, "current_read_unavailable");
+    }
+  }
+
+  #diagnose(evidence: InvestigationCaseEvidence, error: unknown): void {
+    if (!this.#onDiagnostic) return;
+    const operations = {
+      execution: "read_execution_evidence",
+      comparison: "read_comparison_evidence",
+      provider_observation: "read_provider_observation_evidence",
+    } as const;
+    try {
+      this.#onDiagnostic({
+        caseId: evidence.caseId,
+        evidenceId: evidence.evidenceId,
+        evidenceType: evidence.type,
+        operation: operations[evidence.type],
+        errorName: constrainedErrorName(error),
+      });
+    } catch {
+      // Diagnostics must never replace the explicit user-facing unavailable state.
     }
   }
 
@@ -107,6 +140,8 @@ export class InvestigationCaseReviewService {
       summary: {
         ...projectExecutionSummary(execution),
         replayCapability,
+        policy: structuredClone(execution.policy),
+        budget: structuredClone(execution.budget),
       },
     };
     return item;
@@ -217,12 +252,16 @@ export function projectConclusionReadiness(
     },
     {
       id: "evidence_reviewed",
-      satisfied: evidence.every(
-        (item) => item.availability === "available" || item.availability === "unavailable",
-      ),
+      satisfied:
+        evidence.length > 0 &&
+        evidence.every(
+          (item) => item.availability === "available" || item.availability === "unavailable",
+        ),
       label: "Every evidence reference has a current review state",
       explanation:
-        "Available and unavailable are both explicit review states; unavailable evidence remains visible.",
+        evidence.length > 0
+          ? "Available and unavailable are both explicit review states; unavailable evidence remains visible."
+          : "Link at least one evidence reference before review can be complete.",
     },
     {
       id: "finding_present",
@@ -329,4 +368,10 @@ function unavailable(
 
 function hasText(value: string | undefined): boolean {
   return Boolean(value?.trim());
+}
+
+function constrainedErrorName(error: unknown): string {
+  if (!(error instanceof Error)) return "NonErrorThrown";
+  const safe = error.name.replace(/[^A-Za-z0-9_.-]/gu, "").slice(0, 80);
+  return safe || "Error";
 }

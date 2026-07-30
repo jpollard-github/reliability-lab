@@ -32,12 +32,13 @@ describe("canonical operator guide content", () => {
     expect(glossary.map((entry) => entry.term)).toEqual(
       expect.arrayContaining(["Evidence review", "Conclusion readiness", "Review packet"]),
     );
+    expect(glossary.map((entry) => entry.term)).toContain("Case-driven policy experiment");
     expect(operatorWorkflow.at(-1)).toMatchObject({
       name: "Preserve",
       conclusion: expect.stringMatching(/complete enough to resolve/i),
       nonConclusion: expect.stringMatching(/proves the conclusion is true/i),
     });
-    expect(honestLimitations).toHaveLength(8);
+    expect(honestLimitations).toHaveLength(9);
     expect(honestLimitations.join(" ")).toMatch(/exactly-once/i);
     expect(honestLimitations.join(" ")).toMatch(/universal provider-health ranking/i);
   });

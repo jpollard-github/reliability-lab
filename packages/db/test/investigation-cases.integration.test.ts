@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   encodeCaseCursor,
   ExecutionService,
+  InvestigationCaseExperimentService,
   InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
@@ -107,6 +108,15 @@ describe("Postgres saved investigation cases", () => {
       executionId: original.executionId,
     });
     expect(duplicate).toEqual({ evidence: executionLink.evidence, added: false });
+    const caseExperiment = await new InvestigationCaseExperimentService({
+      cases: caseService,
+      executions: executionService,
+    }).create(tenantId, created.case.caseId, {
+      executionEvidenceId: executionLink.evidence.evidenceId,
+      variation: { reproducibilityCheck: true },
+    });
+    await caseExperiment.completion;
+    expect(caseExperiment.result.kind).toBe("comparison_linked");
     await caseService.addEvidence(tenantId, created.case.caseId, {
       type: "comparison",
       experimentId: comparison.experiment.experimentId,
@@ -143,9 +153,19 @@ describe("Postgres saved investigation cases", () => {
     });
     expect(detail.evidence.map((item) => item.type).sort()).toEqual([
       "comparison",
+      "comparison",
       "execution",
       "provider_observation",
     ]);
+    expect(detail.timeline).toContainEqual(
+      expect.objectContaining({
+        type: "case.comparison_started",
+        metadata: expect.objectContaining({
+          experimentId: caseExperiment.result.experiment.experimentId,
+          linkState: "linked",
+        }),
+      }),
+    );
     expect(JSON.stringify(detail.timeline)).not.toContain("Second attempt recovered");
     expect(JSON.stringify(detail.timeline)).not.toContain("The selected retry recovered");
     const review = await new InvestigationCaseReviewService({

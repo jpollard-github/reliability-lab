@@ -131,8 +131,9 @@ Those remain possible future work, not prerequisites for Horizon 5.
 
 ### Horizon 5: An operator’s reliability lab
 
-**Established movements: Saved Investigation Cases, Product Tour and Operator Guidance, and
-Evidence-Backed Case Conclusions and Review Packets.**
+**Established bounded movements: Investigation Workbench Foundation, Saved Investigation Cases,
+Product Tour and Operator Guidance, Evidence-Backed Case Conclusions and Review Packets, and
+Case-Driven Policy Experiments.**
 Investigation persists beyond one browser session without becoming a generic ticketing system, and
 the product now teaches the established operator workflow. The cross-cutting Human-Comprehension and
 Ownership Pass has established Phase 1 contracts/core, Phase 2 persistence/API composition, Phase 3
@@ -141,10 +142,10 @@ Human-Comprehension and Ownership Pass is complete.
 
 The established console supports bounded filtering and search, internal trace-identifier
 correlation, replay comparisons, five deterministic scenarios, attempt-level provider/model
-observations, and aggregate reliability evidence. It exposes signals such as success, degraded
-success, retry recovery, fallback dependence, and latency-budget failure. Broader scenario catalogs,
-policy experiment surfaces, external trace/log correlation, and universal provider-health views
-remain future possibilities.
+observations, aggregate reliability evidence, and case-driven single comparisons. It exposes
+signals such as success, degraded success, retry recovery, fallback dependence, and latency-budget
+failure. Broader scenario catalogs, statistical campaigns, external trace/log correlation,
+universal provider-health views, and generic recovery remain future possibilities.
 
 The established first movement, **Investigation Workbench Foundation**, provides bounded explicit
 time ranges, compact and stably paginated execution search, aggregate reliability signals,
@@ -170,12 +171,27 @@ Markdown with internal trace links and explicit exclusions. It does not copy sou
 generate conclusions with AI, score truth, establish causation, or turn the packet into a
 public-safe report.
 
-Horizon 5 is not complete. A broader scenario catalog and explicitly configured external trace/log
-correlation remain later possibilities when the workflow justifies them. The product still does not
-claim universal provider health or alerting. The supported-conclusion completion signal below is
-now established for the bounded saved-case workflow, while broader Horizon 5 scope remains open.
+The established fifth movement, **Case-Driven Policy Experiments**, lets a saved case launch one
+ordinary controlled comparison from linked replay-capable execution evidence and return the
+comparison to the case without manual identifier choreography. A created comparison whose
+automatic evidence link fails remains explicit and recoverable through a link-only action.
 
-**Completion signal.** A developer can move from an investigation case to a supported reliability conclusion without querying tables or reading application source.
+**Established bounded workflow signals.**
+
+- An operator can move from an investigation case to a supported human reliability conclusion
+  without querying tables or reading application source.
+- An operator can move from a case to one controlled comparison and back to linked evidence without
+  manual identifier choreography.
+
+**Horizon 5 completion signal — established by the bounded operator drill.** An operator can move
+from recorded failure through bounded investigation, controlled policy experiment, preserved
+evidence, and supported human conclusion using the product interfaces, while unavailable evidence
+and prototype limits remain explicit. This is an internal heuristic walkthrough backed by the
+workflow tests, not empirical usability research or a production-readiness claim.
+
+A broader scenario catalog, explicitly configured external trace/log correlation, statistical
+campaigns, universal provider health, and generic recovery remain later candidates rather than
+implicit prerequisites or missing Horizon 5 checkboxes.
 
 ### Horizon 6: A tenant-safe service
 
@@ -220,19 +236,20 @@ Product Tour and Operator Guidance established
         ↓
 Evidence-Backed Case Conclusions and Review Packets established
         ↓
-Evaluate the next broader Horizon 5 movement
+Case-Driven Policy Experiments established
 ```
 
-Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
+Case-Driven Policy Experiments now turn a retained case and its linked execution evidence into one
+ordinary controlled comparison, then returns that comparison to the case.
 The **Horizon 4 Durable Execution Foundation** now makes acceptance restart-durable in PostgreSQL
 worker mode and fences stale claims without overstating exactly-once provider behavior. The
 Investigation Workbench Foundation and Saved Investigation Cases are established. Contracts/core
 (Phase 1), persistence/API composition (Phase 2), operator-console/test organization (Phase 3), and
 ownership documentation/design review (Phase 4) now make those capabilities easier to locate,
 explain, defend, and safely modify. Product Tour and Operator Guidance and Evidence-Backed Case
-Conclusions and Review Packets are established without advancing Horizon 6 claims. The next broader
-Horizon 5 movement remains intentionally unelected;
-candidates include a guided scenario catalog and policy experiments, explicitly configured
-trace/log correlation, or deeper operator recovery. None is declared
-complete. Cancellation, Redis coordination, generic outbox tooling, resumable workflow machinery,
-and cloud infrastructure are not prerequisites for evaluating that choice.
+Conclusions and Review Packets and Case-Driven Policy Experiments are established without advancing
+Horizon 6 claims. The bounded Horizon 5 operator signal is established. A guided scenario catalog,
+explicitly configured trace/log correlation, broader statistical campaigns, universal
+provider-health views, and deeper operator recovery remain unelected future candidates.
+Cancellation, Redis coordination, generic outbox tooling, resumable workflow machinery, and cloud
+infrastructure are not retroactive prerequisites for this horizon signal.

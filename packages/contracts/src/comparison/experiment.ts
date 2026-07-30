@@ -1,9 +1,8 @@
 import { Type, type Static } from "@sinclair/typebox";
-import type { ExecutionId, TenantId } from "../common/identifiers.js";
 import type { ExecutionEnvelope } from "../execution/envelope.js";
-import type { ExecutionBudget, ExecutionPolicy } from "../execution/policy.js";
-import type { FailureMode } from "../execution/status.js";
-import { ReplayVariationSchema, type ReplayVariation } from "../replay/replay.js";
+import { ExecutionBudgetSchema, ExecutionPolicySchema } from "../execution/policy.js";
+import { FailureModeSchema } from "../execution/status.js";
+import { ReplayVariationSchema } from "../replay/replay.js";
 
 /**
  * Comparative Replay experiment and read-projection contracts.
@@ -22,28 +21,36 @@ export const ComparisonExperimentStatusSchema = Type.Union([
 ]);
 export type ComparisonExperimentStatus = Static<typeof ComparisonExperimentStatusSchema>;
 
-export interface ResolvedReplayConfiguration {
-  provider: string;
-  model: string;
-  policy: ExecutionPolicy;
-  budget: ExecutionBudget;
-  structuredOutputRequired: boolean;
-  failureMode?: FailureMode;
-}
+export const ResolvedReplayConfigurationSchema = Type.Object(
+  {
+    provider: Type.String(),
+    model: Type.String(),
+    policy: ExecutionPolicySchema,
+    budget: ExecutionBudgetSchema,
+    structuredOutputRequired: Type.Boolean(),
+    failureMode: Type.Optional(FailureModeSchema),
+  },
+  { additionalProperties: false },
+);
+export type ResolvedReplayConfiguration = Static<typeof ResolvedReplayConfigurationSchema>;
 
-export interface ComparisonExperiment {
-  schemaVersion: 1;
-  experimentId: string;
-  tenantId: TenantId;
-  originalExecutionId: ExecutionId;
-  variantExecutionId?: ExecutionId;
-  status: ComparisonExperimentStatus;
-  requestedVariation: ReplayVariation;
-  resolvedVariant: ResolvedReplayConfiguration;
-  createdAt: string;
-  updatedAt: string;
-  unavailableReason?: string;
-}
+export const ComparisonExperimentSchema = Type.Object(
+  {
+    schemaVersion: Type.Literal(1),
+    experimentId: Type.String(),
+    tenantId: Type.String(),
+    originalExecutionId: Type.String(),
+    variantExecutionId: Type.Optional(Type.String()),
+    status: ComparisonExperimentStatusSchema,
+    requestedVariation: ReplayVariationSchema,
+    resolvedVariant: ResolvedReplayConfigurationSchema,
+    createdAt: Type.String({ format: "date-time" }),
+    updatedAt: Type.String({ format: "date-time" }),
+    unavailableReason: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+export type ComparisonExperiment = Static<typeof ComparisonExperimentSchema>;
 
 export const ComparisonChangeSchema = Type.Union([
   Type.Literal("improved"),

@@ -44,6 +44,9 @@
   .case-review-facts dd {
     margin-bottom: 0.35rem;
   }
+  .case-experiment-eligibility li {
+    grid-template-columns: 1fr;
+  }
   .comparison-fields {
     grid-template-columns: 1fr 1fr;
   }

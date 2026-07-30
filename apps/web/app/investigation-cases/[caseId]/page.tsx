@@ -6,6 +6,7 @@ import { CaseNotes } from "@/features/investigation-cases/case-notes";
 import { CaseOverview } from "@/features/investigation-cases/case-overview";
 import { CaseTimeline } from "@/features/investigation-cases/case-timeline";
 import { ConclusionReadiness } from "@/features/investigation-cases/conclusion-readiness";
+import { CasePolicyExperiments } from "@/features/investigation-cases/case-policy-experiments";
 import { getInvestigationCase, getInvestigationCaseReview } from "@/lib/server-api";
 import { ConceptHelp } from "@/features/guidance/concept-help";
 
@@ -69,6 +70,7 @@ export default async function InvestigationCaseDetailPage({
       />
 
       <CaseOverview detail={detail} />
+      <CasePolicyExperiments caseId={item.caseId} review={review} />
       <CaseEvidenceReview review={review} />
       <ConclusionReadiness readiness={review.readiness} />
       <CaseControls detail={detail} />

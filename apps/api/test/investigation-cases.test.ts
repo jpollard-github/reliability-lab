@@ -229,13 +229,15 @@ describe("API saved investigation cases", () => {
         url: "/executions/missing-execution",
       },
       "execution:missing-execution",
-      {
-        eventId: "missing-evidence-event",
-        caseId,
-        type: "case.evidence_added",
-        occurredAt: new Date().toISOString(),
-        metadata: { evidenceId: "missing-evidence", evidenceType: "execution" },
-      },
+      [
+        {
+          eventId: "missing-evidence-event",
+          caseId,
+          type: "case.evidence_added",
+          occurredAt: new Date().toISOString(),
+          metadata: { evidenceId: "missing-evidence", evidenceType: "execution" },
+        },
+      ],
     );
     await app.inject({
       method: "POST",
@@ -310,4 +312,190 @@ describe("API saved investigation cases", () => {
       expect(wrongTenant.json().error).toBe("not_found");
     }
   });
+
+  it("creates a case comparison from linked execution evidence and returns safe links", async () => {
+    const setup = await createCaseWithExecution(app, service);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${setup.caseId}/comparisons`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: {
+        executionEvidenceId: setup.evidenceId,
+        variation: { reproducibilityCheck: true },
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({
+      result: {
+        kind: "comparison_linked",
+        experiment: { originalExecutionId: setup.executionId },
+      },
+      links: {
+        case: `/v1/investigation-cases/${setup.caseId}`,
+        originalExecution: `/v1/executions/${setup.executionId}`,
+      },
+    });
+    const experimentId = response.json().result.experiment.experimentId as string;
+    expect(response.json().links.comparison).toBe(`/v1/comparisons/${experimentId}`);
+    expect(response.body).not.toContain("SECRET_CASE_EXPERIMENT_INPUT");
+    const detail = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${setup.caseId}`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(detail.json().evidence).toContainEqual(
+      expect.objectContaining({ type: "comparison", experimentId }),
+    );
+    expect(detail.json().timeline).toContainEqual(
+      expect.objectContaining({ type: "case.comparison_started" }),
+    );
+  });
+
+  it("rejects invalid case experiment evidence and preserves tenant-safe not found behavior", async () => {
+    const setup = await createCaseWithExecution(app, service);
+    const invalid = await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${setup.caseId}/comparisons`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: {
+        executionEvidenceId: "not-linked-here",
+        variation: { reproducibilityCheck: true },
+      },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json().error).toBe("invalid_investigation_case");
+
+    const wrongTenant = await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${setup.caseId}/comparisons`,
+      headers: { "x-tenant-id": "tenant-b" },
+      payload: {
+        executionEvidenceId: setup.evidenceId,
+        variation: { reproducibilityCheck: true },
+      },
+    });
+    expect(wrongTenant.statusCode).toBe(404);
+    expect(wrongTenant.json().error).toBe("not_found");
+  });
+
+  it("links an unavailable experiment and returns a recoverable partial link state", async () => {
+    const unavailable = await createCaseWithExecution(app, service);
+    await service.deleteReplayCapsule("tenant-a", unavailable.executionId);
+    const unavailableResponse = await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${unavailable.caseId}/comparisons`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: {
+        executionEvidenceId: unavailable.evidenceId,
+        variation: { reproducibilityCheck: true },
+      },
+    });
+    expect(unavailableResponse.statusCode).toBe(409);
+    expect(unavailableResponse.json()).toMatchObject({
+      result: {
+        kind: "comparison_linked",
+        experiment: { status: "unavailable" },
+      },
+    });
+
+    await app.close();
+    ({ app, service, cases } = await buildTestApp({ failNextCaseComparisonLink: true }));
+    const partial = await createCaseWithExecution(app, service);
+    const partialResponse = await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${partial.caseId}/comparisons`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: {
+        executionEvidenceId: partial.evidenceId,
+        variation: { reproducibilityCheck: true },
+      },
+    });
+    expect(partialResponse.statusCode).toBe(202);
+    expect(partialResponse.json()).toMatchObject({
+      result: {
+        kind: "comparison_created_link_failed",
+        recovery: { kind: "link_existing_comparison" },
+      },
+      links: {
+        manualEvidenceLink: {
+          method: "POST",
+          body: { type: "comparison" },
+        },
+      },
+    });
+    const experimentId = partialResponse.json().result.experiment.experimentId as string;
+    expect(
+      (
+        await app.inject({
+          method: "GET",
+          url: `/v1/comparisons/${experimentId}`,
+          headers: { "x-tenant-id": "tenant-a" },
+        })
+      ).statusCode,
+    ).toBe(200);
+    const recovery = partialResponse.json().links.manualEvidenceLink as {
+      href: string;
+      body: { type: "comparison"; experimentId: string };
+    };
+    const firstRecovery = await app.inject({
+      method: "POST",
+      url: recovery.href,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: recovery.body,
+    });
+    const repeatedRecovery = await app.inject({
+      method: "POST",
+      url: recovery.href,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: recovery.body,
+    });
+    expect(firstRecovery.json().added).toBe(true);
+    expect(repeatedRecovery.json()).toMatchObject({
+      added: false,
+      evidence: { evidenceId: firstRecovery.json().evidence.evidenceId },
+    });
+  });
 });
+
+async function createCaseWithExecution(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  service: ExecutionService,
+) {
+  const execution = await service.execute({
+    tenantId: "tenant-a",
+    body: {
+      provider: "fake-primary",
+      model: "deterministic-v1",
+      input: "SECRET_CASE_EXPERIMENT_INPUT",
+    },
+  });
+  const create = await app.inject({
+    method: "POST",
+    url: "/v1/investigation-cases",
+    headers: { "x-tenant-id": "tenant-a" },
+    payload: {
+      title: "Case experiment API",
+      question: "Can the linked execution run a controlled comparison?",
+      savedScope: {
+        range: {
+          from: new Date(Date.now() - 60_000).toISOString(),
+          to: new Date(Date.now() + 60_000).toISOString(),
+        },
+      },
+    },
+  });
+  const caseId = create.json().case.caseId as string;
+  const link = await app.inject({
+    method: "POST",
+    url: `/v1/investigation-cases/${caseId}/evidence`,
+    headers: { "x-tenant-id": "tenant-a" },
+    payload: { type: "execution", executionId: execution.executionId },
+  });
+  return {
+    caseId,
+    executionId: execution.executionId,
+    evidenceId: link.json().evidence.evidenceId as string,
+  };
+}

@@ -910,6 +910,7 @@ The final repository assigns each ownership question a primary teaching surface:
 - `pnpm audit:docs` checks required ownership documents, README entrypoints, relative Markdown
   links, and local absolute paths. It runs inside `pnpm verify`.
 
-The Human-Comprehension and Ownership Pass is established across contracts/core, persistence/API,
-operator console/tests, and ownership documentation. Product Tour and Operator Guidance remains the
-next future movement; Horizon 5 remains incomplete.
+The Human-Comprehension and Ownership Pass remains established across contracts/core,
+persistence/API, operator console/tests, and ownership documentation. Subsequent bounded movements
+now include Product Tour and Operator Guidance, Evidence-Backed Case Conclusions and Review
+Packets, and Case-Driven Policy Experiments; see the roadmap for the current horizon signal.

@@ -385,3 +385,7 @@ The purpose is to replace:
 with:
 
 > “Immediate fallback removed 1.5 seconds of retry delay, changed the route, required the fallback provider, and changed the outcome from success to degraded success.”
+
+A saved investigation case can start this same ordinary comparison from linked replay-capable
+execution evidence and receive the result as typed evidence. See
+[Case-Driven Policy Experiments basics](reliability-lab-case-driven-policy-experiments-basics.md).

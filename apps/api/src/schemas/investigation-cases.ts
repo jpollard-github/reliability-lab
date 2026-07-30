@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import {
+  InvestigationCaseComparisonResultSchema,
   InvestigationCaseEvidenceSchema,
   InvestigationCaseImportanceSchema,
   InvestigationCaseStatusSchema,
@@ -36,5 +37,37 @@ export const InvestigationCaseEvidenceResultSchema = Type.Object(
 
 export const InvestigationCaseEvidenceRemovedSchema = Type.Object(
   { removed: Type.Literal(true) },
+  { additionalProperties: false },
+);
+
+export const InvestigationCaseComparisonResponseSchema = Type.Object(
+  {
+    result: InvestigationCaseComparisonResultSchema,
+    links: Type.Object(
+      {
+        case: Type.String(),
+        comparison: Type.String(),
+        originalExecution: Type.String(),
+        variantExecution: Type.Optional(Type.String()),
+        manualEvidenceLink: Type.Optional(
+          Type.Object(
+            {
+              href: Type.String(),
+              method: Type.Literal("POST"),
+              body: Type.Object(
+                {
+                  type: Type.Literal("comparison"),
+                  experimentId: Type.String(),
+                },
+                { additionalProperties: false },
+              ),
+            },
+            { additionalProperties: false },
+          ),
+        ),
+      },
+      { additionalProperties: false },
+    ),
+  },
   { additionalProperties: false },
 );

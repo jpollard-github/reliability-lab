@@ -80,9 +80,9 @@ export const operatorWorkflow: WorkflowStage[] = [
   {
     name: "Preserve",
     action:
-      "Save an exact question and scope, review current linked evidence, record a finding and resolution, then download the bounded review packet.",
+      "Save an exact question and scope, run a controlled comparison from eligible linked execution evidence, review the returned evidence, record a finding and resolution, then download the bounded review packet.",
     evidence:
-      "Saved range and filters, available or unavailable evidence summaries, readiness checks, notes, timeline, finding, resolution, and source routes.",
+      "Saved range and filters, experiment link state, available or unavailable evidence summaries, readiness checks, notes, timeline, finding, resolution, and source routes.",
     href: "/investigation-cases",
     control: "Save investigation or Create a case",
     conclusion:
@@ -180,6 +180,10 @@ const glossaryEntries: Array<[string, string]> = [
     "A tenant-scoped Markdown artifact with the case record, bounded evidence summaries, source routes, exclusions, and limitations.",
   ],
   [
+    "Case-driven policy experiment",
+    "One ordinary controlled comparison started from execution evidence already linked to a case, then linked back as comparison evidence.",
+  ],
+  [
     "Tenant routing context",
     "The tenant header used to isolate prototype data; not authenticated identity.",
   ],
@@ -199,4 +203,5 @@ export const honestLimitations = [
   "Provider observations are bounded evidence, not a universal provider-health ranking.",
   "Recorded playback changes presentation only; it does not rerun or mutate an execution.",
   "Replay depends on the execution's current replay capability and retained input.",
+  "Comparison creation and case-evidence linking are separate operations; an explicit partial state may require link-only recovery.",
 ];

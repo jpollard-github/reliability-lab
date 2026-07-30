@@ -162,6 +162,11 @@ removal behavior.
 Comparison detail presentation is split into configuration cards, side-by-side machines, and the
 dimension summary without changing projection semantics.
 
+`comparison-variation-fields.tsx` is the shared bounded editor used by both execution-detail and
+case-driven comparison forms. It receives a safe baseline plus `ComparisonDraft`; it does not fetch
+an execution or inspect retained input. Preset ownership remains in `comparison-presets.ts`, so
+blank inheritance, explicit fallback removal, and numeric conversion cannot diverge by route.
+
 ## Saved investigation cases
 
 The saved-case feature separates:
@@ -184,6 +189,22 @@ review and readiness are useful in the first HTML response and with JavaScript d
 review-packet button is a focused client action because browsers must receive and save the Markdown
 body. Notes remain append-only, source evidence remains authoritative, unavailable links remain
 visible, and no actor identity or correctness score is fabricated.
+
+## Case-driven policy experiments
+
+`case-policy-experiments.tsx` is a Server Component. It derives linked execution candidates and
+current replay eligibility from `InvestigationCaseReview`, so the explanation, unavailable state,
+and existing comparison evidence remain useful without JavaScript.
+
+`case-experiment-form.tsx` is the focused Client Component. It receives only safe candidate
+identity and baseline policy/budget fields, reuses the shared variation editor, and posts one
+evidence ID plus `ReplayVariation`. A ref-backed in-flight guard and disabled result state prevent
+ordinary duplicate clicks. They do not establish cross-client or transport idempotency.
+
+The client displays the ordinary comparison link for both orchestration results. If automatic case
+linking fails, its only recovery action calls `addInvestigationCaseEvidence` with the existing
+experiment ID. It never repeats comparison creation. A router refresh brings the linked comparison
+through the normal server review and packet path.
 
 ## Operator guidance
 
@@ -229,6 +250,7 @@ tests/live-machine.spec.ts
 tests/comparative-replay.spec.ts
 tests/investigation-workbench.spec.ts
 tests/saved-investigation-cases.spec.ts
+tests/case-driven-policy-experiments.spec.ts
 tests/operator-guidance.spec.ts
 ```
 

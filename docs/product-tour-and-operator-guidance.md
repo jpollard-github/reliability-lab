@@ -53,9 +53,11 @@ product mutation. Opening it preserves form values, route state, and the current
 
 Product sections expose semantic `data-guide-anchor` values. They name durable concepts such as
 `execution-scenario`, `live-machine`, `replay-capability`, `workbench-summary`, and
-`case-evidence` and `case-review`. The case-detail tour uses `case-review` to explain current
-bounded summaries and fixed readiness checks before it reaches conclusion controls and packet
-download. Tours do not use incidental nesting, text matching, or child indexes.
+`case-evidence`, `case-experiment`, and `case-review`. The case-detail tour explains that only
+linked replay-capable execution evidence can start one controlled comparison, then uses
+`case-review` to explain current bounded summaries and fixed readiness checks before it reaches
+conclusion controls and packet download. Tours do not use incidental nesting, text matching, or
+child indexes.
 
 When changing an anchor:
 
@@ -96,9 +98,10 @@ required anchors, navigation clamping, and restart. `apps/web/tests/operator-gui
 covers primary navigation, Guide content, keyboard disclosure behavior, tour navigation and active
 targets, URL/form preservation, focus return, optional-anchor reporting, and 390 px fit.
 
-The saved-case workflow additionally verifies the case-review step against a real derived review.
-Existing execution, Live Machine, comparison, Workbench, and saved-case product operations remain
-separate from tour state.
+The saved-case and case-experiment workflows additionally verify case-review and experiment steps
+against real derived review. Launching and exiting the case-detail tour never submits an experiment
+or changes evidence. Existing execution, Live Machine, comparison, Workbench, and saved-case
+product operations remain separate from tour state.
 
 ## Limitations
 
@@ -107,7 +110,9 @@ completion, identify a user, provide analytics, position tooltips, or cross rout
 The Guide repeats the product's security, provider-effect, replay-capability, ranking, and
 answer-quality limitations rather than advancing those claims.
 Case guidance likewise describes readiness as workflow completeness and review packets as internal
-trace artifacts; it does not claim conclusion truth.
+trace artifacts; it does not claim conclusion truth. Experiment guidance describes one controlled
+variation over fixed retained input; it does not claim a recommendation, winner, statistical
+confidence, or atomic create-and-link transaction.
 
 ## Add or change a tour step
 

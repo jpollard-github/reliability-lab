@@ -9,6 +9,7 @@ import type {
 import {
   InvestigationCaseReviewService,
   InvestigationCaseService,
+  type InvestigationCaseReviewDiagnostic,
   MemoryComparisonExperimentRepository,
   MemoryExecutionRepository,
   MemoryInvestigationCaseRepository,
@@ -23,7 +24,12 @@ const RANGE = {
   to: "2026-07-02T00:00:00.000Z",
 };
 
-function harness() {
+function harness(
+  options: {
+    reviewExecutions?: MemoryExecutionRepository;
+    onDiagnostic?: (diagnostic: InvestigationCaseReviewDiagnostic) => void;
+  } = {},
+) {
   const cases = new MemoryInvestigationCaseRepository();
   const executions = new MemoryExecutionRepository();
   const comparisons = new MemoryComparisonExperimentRepository();
@@ -39,11 +45,12 @@ function harness() {
   });
   const reviews = new InvestigationCaseReviewService({
     cases,
-    executions,
+    executions: options.reviewExecutions ?? executions,
     comparisons,
     investigations,
     replayCapsules,
     now: () => new Date("2026-07-02T13:00:00.000Z"),
+    ...(options.onDiagnostic ? { onDiagnostic: options.onDiagnostic } : {}),
   });
   return { cases, executions, comparisons, caseService, reviews };
 }
@@ -134,7 +141,7 @@ describe("investigation case review", () => {
       "tenant-a",
       evidence("missing-execution"),
       "execution:missing-execution",
-      evidenceEvent(item.caseId),
+      [evidenceEvent(item.caseId)],
     );
 
     const review = await reviews.get("tenant-a", item.caseId);
@@ -161,7 +168,47 @@ describe("investigation case review", () => {
     expect(review.readiness.ready).toBe(false);
     expect(
       review.readiness.checks.filter((check) => !check.satisfied).map((check) => check.id),
-    ).toEqual(["evidence_linked", "finding_present", "resolution_present"]);
+    ).toEqual(["evidence_linked", "evidence_reviewed", "finding_present", "resolution_present"]);
+  });
+
+  it("reports metadata-only diagnostics for unexpected reads and preserves unavailable evidence", async () => {
+    const diagnostics: InvestigationCaseReviewDiagnostic[] = [];
+    class FailingExecutionRepository extends MemoryExecutionRepository {
+      override async findById(): Promise<ExecutionEnvelope | null> {
+        const error = new Error("SECRET prompt and provider body");
+        error.name = "Unexpected Provider<>Error";
+        throw error;
+      }
+    }
+    const { cases, reviews } = harness({
+      reviewExecutions: new FailingExecutionRepository(),
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+    const item = caseRecord({ title: "Failed current read" });
+    await cases.create(item, createdEvent(item.caseId));
+    await cases.addEvidence(
+      "tenant-a",
+      evidence("execution-with-failed-read"),
+      "execution:execution-with-failed-read",
+      [evidenceEvent(item.caseId)],
+    );
+
+    const review = await reviews.get("tenant-a", item.caseId);
+
+    expect(review.evidence[0]).toMatchObject({
+      availability: "unavailable",
+      reason: "current_read_unavailable",
+    });
+    expect(diagnostics).toEqual([
+      {
+        caseId: "case-1",
+        evidenceId: "evidence-1",
+        evidenceType: "execution",
+        operation: "read_execution_evidence",
+        errorName: "UnexpectedProviderError",
+      },
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("SECRET");
   });
 
   it("renders deterministic escaped Markdown without note or execution bodies", async () => {

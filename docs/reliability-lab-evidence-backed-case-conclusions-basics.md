@@ -99,3 +99,7 @@ operator recovery, or Horizon 6 identity capability.
 See [ADR 0010](adr/0010-derived-case-evidence-review-and-safe-review-packets.md) for the durable
 architecture decision and [Saved Investigation Cases basics](reliability-lab-saved-investigation-cases-basics.md)
 for the underlying case model.
+
+Comparisons started from a case enter this same review and packet path through the ordinary typed
+comparison evidence link; there is no second packet renderer or copied result. See
+[Case-Driven Policy Experiments basics](reliability-lab-case-driven-policy-experiments-basics.md).

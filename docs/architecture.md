@@ -6,11 +6,11 @@ The architecture is reflected in named source modules rather than implemented in
 barrels. The contracts, core, and DB package roots are public export maps. Internal modules import
 the file that directly owns each symbol.
 
-Contracts are grouped into execution, replay, comparison, Investigation Workbench, saved-case, and
-derived case-review families. Core separates the public `ExecutionService` facade from execution preparation, event
-construction, guarded provider policy, structured-output validation, backoff, durable lease
-control, replay retention, comparison projection, investigation reads, saved-case behavior, and
-case-review projection.
+Contracts are grouped into execution, replay, comparison, Investigation Workbench, saved-case,
+case-experiment, and derived case-review families. Core separates the public `ExecutionService`
+facade from execution preparation, event construction, guarded provider policy, structured-output
+validation, backoff, durable lease control, replay retention, comparison projection, investigation
+reads, saved-case behavior, case-experiment coordination, and case-review projection.
 DB separates connection creation, domain schema definitions, repositories, mapping, fixed read
 queries, transactions, runtime configuration, and cryptographic lifecycles. API separates a small
 Fastify composition root, platform plugins, safe error mapping, TypeBox schemas, query parsing, and
@@ -117,6 +117,26 @@ resolved time. Notes have no update/delete path. Timeline metadata records IDs, 
 changed field names, presence booleans, and status transitions; it does not duplicate note, finding,
 or resolution prose. Archive is the retention action; there is no hard-delete endpoint.
 
+## Case-driven experiment boundary
+
+`InvestigationCaseExperimentService` coordinates three existing owners. It uses the case repository
+to select a persisted execution evidence reference, the tenant-scoped execution repository to
+resolve its current source, `ExecutionService` to create an ordinary comparison, and
+`InvestigationCaseService` to link the comparison back to the case. It performs no HTTP call and
+copies no source envelope or replay content.
+
+The persisted evidence ID is the eligibility boundary: a free execution ID cannot start a
+case-driven experiment. The ordinary comparison service remains authoritative for replay
+capability, variation resolution, provider availability, persistence, and continuation. The web
+selector uses the safe derived review projection and serializes only the bounded baseline
+configuration required by the established variation controls.
+
+Comparison creation and evidence linking are separate transactions. If linking fails, the
+comparison is retained and the result exposes its safe ID plus a link-only recovery action. The
+case timeline records metadata-only success/failure events. There is no experiment-suite table,
+copied comparison result, batch campaign, exactly-once submission guarantee, or statistical
+conclusion.
+
 ## Derived case review boundary
 
 `InvestigationCaseReviewService` is a separate framework-independent read orchestrator. It receives
@@ -209,6 +229,7 @@ share replay capabilities.
 | Repository reads and evidence references are tenant scoped         | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
 | Investigation reads are tenant/range bounded                       | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
 | Saved notes append and evidence remains referenced                 | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |
+| Case comparison returns to typed evidence or explicit recovery     | Case experiment coordinator and unit/API/browser tests                            | Atomic or exactly-once comparison-and-link workflow | Comparison creation and case linking use separate bounded mutations     |
 | Case reviews represent every link and resolved state is meaningful | Review service/invariant and unit/API/integration/browser tests                   | Correctness, causation, or conclusion truth         | Readiness is workflow completeness over bounded current evidence        |
 
 Worker mode makes acceptance durable, including comparison variants and concurrency-safe
@@ -234,6 +255,6 @@ model, avoiding that route's unpaginated replay-capability hydration pattern.
 Authentication, authorization, PostgreSQL row-level security, managed KMS, physical purge
 semantics, distributed rate/circuit state, cancellation, resumable ambiguous work, a general
 transactional outbox, operator recovery tooling, and multi-replica operating procedures remain
-future architecture. Product Tour and Operator Guidance is the next product movement, not an
-implemented UI or security boundary. Horizon 5 remains incomplete, and no Horizon 6 guarantee is
-inferred from tenant-scoped repository predicates.
+future architecture. Case-Driven Policy Experiments is a bounded workflow layer, not a batch,
+statistical, or security boundary. Its operator drill establishes the bounded Horizon 5 workflow
+signal, but no Horizon 6 guarantee is inferred from tenant-scoped repository predicates.

@@ -1,7 +1,9 @@
 "use client";
 
 import type {
+  CreateInvestigationCaseComparisonBody,
   InvestigationCaseDetail,
+  InvestigationCaseComparisonResult,
   InvestigationCaseEvidenceInput,
 } from "@reliability-lab/contracts";
 import { requestJson } from "@/lib/client-api";
@@ -60,6 +62,29 @@ export function removeInvestigationCaseEvidence(
     `/v1/investigation-cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}`,
     { method: "DELETE" },
   );
+}
+
+export async function createInvestigationCaseComparison(
+  caseId: string,
+  body: CreateInvestigationCaseComparisonBody,
+): Promise<{ result: InvestigationCaseComparisonResult }> {
+  const response = await fetch(
+    `${browserApiUrl}/v1/investigation-cases/${encodeURIComponent(caseId)}/comparisons`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-tenant-id": browserTenantId },
+      body: JSON.stringify(body),
+    },
+  );
+  const payload = (await response.json().catch(() => null)) as unknown;
+  if ((response.status === 202 || response.status === 409) && isRecord(payload)) {
+    return payload as { result: InvestigationCaseComparisonResult };
+  }
+  const message =
+    isRecord(payload) && typeof payload.message === "string"
+      ? payload.message
+      : `Case comparison failed with HTTP ${response.status}`;
+  throw new Error(message);
 }
 
 export async function downloadInvestigationCaseReviewPacket(caseId: string): Promise<void> {

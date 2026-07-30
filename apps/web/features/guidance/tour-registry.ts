@@ -193,6 +193,11 @@ export const pageTours = {
         body: "The overview pairs the reliability question with the fixed evidence boundary.",
       },
       {
+        anchor: "case-experiment",
+        title: "Run a controlled experiment",
+        body: "Choose replay-capable execution evidence and one bounded variation. The tour never submits this form. A created comparison returns as case evidence, or exposes link-only recovery.",
+      },
+      {
         anchor: "case-review",
         title: "Evidence review and readiness",
         body: "Current authoritative summaries and explicit unavailable states support a deterministic completeness checklist. Ready does not mean correct.",

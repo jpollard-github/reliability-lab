@@ -1,6 +1,7 @@
 import { createClient, type RedisClientType } from "redis";
 import {
   ExecutionService,
+  InvestigationCaseExperimentService,
   InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
@@ -30,6 +31,11 @@ import {
 } from "@reliability-lab/providers";
 import { buildApp } from "./app.js";
 import { readExecutionRuntimeConfig, readReplayRuntimeConfig } from "./config.js";
+
+if (process.env.RELIABILITY_LAB_RUNTIME_IMPORT_SMOKE === "true") {
+  process.stdout.write("api built-runtime imports resolved\n");
+  process.exit(0);
+}
 
 const replayConfig = readReplayRuntimeConfig(process.env);
 const executionConfig = readExecutionRuntimeConfig(process.env);
@@ -132,12 +138,39 @@ const investigationCaseReviews = new InvestigationCaseReviewService({
   comparisons,
   investigations,
   replayCapsules,
+  onDiagnostic: (diagnostic) => {
+    const { operation: evidenceOperation, ...metadata } = diagnostic;
+    process.stderr.write(
+      `${JSON.stringify({
+        level: "error",
+        operation: "case.evidence_current_read_failed",
+        evidenceOperation,
+        ...metadata,
+      })}\n`,
+    );
+  },
+});
+const investigationCaseExperiments = new InvestigationCaseExperimentService({
+  cases: investigationCases,
+  executions: service,
+  onDiagnostic: (diagnostic) => {
+    const { operation: linkOperation, ...metadata } = diagnostic;
+    process.stderr.write(
+      `${JSON.stringify({
+        level: "error",
+        operation: "case.comparison_link_boundary_failed",
+        linkOperation,
+        ...metadata,
+      })}\n`,
+    );
+  },
 });
 
 const app = await buildApp({
   service,
   investigationCases,
   investigationCaseReviews,
+  investigationCaseExperiments,
   investigations,
   enableFailureInjection: process.env.ENABLE_FAILURE_INJECTION === "true",
   readiness: async () => {

@@ -76,6 +76,8 @@ export const CaseExecutionEvidenceSummarySchema = Type.Object(
   {
     ...ExecutionSummarySchema.properties,
     replayCapability: ReplayCapabilitySummarySchema,
+    policy: ExecutionPolicySchema,
+    budget: ExecutionBudgetSchema,
   },
   { additionalProperties: false },
 );

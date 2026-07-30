@@ -24,6 +24,7 @@ describe("API operations", () => {
     expect(openapi.json().paths["/v1/investigation-cases"]).toBeDefined();
     expect(openapi.json().paths["/v1/investigation-cases/{caseId}"]).toBeDefined();
     expect(openapi.json().paths["/v1/investigation-cases/{caseId}/notes"]).toBeDefined();
+    expect(openapi.json().paths["/v1/investigation-cases/{caseId}/comparisons"]).toBeDefined();
   });
 
   it("serves Swagger UI and its static assets", async () => {

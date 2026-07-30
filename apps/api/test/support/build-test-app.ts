@@ -1,5 +1,6 @@
 import {
   ExecutionService,
+  InvestigationCaseExperimentService,
   InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
@@ -12,10 +13,21 @@ import {
 import { DeterministicFakeProvider } from "@reliability-lab/providers";
 import { buildApp } from "../../src/app.js";
 
-export async function buildTestApp() {
+export async function buildTestApp(options: { failNextCaseComparisonLink?: boolean } = {}) {
   const repository = new MemoryExecutionRepository();
   const comparisons = new MemoryComparisonExperimentRepository();
   const cases = new MemoryInvestigationCaseRepository();
+  if (options.failNextCaseComparisonLink) {
+    const addEvidence = cases.addEvidence.bind(cases);
+    let shouldFail = true;
+    cases.addEvidence = async (...arguments_) => {
+      if (shouldFail && arguments_[1].type === "comparison") {
+        shouldFail = false;
+        throw new Error("Forced case comparison link failure");
+      }
+      return addEvidence(...arguments_);
+    };
+  }
   const investigations = new MemoryInvestigationReadRepository(repository);
   const replayCapsules = new MemoryReplayCapsuleStore();
   const service = new ExecutionService({
@@ -39,10 +51,15 @@ export async function buildTestApp() {
     investigations,
     replayCapsules,
   });
+  const investigationCaseExperiments = new InvestigationCaseExperimentService({
+    cases: investigationCases,
+    executions: service,
+  });
   const app = await buildApp({
     service,
     investigationCases,
     investigationCaseReviews,
+    investigationCaseExperiments,
     investigations,
     logger: false,
     enableFailureInjection: true,
@@ -56,6 +73,7 @@ export async function buildTestApp() {
     investigations,
     investigationCases,
     investigationCaseReviews,
+    investigationCaseExperiments,
   };
 }
 

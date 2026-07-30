@@ -179,6 +179,36 @@ limitations, so it is an operator handoff artifact, not a public report. Relevan
 `apps/api/test/investigation-cases.test.ts`, and
 `apps/web/tests/saved-investigation-cases.spec.ts`.
 
+### 6b. Case-driven policy experiment
+
+1. Case detail derives linked execution eligibility from `InvestigationCaseReview`; it does not
+   fetch or serialize a full execution envelope into the client selector.
+2. The focused client form reuses `ComparisonDraft`, presets, and
+   `ComparisonVariationFields`. It submits one persisted execution evidence ID and one bounded
+   `ReplayVariation`.
+3. `POST /v1/investigation-cases/:caseId/comparisons` calls
+   `InvestigationCaseExperimentService`. The coordinator proves the evidence belongs to the case,
+   is an execution reference, and resolves through the same tenant.
+4. The coordinator delegates to `ExecutionService.createComparison`, so replay capability,
+   variation resolution, provider selection, unavailable comparison persistence, and ordinary
+   execution continuation keep their established owners.
+5. It then calls `InvestigationCaseService.addEvidence` with the experiment ID. A successful
+   transaction stores the typed comparison link and metadata-only `case.comparison_started` event.
+6. If that separate link fails, the comparison remains authoritative. The service records
+   `case.comparison_link_failed` when possible and returns
+   `comparison_created_link_failed` with a safe link-only recovery identifier.
+7. Recovery uses the existing evidence-link endpoint. It does not call comparison creation again.
+   Once linked, the ordinary review and packet projection resolve the comparison.
+
+**Boundary/evidence review:** comparison creation and case linking are intentionally non-atomic.
+The case stores identifiers and timeline metadata only—never retained input, variation prose,
+provider bodies, execution envelopes, or comparison copies. Client busy state prevents ordinary
+double clicks, but exactly-once comparison creation is not claimed. Relevant tests are
+`packages/core/test/investigation-case-experiments.test.ts`,
+`packages/db/test/investigation-cases.integration.test.ts`,
+`apps/api/test/investigation-cases.test.ts`, and
+`apps/web/tests/case-driven-policy-experiments.spec.ts`.
+
 ## 7. API composition and errors
 
 1. `apps/api/src/server.ts` constructs memory or PostgreSQL services and calls the stable

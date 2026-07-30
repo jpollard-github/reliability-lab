@@ -100,7 +100,7 @@ export async function addInvestigationCaseEvidence(
   tenantId: TenantId,
   evidence: InvestigationCaseEvidence,
   identity: string,
-  event: InvestigationCaseTimelineEvent,
+  events: InvestigationCaseTimelineEvent[],
 ) {
   return db.transaction(async (transaction) => {
     const reference = referenceFromEvidence(evidence);
@@ -140,7 +140,9 @@ export async function addInvestigationCaseEvidence(
         added: false,
       };
     }
-    await transaction.insert(investigationCaseEvents).values(eventInsert(tenantId, event));
+    await transaction
+      .insert(investigationCaseEvents)
+      .values(events.map((event) => eventInsert(tenantId, event)));
     await transaction
       .update(investigationCases)
       .set({ updatedAt: new Date(evidence.addedAt) })
@@ -148,6 +150,30 @@ export async function addInvestigationCaseEvidence(
         and(eq(investigationCases.tenantId, tenantId), eq(investigationCases.id, evidence.caseId)),
       );
     return { evidence, added: true };
+  });
+}
+
+export async function appendInvestigationCaseEvent(
+  db: ReliabilityDatabase,
+  tenantId: TenantId,
+  event: InvestigationCaseTimelineEvent,
+) {
+  await db.transaction(async (transaction) => {
+    const [existing] = await transaction
+      .select({ id: investigationCases.id })
+      .from(investigationCases)
+      .where(
+        and(eq(investigationCases.tenantId, tenantId), eq(investigationCases.id, event.caseId)),
+      )
+      .limit(1);
+    if (!existing) throw new Error("Investigation case not found");
+    await transaction.insert(investigationCaseEvents).values(eventInsert(tenantId, event));
+    await transaction
+      .update(investigationCases)
+      .set({ updatedAt: new Date(event.occurredAt) })
+      .where(
+        and(eq(investigationCases.tenantId, tenantId), eq(investigationCases.id, event.caseId)),
+      );
   });
 }
 

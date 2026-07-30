@@ -69,8 +69,9 @@ test("saves a complete investigation case and reopens its exact evidence scope",
       .getByText(comparison.experiment.experimentId, { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Evidence type").selectOption("provider_observation");
-  await page.getByLabel("Provider", { exact: true }).fill("fake-primary");
-  await page.getByLabel("Model", { exact: true }).fill("deterministic-v1");
+  const evidenceForm = page.getByRole("heading", { name: "Add evidence reference" }).locator("..");
+  await evidenceForm.getByLabel("Provider", { exact: true }).fill("fake-primary");
+  await evidenceForm.getByLabel("Model", { exact: true }).fill("deterministic-v1");
   await page.getByRole("button", { name: "Add evidence" }).click();
   await expect(
     page.getByText("fake-primary / deterministic-v1", { exact: true }).first(),
@@ -121,6 +122,8 @@ test("saves a complete investigation case and reopens its exact evidence scope",
   const tour = page.getByRole("dialog", { name: "Investigation case detail tour" });
   await expect(tour).toBeVisible();
   await tour.getByRole("button", { name: "Next" }).click();
+  await tour.getByRole("button", { name: "Next" }).click();
+  await expect(tour.getByRole("heading", { name: "Run a controlled experiment" })).toBeVisible();
   await tour.getByRole("button", { name: "Next" }).click();
   await expect(tour.getByRole("heading", { name: "Evidence review and readiness" })).toBeVisible();
   await expect(page).toHaveURL(tourUrl);
@@ -184,6 +187,19 @@ test("keeps case evidence review and readiness readable without JavaScript", asy
     data: { type: "execution", executionId: execution.executionId },
   });
   expect(linked.status()).toBe(200);
+  const comparison = await createComparison(request, execution.executionId);
+  expect(comparison.response.status()).toBe(202);
+  if (comparison.experiment.variantExecutionId) {
+    await waitForExecution(request, comparison.experiment.variantExecutionId, "degraded");
+  }
+  const comparisonLinked = await request.post(
+    `${apiBaseUrl}/v1/investigation-cases/${caseId}/evidence`,
+    {
+      headers: tenantHeaders,
+      data: { type: "comparison", experimentId: comparison.experiment.experimentId },
+    },
+  );
+  expect(comparisonLinked.status()).toBe(200);
 
   const context = await browser.newContext({
     baseURL: "http://127.0.0.1:3000",
@@ -192,11 +208,17 @@ test("keeps case evidence review and readiness readable without JavaScript", asy
   const page = await context.newPage();
   try {
     await page.goto(`/investigation-cases/${caseId}`);
+    await expect(page.getByRole("heading", { name: "Run controlled experiment" })).toBeVisible();
+    await expect(page.getByText("Replay available: Replay capsule is available")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Evidence review" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Conclusion readiness" })).toBeVisible();
     await expect(page.getByText(execution.executionId, { exact: true }).first()).toBeVisible();
+    await expect(
+      page.getByText(comparison.experiment.experimentId, { exact: true }).first(),
+    ).toBeVisible();
     await expect(page.getByText("Not ready", { exact: true })).toBeVisible();
     await expect(page.getByText("Current finding is present")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Download review packet" })).toBeVisible();
   } finally {
     await context.close();
   }

@@ -23,6 +23,11 @@ import {
 } from "@reliability-lab/providers";
 import { readWorkerRuntimeConfig } from "./config.js";
 
+if (process.env.RELIABILITY_LAB_RUNTIME_IMPORT_SMOKE === "true") {
+  process.stdout.write("worker built-runtime imports resolved\n");
+  process.exit(0);
+}
+
 const executionConfig = readExecutionRuntimeConfig(process.env);
 if (executionConfig.mode !== "postgres_worker" || !executionConfig.keyring) {
   throw new Error("The worker requires EXECUTION_MODE=postgres_worker and command encryption keys");

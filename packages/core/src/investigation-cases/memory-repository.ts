@@ -119,13 +119,13 @@ export class MemoryInvestigationCaseRepository implements InvestigationCaseRepos
     tenantId: TenantId,
     evidence: InvestigationCaseEvidence,
     identity: string,
-    event: InvestigationCaseTimelineEvent,
+    events: InvestigationCaseTimelineEvent[],
   ) {
     const record = this.#tenantRecord(tenantId, evidence.caseId);
     const existing = record.evidence.find((item) => item.identity === identity);
     if (existing) return { evidence: structuredClone(existing.value), added: false };
     record.evidence.push({ value: structuredClone(evidence), identity });
-    record.timeline.push(structuredClone(event));
+    record.timeline.push(...structuredClone(events));
     record.investigationCase.updatedAt = evidence.addedAt;
     return { evidence: structuredClone(evidence), added: true };
   }
@@ -143,6 +143,12 @@ export class MemoryInvestigationCaseRepository implements InvestigationCaseRepos
     record.timeline.push(structuredClone(event));
     record.investigationCase.updatedAt = event.occurredAt;
     return true;
+  }
+
+  async appendEvent(tenantId: TenantId, event: InvestigationCaseTimelineEvent) {
+    const record = this.#tenantRecord(tenantId, event.caseId);
+    record.timeline.push(structuredClone(event));
+    record.investigationCase.updatedAt = event.occurredAt;
   }
 
   #tenantRecord(tenantId: TenantId, caseId: string) {

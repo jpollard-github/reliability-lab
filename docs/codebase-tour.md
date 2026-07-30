@@ -52,6 +52,7 @@ packages/contracts/src/
   investigation/
     workbench.ts               bounded search and aggregate read contracts
     cases.ts                   saved cases, evidence, notes, and timeline
+    case-experiments.ts        case comparison request and orchestration result
     case-review.ts             bounded derived evidence review and readiness
   index.ts                     public package barrel
 ```
@@ -100,6 +101,7 @@ packages/core/src/
     statistics.ts
   investigation-cases/
     investigation-case-service.ts
+    case-experiment-service.ts
     case-review-service.ts
     review-packet.ts
     saved-scope.ts
@@ -289,11 +291,16 @@ stateless guidance client island.
 - `packages/db/src/index.ts` preserves `@reliability-lab/db`.
 - `packages/providers/src/index.ts`, `packages/observability/src/index.ts`, and
   `packages/testkit/src/index.ts` are their package entrypoints.
+- Each package `package.json` selects TypeScript source only under Node's `development` condition
+  and emitted `dist/index.js` by default. Each package `tsconfig.build.json` owns its runtime emit.
 - `apps/api/src/server.ts` selects memory or PostgreSQL adapters and constructs `ExecutionService`,
-  investigation reads, `InvestigationCaseService`, and the derived `InvestigationCaseReviewService`.
+  investigation reads, `InvestigationCaseService`, `InvestigationCaseExperimentService`, and the
+  derived `InvestigationCaseReviewService`.
 - `apps/worker/src/server.ts` constructs `ExecutionService`, `DurableExecutionWorker`, and the
   PostgreSQL job adapter.
 - `apps/api/src/app.ts` installs platform/error infrastructure and typed domain route plugins.
+- `scripts/check-built-runtime.mjs` verifies default-condition package imports and built API/worker
+  entrypoints after every root build. See [Built runtime](built-runtime.md).
 
 ## Where do I find…?
 
@@ -314,6 +321,7 @@ stateless guidance client island.
 | Derived case review                | `packages/core/src/investigation-cases/case-review-service.ts` — `InvestigationCaseReviewService`                                                              |
 | Conclusion readiness               | `packages/core/src/investigation-cases/case-review-service.ts` — `projectConclusionReadiness`                                                                  |
 | Safe Markdown review packet        | `packages/core/src/investigation-cases/review-packet.ts` — `renderInvestigationCaseReviewPacket`                                                               |
+| Case experiment coordination       | `packages/core/src/investigation-cases/case-experiment-service.ts` — `InvestigationCaseExperimentService`                                                      |
 
 ## Persistence and API “find it” drill
 
@@ -339,6 +347,7 @@ stateless guidance client island.
 | 18  | Saved-case creation route            | `apps/api/src/routes/investigation-cases.ts` — `investigationCaseRoutes`                           |
 | 19  | API error mapping                    | `apps/api/src/http/error-mapper.ts` — `mapError`, `installErrorHandler`                            |
 | 20  | Swagger registration                 | `apps/api/src/plugins/platform.ts` — `registerPlatformPlugins`                                     |
+| 21  | Case comparison route                | `POST /v1/investigation-cases/:caseId/comparisons` in `apps/api/src/routes/investigation-cases.ts` |
 
 ## Tests
 
@@ -379,6 +388,9 @@ stateless guidance client island.
 | 24  | Saved Investigation Cases workflow     | `apps/web/tests/saved-investigation-cases.spec.ts` — `saves a complete investigation case and reopens its exact evidence scope` |
 | 25  | Investigation styles                   | `apps/web/styles/investigations.css`                                                                                            |
 | 26  | Responsive styles                      | `apps/web/styles/responsive.css`                                                                                                |
+| 27  | Shared comparison variation fields     | `apps/web/features/comparisons/comparison-variation-fields.tsx` — `ComparisonVariationFields`                                   |
+| 28  | Case experiment eligibility            | `apps/web/features/investigation-cases/case-policy-experiments.tsx` — `CasePolicyExperiments`                                   |
+| 29  | Case experiment client action          | `apps/web/features/investigation-cases/case-experiment-form.tsx` — `CaseExperimentForm`                                         |
 
 ## Operator guidance “find it” drill
 
@@ -428,6 +440,33 @@ stateless guidance client island.
 | 17  | Core, HTTP, PostgreSQL, and browser tests           | `packages/core/test/investigation-case-review.test.ts`, API/DB tests, and `apps/web/tests/saved-investigation-cases.spec.ts` |
 | 18  | Change recipe                                       | [Revise evidence-backed case conclusions](change-recipes.md#12-revise-evidence-backed-case-conclusions)                      |
 
+## Case-driven policy experiment “find it” drill
+
+| #   | Responsibility                         | Final file and symbol or route                                                                                                                               |
+| --- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Built package export convention        | Workspace `package.json` files — conditional `exports`; package `tsconfig.build.json` files                                                                  |
+| 2   | Built app entrypoints                  | `apps/api/dist/server.js`, `apps/worker/dist/server.js`; source owners are each app's `src/server.ts`                                                        |
+| 3   | Automated built-runtime smoke          | `scripts/check-built-runtime.mjs`; root `build` and `audit:runtime` scripts                                                                                  |
+| 4   | Request and result contracts           | `packages/contracts/src/investigation/case-experiments.ts`                                                                                                   |
+| 5   | Ordinary comparison contract           | `packages/contracts/src/comparison/experiment.ts` — `ComparisonExperimentSchema`, `ResolvedReplayConfigurationSchema`                                        |
+| 6   | Coordinator                            | `packages/core/src/investigation-cases/case-experiment-service.ts` — `InvestigationCaseExperimentService`                                                    |
+| 7   | Case/evidence eligibility              | `InvestigationCaseExperimentService.createComparison` before delegation to `ExecutionService`                                                                |
+| 8   | Partial-link result and recovery ID    | `comparison_created_link_failed` in `case-experiments.ts`; coordinator catch boundary                                                                        |
+| 9   | Case link and timeline transaction     | `InvestigationCaseService.addEvidence`; `addInvestigationCaseEvidence` in `case-command-transactions.ts`                                                     |
+| 10  | Timeline event contracts               | `case.comparison_started` and `case.comparison_link_failed` in `packages/contracts/src/investigation/cases.ts`                                               |
+| 11  | Tenant-scoped API route and safe links | `POST /v1/investigation-cases/:caseId/comparisons` in `apps/api/src/routes/investigation-cases.ts`                                                           |
+| 12  | Shared variation presets and fields    | `comparison-presets.ts`, `comparison-draft.ts`, and `comparison-variation-fields.tsx`                                                                        |
+| 13  | Server-rendered eligibility            | `apps/web/features/investigation-cases/case-policy-experiments.tsx` — `CasePolicyExperiments`                                                                |
+| 14  | Client submit and link-only recovery   | `apps/web/features/investigation-cases/case-experiment-form.tsx` — `CaseExperimentForm`; `case-mutations.ts`                                                 |
+| 15  | Review-read diagnostic callback        | `InvestigationCaseReviewServiceOptions.onDiagnostic`; composition in `apps/api/src/server.ts`                                                                |
+| 16  | Coordinator diagnostic callback        | `InvestigationCaseExperimentServiceOptions.onDiagnostic`; composition in `apps/api/src/server.ts`                                                            |
+| 17  | Core tests                             | `packages/core/test/investigation-case-experiments.test.ts`                                                                                                  |
+| 18  | PostgreSQL integration tests           | `packages/db/test/investigation-cases.integration.test.ts`                                                                                                   |
+| 19  | API tests                              | `apps/api/test/investigation-cases.test.ts`; composition fixture in `apps/api/test/support/build-test-app.ts`                                                |
+| 20  | Browser workflow and failure fixture   | `apps/web/tests/case-driven-policy-experiments.spec.ts`                                                                                                      |
+| 21  | Plain-language ownership               | [Case-Driven Policy Experiments basics](reliability-lab-case-driven-policy-experiments-basics.md) and [ADR 0011](adr/0011-case-driven-policy-experiments.md) |
+| 22  | Change recipe                          | [Change a case-driven policy experiment](change-recipes.md#13-change-a-case-driven-policy-experiment)                                                        |
+
 ## Recommended reading order
 
 1. `README.md`, then `docs/reliability-lab-basics.md`
@@ -462,3 +501,4 @@ The companion [system flows](system-flows.md) follows concrete calls across thos
 | Playwright workflow         | `apps/web/tests/`                                   | [Add a Playwright workflow](change-recipes.md#10-add-a-playwright-workflow)                             |
 | Operator guidance           | `apps/web/features/guidance/`                       | [Add or revise operator guidance](change-recipes.md#11-add-or-revise-operator-guidance)                 |
 | Case review or packet       | `packages/core/src/investigation-cases/`            | [Revise evidence-backed case conclusions](change-recipes.md#12-revise-evidence-backed-case-conclusions) |
+| Case-driven experiment      | `packages/core/src/investigation-cases/`            | [Change a case-driven policy experiment](change-recipes.md#13-change-a-case-driven-policy-experiment)   |

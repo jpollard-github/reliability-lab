@@ -31,6 +31,10 @@ Choose the path that matches the question you are trying to answer.
    saved-case paths.
 4. [Architecture](docs/architecture.md) defines process, trust, consistency, and security
    boundaries.
+5. [Built runtime](docs/built-runtime.md) explains source-aware development and emitted-JavaScript
+   production entrypoints.
+6. [Case-Driven Policy Experiments basics](docs/reliability-lab-case-driven-policy-experiments-basics.md)
+   explains how a case launches and recovers one bounded comparison.
 
 **Modify the system**
 
@@ -74,6 +78,9 @@ Implemented now:
   lifecycle timelines, archive status, and stable tenant-scoped case pagination
 - derived case evidence review with explicit unavailable states, deterministic conclusion
   readiness, a resolved-state finding/resolution invariant, and tenant-aware Markdown review packets
+- case-driven policy experiments that select linked replay-capable execution evidence, reuse
+  ordinary Comparative Replay, automatically link the result, and expose link-only recovery when
+  the non-atomic case association fails
 - server-rendered product Guide, native contextual concept help, and stateless on-demand tours for
   all six established operator route families
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
@@ -114,6 +121,9 @@ flowchart LR
   Service --> Experiment[Comparison experiment port]
   Experiment --> PG
   API --> Case[Investigation case service]
+  Case --> CaseExperiment[Case experiment coordinator]
+  CaseExperiment --> Service
+  CaseExperiment --> Experiment
   Case --> CaseStore[Case repository port]
   CaseStore --> PG
   API --> CaseReview[Derived case review service]
@@ -139,6 +149,7 @@ Plain-language guides:
 - [Investigation Workbench basics](docs/reliability-lab-investigation-workbench-basics.md)
 - [Saved Investigation Cases basics](docs/reliability-lab-saved-investigation-cases-basics.md)
 - [Evidence-Backed Case Conclusions basics](docs/reliability-lab-evidence-backed-case-conclusions-basics.md)
+- [Case-Driven Policy Experiments basics](docs/reliability-lab-case-driven-policy-experiments-basics.md)
 - [Owned Software basics](docs/reliability-lab-owned-software-basics.md)
 - [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
 - [Persistence and API patterns](docs/persistence-and-api-patterns.md)
@@ -402,6 +413,7 @@ KMS.
 | `pnpm test:e2e`                                  | Separate API/worker durable browser and comparison flow |
 | `pnpm verify`, `verify:full`                     | Static/unit build checks, then DB and browser checks    |
 | `pnpm audit:deps`, `audit:unused`, `audit`       | Read-only dependency/dead-code observation              |
+| `pnpm audit:runtime`                             | Built workspace export and process import smoke         |
 | `pnpm db:generate`, `db:migrate`, `db:studio`    | Drizzle workflows                                       |
 | `pnpm export:repo`, `export:working`             | Guarded compressed exports                              |
 
@@ -461,6 +473,8 @@ finding, and resolution text. Tenant routing still cannot establish authorship.
   updates are a separate consistency boundary.
 - Variant acceptance and experiment persistence are atomic only in PostgreSQL worker mode.
   In-process mode deliberately keeps the simpler two-operation boundary.
+- Case-driven comparison creation and its following case evidence link are not atomic. A link
+  failure preserves the comparison and returns an explicit link-only recovery action.
 
 ## Production-hardening direction
 
@@ -496,4 +510,5 @@ instead of automatically duplicating the call. Readiness checks database tables 
 not a full migration version or global worker liveness. Memory capsules disappear on restart.
 PostgreSQL replay deletion is a tombstone, not physical backup erasure. Audits lack authenticated
 actors, environment keyrings are not KMS, Redis implementations are skeletons, cost is normalized
-but not enforced, and circuit/rate state is process-local.
+but not enforced, and circuit/rate state is process-local. Case experiment creation is not
+idempotent across clients or HTTP retries, and comparison creation is not atomic with case linking.

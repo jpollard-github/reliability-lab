@@ -170,7 +170,14 @@ export class InvestigationCaseService {
     return note;
   }
 
-  async addEvidence(tenantId: TenantId, caseId: string, input: InvestigationCaseEvidenceInput) {
+  async addEvidence(
+    tenantId: TenantId,
+    caseId: string,
+    input: InvestigationCaseEvidenceInput,
+    options: {
+      comparisonStarted?: { experimentId: string; originalExecutionId: string };
+    } = {},
+  ) {
     const detail = await this.get(tenantId, caseId);
     const canonical = await this.#canonicalEvidence(tenantId, input);
     const identity = evidenceIdentity(canonical);
@@ -188,13 +195,38 @@ export class InvestigationCaseService {
       url: evidenceUrl(canonical),
       ...canonical,
     };
-    return this.#cases.addEvidence(
-      tenantId,
-      evidence,
-      identity,
+    const events: InvestigationCaseTimelineEvent[] = [];
+    if (options.comparisonStarted) {
+      events.push(
+        this.#event(caseId, "case.comparison_started", addedAt, {
+          experimentId: options.comparisonStarted.experimentId,
+          originalExecutionId: options.comparisonStarted.originalExecutionId,
+          linkState: "linked",
+        }),
+      );
+    }
+    events.push(
       this.#event(caseId, "case.evidence_added", addedAt, {
         evidenceId: evidence.evidenceId,
         evidenceType: evidence.type,
+      }),
+    );
+    return this.#cases.addEvidence(tenantId, evidence, identity, events);
+  }
+
+  async recordComparisonLinkFailure(
+    tenantId: TenantId,
+    caseId: string,
+    input: { experimentId: string; originalExecutionId: string },
+  ) {
+    await this.get(tenantId, caseId);
+    const occurredAt = this.#now().toISOString();
+    await this.#cases.appendEvent(
+      tenantId,
+      this.#event(caseId, "case.comparison_link_failed", occurredAt, {
+        experimentId: input.experimentId,
+        originalExecutionId: input.originalExecutionId,
+        linkState: "unlinked",
       }),
     );
   }

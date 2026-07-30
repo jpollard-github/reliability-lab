@@ -17,6 +17,7 @@ import type { ReliabilityDatabase } from "../database/database.js";
 import {
   addInvestigationCaseEvidence,
   addInvestigationCaseNote,
+  appendInvestigationCaseEvent,
   createInvestigationCase,
   removeInvestigationCaseEvidence,
   updateInvestigationCase,
@@ -62,9 +63,9 @@ export class PostgresInvestigationCaseRepository implements InvestigationCaseRep
     tenantId: TenantId,
     evidence: InvestigationCaseEvidence,
     identity: string,
-    event: InvestigationCaseTimelineEvent,
+    events: InvestigationCaseTimelineEvent[],
   ) {
-    return addInvestigationCaseEvidence(this.#db, tenantId, evidence, identity, event);
+    return addInvestigationCaseEvidence(this.#db, tenantId, evidence, identity, events);
   }
 
   removeEvidence(
@@ -74,5 +75,9 @@ export class PostgresInvestigationCaseRepository implements InvestigationCaseRep
     event: InvestigationCaseTimelineEvent,
   ) {
     return removeInvestigationCaseEvidence(this.#db, tenantId, caseId, evidenceId, event);
+  }
+
+  appendEvent(tenantId: TenantId, event: InvestigationCaseTimelineEvent) {
+    return appendInvestigationCaseEvent(this.#db, tenantId, event);
   }
 }

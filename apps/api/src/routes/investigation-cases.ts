@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { Type } from "@sinclair/typebox";
 import {
   AddInvestigationCaseNoteBodySchema,
+  CreateInvestigationCaseComparisonBodySchema,
   CreateInvestigationCaseBodySchema,
   InvestigationCaseDetailSchema,
   InvestigationCaseEvidenceInputSchema,
@@ -23,13 +24,14 @@ import {
   InvestigationCaseEvidenceParamsSchema,
   InvestigationCaseEvidenceRemovedSchema,
   InvestigationCaseEvidenceResultSchema,
+  InvestigationCaseComparisonResponseSchema,
   InvestigationCaseListQuerySchema,
   InvestigationCaseParamsSchema,
 } from "../schemas/investigation-cases.js";
 
 type InvestigationCaseRouteOptions = Pick<
   AppOptions,
-  "investigationCases" | "investigationCaseReviews"
+  "investigationCases" | "investigationCaseReviews" | "investigationCaseExperiments"
 >;
 
 export const investigationCaseRoutes: FastifyPluginAsync<InvestigationCaseRouteOptions> = async (
@@ -188,6 +190,83 @@ export const investigationCaseRoutes: FastifyPluginAsync<InvestigationCaseRouteO
         "investigation case updated",
       );
       return detail;
+    },
+  );
+
+  api.post(
+    "/v1/investigation-cases/:caseId/comparisons",
+    {
+      schema: {
+        tags: ["investigation-cases", "comparisons"],
+        security: [{ tenant: [] }],
+        headers: TenantOnlyHeadersSchema,
+        params: InvestigationCaseParamsSchema,
+        body: CreateInvestigationCaseComparisonBodySchema,
+        response: {
+          202: InvestigationCaseComparisonResponseSchema,
+          400: ErrorSchema,
+          404: ErrorSchema,
+          409: InvestigationCaseComparisonResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const submission = await options.investigationCaseExperiments.create(
+        request.headers["x-tenant-id"],
+        request.params.caseId,
+        request.body,
+      );
+      if (submission.completion) {
+        void submission.completion.catch(() => {
+          app.log.error(
+            {
+              caseId: request.params.caseId,
+              experimentId: submission.result.experiment.experimentId,
+              operation: "case.comparison_continuation_failed",
+            },
+            "case comparison continuation could not persist completion",
+          );
+        });
+      }
+      const experiment = submission.result.experiment;
+      const manualEvidenceLink =
+        submission.result.kind === "comparison_created_link_failed"
+          ? {
+              href: `/v1/investigation-cases/${encodeURIComponent(request.params.caseId)}/evidence`,
+              method: "POST" as const,
+              body: {
+                type: "comparison" as const,
+                experimentId: experiment.experimentId,
+              },
+            }
+          : undefined;
+      const response = {
+        result: submission.result,
+        links: {
+          case: `/v1/investigation-cases/${encodeURIComponent(request.params.caseId)}`,
+          comparison: `/v1/comparisons/${encodeURIComponent(experiment.experimentId)}`,
+          originalExecution: `/v1/executions/${encodeURIComponent(experiment.originalExecutionId)}`,
+          ...(experiment.variantExecutionId
+            ? {
+                variantExecution: `/v1/executions/${encodeURIComponent(experiment.variantExecutionId)}`,
+              }
+            : {}),
+          ...(manualEvidenceLink ? { manualEvidenceLink } : {}),
+        },
+      };
+      request.log[submission.result.kind === "comparison_linked" ? "info" : "warn"](
+        {
+          caseId: request.params.caseId,
+          experimentId: experiment.experimentId,
+          originalExecutionId: experiment.originalExecutionId,
+          linkState: submission.result.kind === "comparison_linked" ? "linked" : "unlinked",
+          operation: "case.comparison_created",
+        },
+        submission.result.kind === "comparison_linked"
+          ? "case comparison created and linked"
+          : "case comparison created but evidence link failed",
+      );
+      return reply.code(experiment.status === "unavailable" ? 409 : 202).send(response);
     },
   );
 

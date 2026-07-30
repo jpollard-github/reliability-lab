@@ -45,7 +45,7 @@ export interface InvestigationCaseRepository {
     tenantId: TenantId,
     evidence: InvestigationCaseEvidence,
     identity: string,
-    event: InvestigationCaseTimelineEvent,
+    events: InvestigationCaseTimelineEvent[],
   ): Promise<{ evidence: InvestigationCaseEvidence; added: boolean }>;
   removeEvidence(
     tenantId: TenantId,
@@ -53,6 +53,7 @@ export interface InvestigationCaseRepository {
     evidenceId: string,
     event: InvestigationCaseTimelineEvent,
   ): Promise<boolean>;
+  appendEvent(tenantId: TenantId, event: InvestigationCaseTimelineEvent): Promise<void>;
 }
 
 export interface InvestigationCaseServiceOptions {

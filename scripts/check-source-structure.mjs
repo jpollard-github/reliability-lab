@@ -26,6 +26,7 @@ for (const packageInfo of packages) {
 }
 
 checkExportOnly(path.join(repositoryRoot, "packages/db/src/schema.ts"));
+checkRuntimePackaging();
 for (const file of productionTypeScriptFiles(apiRoot)) {
   checkLineCount(file);
   checkApiComposition(file);
@@ -40,6 +41,11 @@ requireFiles([
   "apps/api/src/http/error-mapper.ts",
   "apps/api/src/routes/execution-events.ts",
   "apps/api/src/routes/investigation-cases.ts",
+  "apps/api/tsconfig.build.json",
+  "apps/worker/tsconfig.build.json",
+  "scripts/check-built-runtime.mjs",
+  "packages/contracts/src/investigation/case-experiments.ts",
+  "packages/core/src/investigation-cases/case-experiment-service.ts",
   "apps/web/features/investigations/search-state.ts",
   "apps/web/features/investigations/workbench-loader.ts",
   "apps/web/features/investigations/reliability-summary-cards.tsx",
@@ -51,9 +57,12 @@ requireFiles([
   "apps/web/features/live-machine/machine-route.tsx",
   "apps/web/features/comparisons/comparison-draft.ts",
   "apps/web/features/comparisons/comparison-presets.ts",
+  "apps/web/features/comparisons/comparison-variation-fields.tsx",
   "apps/web/features/investigation-cases/case-controls.tsx",
   "apps/web/features/investigation-cases/case-mutations.ts",
   "apps/web/features/investigation-cases/case-evidence.tsx",
+  "apps/web/features/investigation-cases/case-policy-experiments.tsx",
+  "apps/web/features/investigation-cases/case-experiment-form.tsx",
   "apps/web/app/guide/page.tsx",
   "apps/web/features/guidance/guide-content.ts",
   "apps/web/features/guidance/guide-page.tsx",
@@ -152,6 +161,39 @@ function checkGuidanceStructure() {
   for (const dependency of dependencies) {
     if (forbiddenTourRuntimes.includes(dependency)) {
       failures.push(`apps/web/package.json adds forbidden tour runtime ${dependency}`);
+    }
+  }
+}
+
+function checkRuntimePackaging() {
+  const publicPackages = ["contracts", "core", "db", "observability", "providers", "testkit"];
+  for (const packageName of publicPackages) {
+    const packagePath = path.join(repositoryRoot, "packages", packageName, "package.json");
+    const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+    const rootExport = packageJson.exports?.["."];
+    if (
+      rootExport?.development !== "./src/index.ts" ||
+      rootExport?.types !== "./dist/index.d.ts" ||
+      rootExport?.default !== "./dist/index.js"
+    ) {
+      failures.push(
+        `packages/${packageName}/package.json must map development to source and default runtime/types to dist`,
+      );
+    }
+    if (packageJson.scripts?.build !== "tsc -p tsconfig.build.json") {
+      failures.push(`packages/${packageName}/package.json must build with tsconfig.build.json`);
+    }
+  }
+
+  const processEntrypoints = [
+    ["api", "node dist/server.js"],
+    ["worker", "node dist/server.js"],
+  ];
+  for (const [appName, expectedStart] of processEntrypoints) {
+    const packagePath = path.join(repositoryRoot, "apps", appName, "package.json");
+    const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+    if (packageJson.scripts?.start !== expectedStart) {
+      failures.push(`apps/${appName}/package.json must start emitted dist/server.js with Node`);
     }
   }
 }

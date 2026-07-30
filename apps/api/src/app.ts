@@ -44,6 +44,7 @@ export async function buildApp(options: AppOptions) {
   await app.register(investigationCaseRoutes, {
     investigationCases: options.investigationCases,
     investigationCaseReviews: options.investigationCaseReviews,
+    investigationCaseExperiments: options.investigationCaseExperiments,
   });
   await app.register(executionEventRoutes, {
     service: options.service,

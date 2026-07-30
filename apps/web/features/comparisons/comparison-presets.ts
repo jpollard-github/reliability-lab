@@ -1,4 +1,4 @@
-import type { ExecutionEnvelope } from "@reliability-lab/contracts";
+import type { ExecutionBudget, ExecutionPolicy } from "@reliability-lab/contracts";
 import { emptyComparisonDraft, type ComparisonDraft } from "./comparison-draft";
 
 export const comparisonPresets = [
@@ -11,9 +11,16 @@ export const comparisonPresets = [
 
 export type ComparisonPreset = (typeof comparisonPresets)[number]["value"];
 
+export interface ComparisonBaseline {
+  provider: string;
+  model: string;
+  policy: ExecutionPolicy;
+  budget: ExecutionBudget;
+}
+
 export function applyComparisonPreset(
   preset: ComparisonPreset,
-  execution: ExecutionEnvelope,
+  execution: ComparisonBaseline,
 ): ComparisonDraft {
   const inherited = execution.policy;
   switch (preset) {

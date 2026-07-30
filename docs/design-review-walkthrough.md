@@ -254,11 +254,20 @@ non-empty. `CaseEvidenceReview` and `ConclusionReadiness` render in the server r
 `renderInvestigationCaseReviewPacket` produces escaped deterministic Markdown from the same
 projection.
 
+`InvestigationCaseExperimentService` turns the case into a bounded experiment workspace without
+making it an experiment store. It proves a persisted execution evidence reference belongs to the
+case and tenant, delegates one ordinary comparison to `ExecutionService`, and then links the
+experiment through `InvestigationCaseService`. Replay availability and variation semantics are not
+reimplemented. A separate link failure preserves the comparison, returns
+`comparison_created_link_failed`, and offers evidence-link recovery with the existing experiment
+ID. `case.comparison_started` and `case.comparison_link_failed` carry metadata only.
+
 Proof is in `packages/core/test/investigation-cases.test.ts`,
 `packages/core/test/investigation-case-review.test.ts`,
+`packages/core/test/investigation-case-experiments.test.ts`,
 `packages/db/test/investigation-cases.integration.test.ts`,
 `apps/api/test/investigation-cases.test.ts`, and
-`apps/web/tests/saved-investigation-cases.spec.ts`.
+the saved-case and case-driven experiment browser workflows.
 
 No author is recorded because `X-Tenant-Id` is routing context, not a person. Notes are append-only;
 evidence removal removes only the association; archive is the current retention action.
@@ -326,18 +335,19 @@ names the expected layers for representative work.
 
 ## Guarantees and non-guarantees
 
-| Guarantee                                                   | Evidence                                                                           | Non-guarantee and reason                                                         |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Worker-mode `202` follows atomic durable acceptance         | `PostgresDurableExecutionStore.acceptExecution`; durable integration rollback test | No promise for in-process continuation after API loss                            |
-| Stale claims are fenced from heartbeat, finish, and cleanup | Exact `claimVersion` predicates; lease safety and durable integration tests        | No exactly-once provider call because the provider is outside the DB transaction |
-| Execution decisions are append-only evidence                | `ExecutionEventRecorder`; event and repository tests                               | No general outbox makes every projection/event/process boundary atomic           |
-| PostgreSQL replay payload is encrypted at rest              | `encryptReplayCapsule`; replay crypto/vault tests                                  | Environment keys are not production KMS or envelope encryption                   |
-| Reads and references carry tenant predicates                | repository ports/adapters and cross-tenant tests                                   | Tenant header is not authenticated identity or DB-enforced RLS                   |
-| Investigation queries are bounded by tenant and `[from,to)` | named PostgreSQL query modules and fixed-query integration test                    | Results are selected evidence, not an SLA or universal provider health           |
-| Saved notes are append-only and evidence is referenced      | case service/transactions/tests                                                    | Case prose is plaintext and has no authenticated author                          |
-| Resolved cases have a finding and resolution                | case service invariant and unit/API/browser tests                                  | The content is operator interpretation, not verified truth                       |
-| Review items never silently lose linked evidence            | review contracts/service and unit/API/integration tests                            | A source can be explicitly unavailable at review time                            |
-| Replay deletion revokes current capability                  | vault adapter and replay tests                                                     | Tombstoning does not guarantee physical backup erasure                           |
+| Guarantee                                                       | Evidence                                                                           | Non-guarantee and reason                                                         |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Worker-mode `202` follows atomic durable acceptance             | `PostgresDurableExecutionStore.acceptExecution`; durable integration rollback test | No promise for in-process continuation after API loss                            |
+| Stale claims are fenced from heartbeat, finish, and cleanup     | Exact `claimVersion` predicates; lease safety and durable integration tests        | No exactly-once provider call because the provider is outside the DB transaction |
+| Execution decisions are append-only evidence                    | `ExecutionEventRecorder`; event and repository tests                               | No general outbox makes every projection/event/process boundary atomic           |
+| PostgreSQL replay payload is encrypted at rest                  | `encryptReplayCapsule`; replay crypto/vault tests                                  | Environment keys are not production KMS or envelope encryption                   |
+| Reads and references carry tenant predicates                    | repository ports/adapters and cross-tenant tests                                   | Tenant header is not authenticated identity or DB-enforced RLS                   |
+| Investigation queries are bounded by tenant and `[from,to)`     | named PostgreSQL query modules and fixed-query integration test                    | Results are selected evidence, not an SLA or universal provider health           |
+| Saved notes are append-only and evidence is referenced          | case service/transactions/tests                                                    | Case prose is plaintext and has no authenticated author                          |
+| Resolved cases have a finding and resolution                    | case service invariant and unit/API/browser tests                                  | The content is operator interpretation, not verified truth                       |
+| Review items never silently lose linked evidence                | review contracts/service and unit/API/integration tests                            | A source can be explicitly unavailable at review time                            |
+| Case experiment results return to evidence or explicit recovery | case experiment coordinator and unit/API/browser tests                             | Comparison creation and case linking are not atomic or exactly once              |
+| Replay deletion revokes current capability                      | vault adapter and replay tests                                                     | Tombstoning does not guarantee physical backup erasure                           |
 
 ## Current limitations
 
@@ -353,18 +363,21 @@ names the expected layers for representative work.
 - Provider observations are bounded evidence summaries, not universal health or confidence claims.
 - Conclusion readiness is deterministic workflow completeness, not factual correctness, causation,
   or a confidence score. Review packets contain internal links and are not public-safe reports.
+- Case-driven comparison creation and the later evidence link are not atomic. Browser busy state
+  does not provide exactly-once creation across clients or retried requests.
 - The compatibility execution list is unbounded.
 - There is no broad scenario catalog or configured external trace/log investigation integration.
-- Horizon 5 remains incomplete.
+- The bounded Horizon 5 workflow signal is established by an internal heuristic drill; it is not
+  empirical usability evidence or a production-readiness claim.
 
 ## What comes next
 
-The on-demand Guide, contextual help, and route-specific tours are established. Evidence-backed
-case conclusions now establish the supported-conclusion slice of Horizon 5: an operator can trace
-current bounded evidence, complete the interpretation, resolve it, and download a safe internal
-packet without querying tables or reading source. Horizon 5 as a whole remains incomplete; the
-broader scenario catalog, external trace/log investigation integration, and later operational
-workflows remain future work. See [the roadmap](roadmap.md#near-term-direction).
+The on-demand Guide, contextual help, route-specific tours, supported-conclusion workflow, and
+single case-driven policy experiment are established bounded movements. The operator drill from
+recorded failure through investigation, comparison, linked evidence, and supported human conclusion
+establishes the bounded Horizon 5 signal. Broader scenario catalogs, statistical campaigns,
+external trace/log investigation integration, universal provider health, and generic recovery
+remain future candidates. See [the roadmap](roadmap.md#near-term-direction).
 
 ## Suggested interview questions and honest answers
 
@@ -424,5 +437,6 @@ server-only behavior; browser mutations can use only public configuration. Evide
 That limits production trust, authorship, and isolation claims even though reads are routed by
 tenant.
 
-**What comes next?** Product Tour and Operator Guidance, then broader Horizon 5 movements. The tour
-remains future work and Horizon 5 remains incomplete.
+**What comes next?** The bounded Horizon 5 workflow is established. Broader scenario catalogs,
+external telemetry correlation, statistical campaigns, universal provider-health views, and
+generic recovery remain candidates; Horizon 6 identity guarantees have not begun.
