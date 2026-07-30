@@ -5,6 +5,7 @@ import { CaseNotes } from "@/features/investigation-cases/case-notes";
 import { CaseOverview } from "@/features/investigation-cases/case-overview";
 import { CaseTimeline } from "@/features/investigation-cases/case-timeline";
 import { getInvestigationCase } from "@/lib/server-api";
+import { ConceptHelp } from "@/features/guidance/concept-help";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,11 @@ export default async function InvestigationCaseDetailPage({
             <span className="mono">{item.caseId}</span>
           </div>
         </div>
-        <Link className="workbench-link" href={detail.links.savedWorkbench}>
+        <Link
+          className="workbench-link"
+          data-guide-anchor="case-saved-workbench"
+          href={detail.links.savedWorkbench}
+        >
           Open saved workbench scope
         </Link>
       </section>
@@ -51,6 +56,12 @@ export default async function InvestigationCaseDetailPage({
           intentionally record timestamps without claiming who made a change.
         </p>
       </section>
+      <ConceptHelp
+        title="How should I read this case history?"
+        what="Evidence remains authoritative at its source links. Notes are append-only, while finding, resolution, importance, and status are current interpretation."
+        why="Separating references, immutable notes, and mutable conclusions keeps the investigation reviewable without claiming an authenticated actor."
+        lookFor="Reopen the exact saved Workbench scope, inspect linked evidence, and distinguish note history from current fields and metadata events."
+      />
 
       <CaseOverview detail={detail} />
       <CaseControls detail={detail} />

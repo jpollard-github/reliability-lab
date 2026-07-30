@@ -3,7 +3,11 @@ import { ExecutionMachineView } from "@/features/live-machine/live-execution-vie
 
 export function ComparisonMachines({ comparison }: { comparison: ComparisonView }) {
   return (
-    <section className="comparison-machines" aria-label="Side-by-side execution machines">
+    <section
+      className="comparison-machines"
+      aria-label="Side-by-side execution machines"
+      data-guide-anchor="comparison-machines"
+    >
       <ExecutionMachineView
         followLive={false}
         initialExecution={comparison.originalExecution}

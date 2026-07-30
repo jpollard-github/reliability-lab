@@ -72,6 +72,8 @@ Implemented now:
 - Saved Investigation Cases with exact canonical workbench scopes, current findings and resolution,
   typed execution/comparison/provider-observation references, append-only notes, metadata-only
   lifecycle timelines, archive status, and stable tenant-scoped case pagination
+- server-rendered product Guide, native contextual concept help, and stateless on-demand tours for
+  all six established operator route families
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
   overrides, resolved non-sensitive conditions, linked variant executions, and read-time projections
 - explicit `in_process` and `postgres_worker` execution modes; durable mode atomically accepts
@@ -139,6 +141,8 @@ Plain-language guides:
 - [Design-review walkthrough](docs/design-review-walkthrough.md)
 - [Change recipes](docs/change-recipes.md)
 - [Human-Comprehension Refactor plan](docs/reliability-lab-human-comprehension-refactor-plan.md)
+- [Product Tour and Operator Guidance basics](docs/reliability-lab-product-tour-and-operator-guidance-basics.md)
+- [Product Tour and Operator Guidance implementation](docs/product-tour-and-operator-guidance.md)
 
 ## Execution lifecycle
 

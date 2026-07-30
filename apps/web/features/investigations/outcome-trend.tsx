@@ -4,7 +4,7 @@ import { formatDate } from "./time-window-toolbar";
 export function OutcomeTrend({ summary }: { summary: ReliabilitySummary }) {
   const max = Math.max(1, ...summary.trend.map((bucket) => bucket.total));
   return (
-    <section className="panel" id="provider-observations">
+    <section className="panel" data-guide-anchor="workbench-trend">
       <div className="panel-heading">
         <div>
           <h2>Outcome trend</h2>

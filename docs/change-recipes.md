@@ -286,6 +286,36 @@ boundary.
 - **Avoid:** a new catch-all dashboard spec, fixed shared idempotency keys, arbitrary sleeps,
   unbounded pagination seeds, or helpers that contain the assertions.
 
+## 11. Add or revise operator guidance
+
+**Product intent.** Help an operator interpret one established product concept without inventing a
+new capability or mutating the evidence being explained.
+
+- **Primary owner:** plain Guide or tour data under `apps/web/features/guidance/`; the established
+  product component owns its semantic `data-guide-anchor`.
+- **Adjacent modules:** `guide-page.tsx` for Guide presentation, `concept-help.tsx` for native
+  disclosure structure, `tour-launcher.tsx` for browser interaction, `guidance.css` for feature
+  styling, and the relevant route composition.
+- **Contract implications:** none. Guidance describes existing contracts and must not introduce a
+  parallel data shape that claims authority over product evidence.
+- **Persistence and API implications:** none. Tours are stateless and on demand; static guidance
+  requires no API request.
+- **Web implications:** keep Guide content server-rendered, step content plain and reviewable, and
+  the controller a focused Client Component. Use one stable semantic anchor per concept.
+- **Tests:** update canonical-content or tour-state unit tests and
+  `apps/web/tests/operator-guidance.spec.ts`; verify required and optional absence, keyboard focus,
+  reduced motion, desktop, and 390 px behavior.
+- **Documentation:** update `product-tour-and-operator-guidance.md`, the codebase find-it drill, and
+  roadmap wording only when established versus future capability changes.
+- **Invariant:** a tour never auto-launches, changes navigation, submits a form, stores evidence, or
+  claims more than the underlying interface proves.
+- **Avoid:** arbitrary HTML in registry data, text/nesting selectors, a third-party tour runtime,
+  fake tour evidence, persistent completion state, or converting a route wholesale to client
+  rendering.
+
+See [Product Tour and Operator Guidance](product-tour-and-operator-guidance.md) for the step-level
+procedure.
+
 ## Verification chooser
 
 | Change boundary                            | Minimum focused evidence before broader verification     |

@@ -13,7 +13,7 @@ export function ExecutionExplorer({
   >;
 }) {
   return (
-    <section className="panel" id="execution-explorer">
+    <section className="panel" data-guide-anchor="workbench-explorer" id="execution-explorer">
       <div className="panel-heading">
         <div>
           <h2>Execution explorer</h2>

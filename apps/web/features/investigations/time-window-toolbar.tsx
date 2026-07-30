@@ -9,7 +9,11 @@ export function TimeWindowToolbar({
   selectedWindow: WindowPreset;
 }) {
   return (
-    <section className="workbench-toolbar panel" aria-labelledby="time-window-heading">
+    <section
+      className="workbench-toolbar panel"
+      aria-labelledby="time-window-heading"
+      data-guide-anchor="workbench-time-window"
+    >
       <div className="panel-heading">
         <div>
           <h2 id="time-window-heading">Time window</h2>

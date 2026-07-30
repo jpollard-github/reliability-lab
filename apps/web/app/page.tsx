@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ExecutionForm } from "@/features/executions/execution-form";
 import { ExecutionTable } from "@/features/executions/execution-table";
+import { ConceptHelp } from "@/features/guidance/concept-help";
 import { getInvestigationSummary, searchInvestigationExecutions } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,17 @@ export default async function HomePage() {
           local · demo-tenant
         </div>
       </section>
-      <section className="metrics" aria-label="Execution summary">
+      <ConceptHelp
+        title="How should I read a deterministic execution?"
+        what="Each scenario creates one policy-governed execution. Every provider call inside that lifecycle is an attempt."
+        why="Known fake-provider behavior makes retry, fallback, validation, and budget evidence repeatable without implying real-provider quality."
+        lookFor="Compare the execution status with its attempt count, then open the detail page to inspect the recorded route."
+      />
+      <section
+        className="metrics"
+        aria-label="Execution summary"
+        data-guide-anchor="execution-summary"
+      >
         <Metric label="Total" value={summary.population.total} />
         <Metric label="Succeeded" value={summary.outcomes.succeeded} tone="success" />
         <Metric label="Degraded" value={summary.outcomes.degraded} tone="warning" />
@@ -42,13 +53,17 @@ export default async function HomePage() {
         </div>
         <ExecutionForm />
       </section>
-      <section className="panel">
+      <section className="panel" data-guide-anchor="recent-executions">
         <div className="panel-heading">
           <div>
             <h2>Recent executions</h2>
             <p>Compact tenant-isolated results from the last 24 hours, newest first.</p>
           </div>
-          <Link className="workbench-link" href="/investigations">
+          <Link
+            className="workbench-link"
+            data-guide-anchor="workbench-entry"
+            href="/investigations"
+          >
             Open investigation workbench
           </Link>
         </div>

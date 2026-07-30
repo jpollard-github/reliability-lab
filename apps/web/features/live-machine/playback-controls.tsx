@@ -4,6 +4,7 @@ import { playbackSpeeds, type PlaybackSpeed, type PlaybackState } from "./use-ev
 
 interface PlaybackControlsProps extends PlaybackState {
   eventCount: number;
+  guideAnchor?: string | undefined;
   restart: () => void;
   toggle: () => void;
   step: () => void;
@@ -17,6 +18,7 @@ export function PlaybackControls({
   playing,
   speed,
   eventCount,
+  guideAnchor,
   restart,
   toggle,
   step,
@@ -24,7 +26,11 @@ export function PlaybackControls({
   setSpeed,
 }: PlaybackControlsProps) {
   return (
-    <div className="playback-controls" aria-label="Timeline playback controls">
+    <div
+      className="playback-controls"
+      aria-label="Timeline playback controls"
+      data-guide-anchor={guideAnchor}
+    >
       <button type="button" onClick={restart} disabled={eventCount === 0}>
         Restart
       </button>

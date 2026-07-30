@@ -13,7 +13,11 @@ export function CaseEvidence({
   removeEvidence: (evidenceId: string) => void;
 }) {
   return (
-    <section className="panel" aria-labelledby="linked-evidence-heading">
+    <section
+      className="panel"
+      aria-labelledby="linked-evidence-heading"
+      data-guide-anchor="case-evidence"
+    >
       <div className="panel-heading">
         <div>
           <h2 id="linked-evidence-heading">Linked evidence</h2>

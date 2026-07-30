@@ -9,6 +9,7 @@ const ownershipDocuments = [
   "reliability-lab-ownership-and-design-review-basics.md",
   "design-review-walkthrough.md",
   "change-recipes.md",
+  "product-tour-and-operator-guidance.md",
 ];
 
 describe("documentation audit", () => {
@@ -43,7 +44,7 @@ describe("documentation audit", () => {
 
     const result = await run(process.execPath, [script], directory, true);
     expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("README.md:4: unresolved relative link docs/missing.md");
+    expect(result.stderr).toContain("README.md:5: unresolved relative link docs/missing.md");
   });
 
   it("rejects an unguarded local absolute path", async () => {
@@ -58,7 +59,7 @@ Local checkout: /Users/example/reliability-lab
 
     const result = await run(process.execPath, [script], directory, true);
     expect(result.code).not.toBe(0);
-    expect(result.stderr).toContain("README.md:4: local absolute path is not portable");
+    expect(result.stderr).toContain("README.md:5: local absolute path is not portable");
   });
 });
 

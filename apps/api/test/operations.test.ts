@@ -25,4 +25,19 @@ describe("API operations", () => {
     expect(openapi.json().paths["/v1/investigation-cases/{caseId}"]).toBeDefined();
     expect(openapi.json().paths["/v1/investigation-cases/{caseId}/notes"]).toBeDefined();
   });
+
+  it("serves Swagger UI and its static assets", async () => {
+    const docs = await app.inject({ method: "GET", url: "/docs/" });
+    expect(docs.statusCode).toBe(200);
+    expect(docs.headers["content-type"]).toContain("text/html");
+    expect(docs.body).toContain("./static/swagger-ui.css");
+
+    const stylesheet = await app.inject({
+      method: "GET",
+      url: "/docs/static/swagger-ui.css",
+    });
+    expect(stylesheet.statusCode).toBe(200);
+    expect(stylesheet.headers["content-type"]).toContain("text/css");
+    expect(stylesheet.body).toContain(".swagger-ui");
+  });
 });

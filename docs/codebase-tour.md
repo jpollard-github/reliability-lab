@@ -23,6 +23,7 @@ symbol.
 | Question                                   | Primary document                                                 |
 | ------------------------------------------ | ---------------------------------------------------------------- |
 | What is the product and its vocabulary?    | `README.md`, `docs/reliability-lab-basics.md`                    |
+| How does operator guidance work?           | `docs/product-tour-and-operator-guidance.md`                     |
 | How would the owner explain and defend it? | `docs/design-review-walkthrough.md`                              |
 | How does one operation cross boundaries?   | `docs/system-flows.md`                                           |
 | Where does one responsibility live?        | This codebase tour                                               |
@@ -200,6 +201,7 @@ apps/web/
     comparisons/[experimentId]/page.tsx
     investigation-cases/page.tsx
     investigation-cases/[caseId]/page.tsx
+    guide/page.tsx
     globals.css                         ordered style import map
   features/
     executions/
@@ -245,24 +247,35 @@ apps/web/
       case-overview.tsx
       case-notes.tsx
       case-timeline.tsx
+    guidance/
+      guide-content.ts
+      guide-page.tsx
+      concept-help.tsx
+      page-tour.tsx
+      tour-launcher.tsx
+      tour-registry.ts
+      tour-state.ts
   lib/
     server-api.ts
     client-api.ts
   styles/
     tokens.css, base.css, shell.css, forms.css, tables.css
     executions.css, comparisons.css, live-machine.css
-    investigations.css, investigation-cases.css, responsive.css
+    investigations.css, investigation-cases.css, guidance.css, responsive.css
   tests/
     execution-lifecycle.spec.ts
     live-machine.spec.ts
     comparative-replay.spec.ts
     investigation-workbench.spec.ts
     saved-investigation-cases.spec.ts
+    operator-guidance.spec.ts
     support/
 ```
 
 Route pages compose server-rendered evidence and focused client islands. `server-api.ts` imports
-`server-only`; browser mutations use the public-only `client-api.ts` boundary.
+`server-only`; browser mutations use the public-only `client-api.ts` boundary. Static Guide content
+and contextual help remain server-rendered. `PageTour` and `TourLauncher` are the focused,
+stateless guidance client island.
 
 ## Public entrypoints and composition roots
 
@@ -356,6 +369,31 @@ Route pages compose server-rendered evidence and focused client islands. `server
 | 22  | Investigation styles                   | `apps/web/styles/investigations.css`                                                                                            |
 | 23  | Responsive styles                      | `apps/web/styles/responsive.css`                                                                                                |
 
+## Operator guidance “find it” drill
+
+| #   | Responsibility                 | Final file and symbol or data identifier                                   |
+| --- | ------------------------------ | -------------------------------------------------------------------------- |
+| 1   | Guide route                    | `apps/web/app/guide/page.tsx` — `ProductGuidePage`                         |
+| 2   | Product workflow content       | `apps/web/features/guidance/guide-content.ts` — `operatorWorkflow`         |
+| 3   | Glossary                       | `apps/web/features/guidance/guide-content.ts` — `glossary`                 |
+| 4   | Contextual help                | `apps/web/features/guidance/concept-help.tsx` — `ConceptHelp`              |
+| 5   | Tour launcher                  | `apps/web/features/guidance/tour-launcher.tsx` — `TourLauncher`            |
+| 6   | Tour registry                  | `apps/web/features/guidance/tour-registry.ts` — `pageTours`                |
+| 7   | Tour navigation state          | `apps/web/features/guidance/tour-state.ts` — `TourNavigation`              |
+| 8   | Required-anchor failure        | `apps/web/features/guidance/tour-state.ts` — `prepareTour`                 |
+| 9   | Optional-anchor skip           | `apps/web/features/guidance/tour-state.ts` — `prepareTour`                 |
+| 10  | Executions tour                | `pageTours.executions`                                                     |
+| 11  | Execution-detail tour          | `pageTours.executionDetail`                                                |
+| 12  | Comparison tour                | `pageTours.comparisonDetail`                                               |
+| 13  | Workbench tour                 | `pageTours.investigations`                                                 |
+| 14  | Case-list tour                 | `pageTours.caseList`                                                       |
+| 15  | Case-detail tour               | `pageTours.caseDetail`                                                     |
+| 16  | Active-target styling          | `apps/web/styles/guidance.css` — `[data-guide-active="true"]`              |
+| 17  | Reduced-motion styling         | `apps/web/styles/guidance.css` — `@media (prefers-reduced-motion: reduce)` |
+| 18  | Guidance Playwright workflow   | `apps/web/tests/operator-guidance.spec.ts`                                 |
+| 19  | Route-resolution unit tests    | `apps/web/features/guidance/tour-state.test.ts`                            |
+| 20  | Adding or changing a tour step | `docs/product-tour-and-operator-guidance.md` — “Add or change a tour step” |
+
 ## Recommended reading order
 
 1. `README.md`, then `docs/reliability-lab-basics.md`
@@ -388,3 +426,4 @@ The companion [system flows](system-flows.md) follows concrete calls across thos
 | API read endpoint           | `apps/api/src/routes/`                              | [Add an API read endpoint](change-recipes.md#8-add-an-api-read-endpoint)                   |
 | Operator-console section    | `apps/web/features/`                                | [Add an operator-console section](change-recipes.md#9-add-an-operator-console-section)     |
 | Playwright workflow         | `apps/web/tests/`                                   | [Add a Playwright workflow](change-recipes.md#10-add-a-playwright-workflow)                |
+| Operator guidance           | `apps/web/features/guidance/`                       | [Add or revise operator guidance](change-recipes.md#11-add-or-revise-operator-guidance)    |

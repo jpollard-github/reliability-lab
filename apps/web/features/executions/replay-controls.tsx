@@ -96,7 +96,7 @@ export function ReplayControls({
   const canDelete = !["retention_disabled", "missing", "deleted"].includes(capability.state);
 
   return (
-    <div className="replay-control">
+    <div className="replay-control" data-guide-anchor="replay-capability">
       <div className="replay-actions">
         <ComparisonBuilder execution={execution} capability={capability} />
         <button

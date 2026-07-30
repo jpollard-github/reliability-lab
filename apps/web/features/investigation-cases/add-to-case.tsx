@@ -12,10 +12,12 @@ export function AddToCase({
   cases,
   evidence,
   beginCaseHref,
+  guideAnchor,
 }: {
   cases: InvestigationCaseSummary[];
   evidence: InvestigationCaseEvidenceInput;
   beginCaseHref: string;
+  guideAnchor?: string;
 }) {
   const [caseId, setCaseId] = useState(cases[0]?.case.caseId ?? "");
   const [busy, setBusy] = useState(false);
@@ -36,7 +38,11 @@ export function AddToCase({
   }
 
   return (
-    <section className="panel add-to-case" aria-labelledby="add-to-case-heading">
+    <section
+      className="panel add-to-case"
+      aria-labelledby="add-to-case-heading"
+      data-guide-anchor={guideAnchor}
+    >
       <div>
         <h2 id="add-to-case-heading">Add to investigation case</h2>
         <p>Link this evidence without copying its prompt, output, attempts, or events.</p>

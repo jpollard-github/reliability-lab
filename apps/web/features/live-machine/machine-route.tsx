@@ -4,13 +4,19 @@ export function MachineRoute({
   projection,
   playbackActive,
   latestVisibleSequence,
+  guideAnchor,
 }: {
   projection: ExecutionMachineProjection;
   playbackActive: boolean;
   latestVisibleSequence: number;
+  guideAnchor?: string | undefined;
 }) {
   return (
-    <ol className="machine-route" aria-label="Execution state route">
+    <ol
+      className="machine-route"
+      aria-label="Execution state route"
+      data-guide-anchor={guideAnchor}
+    >
       {projection.steps.map((step) => (
         <li
           key={step.id}

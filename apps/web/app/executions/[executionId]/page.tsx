@@ -4,6 +4,7 @@ import { LiveExecutionView } from "@/features/live-machine/live-execution-view";
 import { ReplayControls } from "@/features/executions/replay-controls";
 import { StatusBadge } from "@/components/status-badge";
 import { AddToCase } from "@/features/investigation-cases/add-to-case";
+import { ConceptHelp } from "@/features/guidance/concept-help";
 import { getExecution, getInvestigationCases } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function ExecutionDetailPage({
         <span>/</span>
         <span className="mono">{execution.executionId}</span>
       </div>
-      <section className="detail-heading">
+      <section className="detail-heading" data-guide-anchor="execution-envelope">
         <div>
           <p className="eyebrow">Execution envelope v{execution.schemaVersion}</p>
           <h1 className="mono">{execution.executionId}</h1>
@@ -62,6 +63,12 @@ export default async function ExecutionDetailPage({
           capability={execution.replayCapability}
         />
       </section>
+      <ConceptHelp
+        title="How should I interpret this execution evidence?"
+        what="Live mode follows newly persisted events; recorded playback only changes the visible presentation point. Replay is a separate new execution and depends on current capability."
+        why="Normalized outcomes, including degraded recovery, explain recorded control flow without claiming answer quality or exactly-once provider effects."
+        lookFor="Check replay state and reason, compare live status with playback status, then inspect normalized outcome and event-derived investigation signals."
+      />
       <LiveExecutionView
         key={`${execution.executionId}-${execution.status}-${execution.updatedAt}`}
         initialExecution={execution}
@@ -98,7 +105,7 @@ export default async function ExecutionDetailPage({
             ) : null}
           </dl>
         </div>
-        <div className="panel">
+        <div className="panel" data-guide-anchor="normalized-outcome">
           <h2>Normalized outcome</h2>
           {execution.error ? (
             <div className="error-block">
@@ -112,7 +119,7 @@ export default async function ExecutionDetailPage({
           )}
         </div>
       </section>
-      <section className="panel">
+      <section className="panel" data-guide-anchor="investigation-signals">
         <div className="panel-heading">
           <div>
             <h2>Investigation signals</h2>
@@ -135,6 +142,7 @@ export default async function ExecutionDetailPage({
         beginCaseHref={`/investigation-cases?newEvidenceType=execution&newEvidenceId=${encodeURIComponent(execution.executionId)}`}
         cases={recentCases.data}
         evidence={{ type: "execution", executionId: execution.executionId }}
+        guideAnchor="case-linking"
       />
       <section className="panel">
         <div className="panel-heading">

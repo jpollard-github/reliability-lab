@@ -77,7 +77,11 @@ export function ReliabilitySummaryCards({
     },
   ];
   return (
-    <section className="investigation-cards" aria-label="Reliability summary">
+    <section
+      className="investigation-cards"
+      aria-label="Reliability summary"
+      data-guide-anchor="workbench-summary"
+    >
       {cards.map((card) => (
         <DrillCard key={card.label} {...card} />
       ))}

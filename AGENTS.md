@@ -47,6 +47,9 @@ Prefer targeted tests while editing, then run the appropriate repository verific
 - Keep `apps/web/app/**/page.tsx` as route composition. Server reads use `lib/server-api.ts`; browser
   mutations use `lib/client-api.ts` and feature-specific helpers. Keep URL state, live stream state,
   playback state, and form drafts in their named feature modules.
+- Keep operator guidance under `apps/web/features/guidance`. Guide content and tour records are
+  plain reviewable data; route sections own semantic `data-guide-anchor` values. Tours stay
+  stateless, on demand, and free of product mutations or server-only imports.
 - Keep global CSS in the ordered `app/globals.css` import map. Preserve selector names, declaration
   values, and cascade order when moving feature styles.
 - Organize Playwright by operator workflow under `apps/web/tests`; shared setup uses domain names,

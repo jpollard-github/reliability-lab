@@ -18,6 +18,10 @@ The end goal is not another chatbot, provider wrapper, or generic admin panel. I
 Execute → Explain → Preserve safely → Replay → Compare → Learn → Operate
 ```
 
+This is the system-evolution sequence: it describes how product capabilities build on safe
+evidence. The operator Guide uses a distinct product-use workflow:
+`Execute → Explain → Watch → Replay → Compare → Investigate → Preserve`.
+
 ## The moving parts
 
 ### Evidence plane
@@ -127,13 +131,19 @@ Those remain possible future work, not prerequisites for Horizon 5.
 
 ### Horizon 5: An operator’s reliability lab
 
-**Established movement: Saved Investigation Cases.** Investigation now persists beyond one browser
-session without becoming a generic ticketing system. The cross-cutting Human-Comprehension and
-Ownership Pass has established Phase 1 contracts/core and Phase 2 persistence/API composition.
-Phase 3 operator-console/test organization and Phase 4 ownership documentation/design review are
-also established. The Human-Comprehension and Ownership Pass is complete.
+**Established movements: Saved Investigation Cases and Product Tour and Operator Guidance.**
+Investigation persists beyond one browser session without becoming a generic ticketing system, and
+the product now teaches the established operator workflow. The cross-cutting Human-Comprehension and
+Ownership Pass has established Phase 1 contracts/core, Phase 2 persistence/API composition, Phase 3
+operator-console/test organization, and Phase 4 ownership documentation/design review. The
+Human-Comprehension and Ownership Pass is complete.
 
-The console supports useful filtering and search, trace/log correlation, replay comparisons, scenario catalogs, policy experiments, provider health views, and aggregate reliability metrics. The system begins to expose service-level signals such as success, degraded success, retry recovery, fallback dependence, latency-budget failures, and replay reproducibility.
+The established console supports bounded filtering and search, internal trace-identifier
+correlation, replay comparisons, five deterministic scenarios, attempt-level provider/model
+observations, and aggregate reliability evidence. It exposes signals such as success, degraded
+success, retry recovery, fallback dependence, and latency-budget failure. Broader scenario catalogs,
+policy experiment surfaces, external trace/log correlation, and universal provider-health views
+remain future possibilities.
 
 The established first movement, **Investigation Workbench Foundation**, provides bounded explicit
 time ranges, compact and stably paginated execution search, aggregate reliability signals,
@@ -146,11 +156,10 @@ metadata-only lifecycle timeline. It deliberately has no fabricated author, assi
 comments, arbitrary attachments/URLs, automatic case creation, or copied execution envelopes. The
 tenant header remains routing context rather than authenticated identity.
 
-**Future movement: Product Tour and Operator Guidance.** A new operator should be able to understand
-what Reliability Lab does, complete the main workflow, interpret evidence, and know what to try next
-without reading source code. Future guidance may include an on-demand tour, contextual “What does
-this do?” and “How do I use this?” help, and links to API and human documentation. This movement is
-not implemented by the structural comprehension pass.
+The established third movement, **Product Tour and Operator Guidance**, adds a server-rendered Guide,
+focused contextual concept help, and stateless on-demand tours for all six established route
+families. It teaches the current product and its limitations without adding a broad scenario
+catalog, analytics, stored progress, or a second demonstration application.
 
 Horizon 5 is not complete. A broader scenario catalog and explicitly configured external trace/log
 correlation remain later possibilities when the workflow justifies them. The product still does not
@@ -197,9 +206,9 @@ Saved Investigation Cases
         ↓
 Human-Comprehension and Ownership Pass complete
         ↓
-Product Tour and Operator Guidance
+Product Tour and Operator Guidance established
         ↓
-Resume broader Horizon 5 product movements
+Evaluate the next broader Horizon 5 movement
 ```
 
 Comparative Replay now turns a retained case and its live evidence into a controlled experiment.
@@ -208,9 +217,9 @@ worker mode and fences stale claims without overstating exactly-once provider be
 Investigation Workbench Foundation and Saved Investigation Cases are established. Contracts/core
 (Phase 1), persistence/API composition (Phase 2), operator-console/test organization (Phase 3), and
 ownership documentation/design review (Phase 4) now make those capabilities easier to locate,
-explain, defend, and safely modify. The cross-cutting pass is complete; future Product Tour and
-Operator Guidance is next. This is not a new product horizon and does not advance Horizon 6 claims.
-A scenario catalog and explicitly configured
-trace/log integrations remain later Horizon 5 work. Cancellation, Redis coordination, generic
-outbox tooling, resumable workflow machinery, and cloud infrastructure are not prerequisites for
-that movement.
+explain, defend, and safely modify. Product Tour and Operator Guidance is established without
+advancing Horizon 6 claims. The next broader Horizon 5 movement remains intentionally unelected;
+candidates include a guided scenario catalog and policy experiments, explicitly configured
+trace/log correlation, or deeper investigation conclusions and operator recovery. None is declared
+complete. Cancellation, Redis coordination, generic outbox tooling, resumable workflow machinery,
+and cloud infrastructure are not prerequisites for evaluating that choice.

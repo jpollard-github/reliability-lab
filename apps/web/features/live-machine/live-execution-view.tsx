@@ -12,17 +12,19 @@ import { useEventPlayback } from "./use-event-playback";
 import { useExecutionStream, type StreamState } from "./use-execution-stream";
 
 export function LiveExecutionView({ initialExecution }: { initialExecution: ExecutionEnvelope }) {
-  return <ExecutionMachineView initialExecution={initialExecution} />;
+  return <ExecutionMachineView guideAnchor="live-machine" initialExecution={initialExecution} />;
 }
 
 export function ExecutionMachineView({
   initialExecution,
   title = "Live execution machine",
   followLive = true,
+  guideAnchor,
 }: {
   initialExecution: ExecutionEnvelope;
   title?: string;
   followLive?: boolean;
+  guideAnchor?: string;
 }) {
   const headingId = useId();
   const stream = useExecutionStream(initialExecution, followLive);
@@ -34,7 +36,11 @@ export function ExecutionMachineView({
     : stream.execution.status;
 
   return (
-    <section className="panel live-machine" aria-labelledby={headingId}>
+    <section
+      className="panel live-machine"
+      aria-labelledby={headingId}
+      data-guide-anchor={guideAnchor}
+    >
       <div className="panel-heading live-machine-heading">
         <div>
           <p className="eyebrow">Persisted event stream</p>
@@ -60,6 +66,7 @@ export function ExecutionMachineView({
         active={playback.active}
         count={playback.count}
         eventCount={stream.events.length}
+        guideAnchor={guideAnchor ? "playback-controls" : undefined}
         leave={playback.leave}
         playing={playback.playing}
         restart={playback.restart}
@@ -69,6 +76,7 @@ export function ExecutionMachineView({
         toggle={playback.toggle}
       />
       <MachineRoute
+        guideAnchor={guideAnchor ? "machine-route" : undefined}
         latestVisibleSequence={visibleEvents.at(-1)?.sequence ?? 0}
         playbackActive={playback.active}
         projection={visibleProjection}

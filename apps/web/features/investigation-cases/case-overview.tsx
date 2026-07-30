@@ -4,7 +4,7 @@ export function CaseOverview({ detail }: { detail: InvestigationCaseDetail }) {
   const item = detail.case;
   return (
     <>
-      <section className="case-overview">
+      <section className="case-overview" data-guide-anchor="case-overview">
         <article className="panel">
           <h2>Reliability question</h2>
           <p className="case-prose">{item.question}</p>

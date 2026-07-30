@@ -11,7 +11,11 @@ export function ProviderObservations({
   current: URLSearchParams;
 }) {
   return (
-    <section className="panel">
+    <section
+      className="panel"
+      data-guide-anchor="workbench-provider-observations"
+      id="provider-observations"
+    >
       <div className="panel-heading">
         <div>
           <h2>Provider/model observations</h2>

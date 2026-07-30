@@ -2,7 +2,7 @@ import type { InvestigationCaseDetail } from "@reliability-lab/contracts";
 
 export function CaseNotes({ notes }: { notes: InvestigationCaseDetail["notes"] }) {
   return (
-    <article className="panel">
+    <article className="panel" data-guide-anchor="case-notes">
       <div className="panel-heading">
         <div>
           <h2>Append-only notes</h2>

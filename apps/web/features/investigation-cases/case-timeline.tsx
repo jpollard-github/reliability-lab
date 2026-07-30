@@ -2,7 +2,7 @@ import type { InvestigationCaseDetail } from "@reliability-lab/contracts";
 
 export function CaseTimeline({ timeline }: { timeline: InvestigationCaseDetail["timeline"] }) {
   return (
-    <article className="panel">
+    <article className="panel" data-guide-anchor="case-timeline">
       <div className="panel-heading">
         <div>
           <h2>Metadata timeline</h2>

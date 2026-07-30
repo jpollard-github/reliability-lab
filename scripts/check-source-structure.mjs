@@ -31,6 +31,7 @@ for (const file of productionTypeScriptFiles(apiRoot)) {
   checkApiComposition(file);
 }
 checkWebStructure();
+checkGuidanceStructure();
 requireFiles([
   "packages/db/src/database/database.ts",
   "packages/db/src/investigation/execution-search-query.ts",
@@ -53,6 +54,15 @@ requireFiles([
   "apps/web/features/investigation-cases/case-controls.tsx",
   "apps/web/features/investigation-cases/case-mutations.ts",
   "apps/web/features/investigation-cases/case-evidence.tsx",
+  "apps/web/app/guide/page.tsx",
+  "apps/web/features/guidance/guide-content.ts",
+  "apps/web/features/guidance/guide-page.tsx",
+  "apps/web/features/guidance/concept-help.tsx",
+  "apps/web/features/guidance/page-tour.tsx",
+  "apps/web/features/guidance/tour-launcher.tsx",
+  "apps/web/features/guidance/tour-registry.ts",
+  "apps/web/features/guidance/tour-state.ts",
+  "apps/web/styles/guidance.css",
 ]);
 
 for (const warning of warnings) console.warn(`structure warning: ${warning}`);
@@ -112,6 +122,38 @@ function checkWebStructure() {
     failures.push("apps/web/tests/dashboard.spec.ts must be replaced by workflow-named specs");
   }
   checkFeatureCycles(path.join(webRoot, "features"));
+}
+
+function checkGuidanceStructure() {
+  const layout = path.join(webRoot, "app/layout.tsx");
+  const layoutSource = fs.readFileSync(layout, "utf8");
+  if (/\b(?:GuideStep|pageTours|operatorWorkflow|steps\s*:)\b/u.test(layoutSource)) {
+    failures.push("apps/web/app/layout.tsx must compose guidance, not embed guidance content");
+  }
+
+  for (const page of recursiveFiles(path.join(webRoot, "app")).filter((file) =>
+    file.endsWith(`${path.sep}page.tsx`),
+  )) {
+    const source = fs.readFileSync(page, "utf8");
+    if (/\b(?:prepareTour|TourLauncher|nextTourStep|previousTourStep)\b/u.test(source)) {
+      failures.push(`${relative(page)} must compose guidance, not own the tour implementation`);
+    }
+  }
+
+  const packageJson = JSON.parse(fs.readFileSync(path.join(webRoot, "package.json"), "utf8"));
+  const dependencies = Object.keys(packageJson.dependencies ?? {});
+  const forbiddenTourRuntimes = [
+    "driver.js",
+    "intro.js",
+    "react-joyride",
+    "shepherd.js",
+    "@reactour/tour",
+  ];
+  for (const dependency of dependencies) {
+    if (forbiddenTourRuntimes.includes(dependency)) {
+      failures.push(`apps/web/package.json adds forbidden tour runtime ${dependency}`);
+    }
+  }
 }
 
 function webProductionFiles(directory) {

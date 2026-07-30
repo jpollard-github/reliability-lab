@@ -15,6 +15,7 @@ app/executions/[executionId]/page.tsx
 app/comparisons/[experimentId]/page.tsx
 app/investigation-cases/page.tsx
 app/investigation-cases/[caseId]/page.tsx
+app/guide/page.tsx
 ```
 
 Pages await Next.js route/search parameters, call server reads or a named loader, handle
@@ -34,6 +35,7 @@ Server Components own initial reads and evidence presentation. Examples include:
 - Workbench summary/trend/provider/execution sections;
 - execution and comparison detail evidence;
 - saved-case list, overview, notes, and timeline.
+- Guide content and native contextual disclosures.
 
 Client Components are focused mutation or live-interaction islands:
 
@@ -42,6 +44,7 @@ Client Components are focused mutation or live-interaction islands:
 - `features/live-machine/live-execution-view.tsx` and its controllers;
 - `features/comparisons/comparison-builder.tsx`;
 - saved-case creation, add-to-case, controls, and evidence removal.
+- `features/guidance/page-tour.tsx` and `tour-launcher.tsx`.
 
 Client modules never import `lib/server-api.ts` or the server-only Workbench loader. The structural
 audit enforces that obvious boundary.
@@ -57,6 +60,7 @@ features/
   comparisons/
   investigations/
   investigation-cases/
+  guidance/
 ```
 
 `components/status-badge.tsx` remains shared because status is a stable cross-feature visual
@@ -174,6 +178,18 @@ The saved-case feature separates:
 
 Notes remain append-only, evidence remains a current link, and no actor identity is fabricated.
 
+## Operator guidance
+
+`features/guidance/guide-content.ts` owns reviewable product workflow, deterministic scenario,
+glossary, and limitation data. `guide-page.tsx` renders it on the server. `ConceptHelp` is a native
+disclosure that route pages compose at established concept boundaries.
+
+`tour-registry.ts` contains six plain route-specific tours. `PageTour` resolves the current route;
+`TourLauncher` is the focused client controller; and `tour-state.ts` owns pure preparation and
+navigation rules. Semantic `data-guide-anchor` values live on the product sections they name.
+Optional missing anchors are skipped and reported; required missing anchors stop the tour. Tours
+never auto-launch, persist state, call an API, navigate, or mutate product state.
+
 ## CSS organization
 
 `app/globals.css` is an ordered import map:
@@ -189,16 +205,16 @@ comparisons.css
 live-machine.css
 investigations.css
 investigation-cases.css
+guidance.css
 responsive.css
 ```
 
-Concatenating these files in import order reproduces the previous stylesheet after whitespace
-normalization; formatting removed only two boundary blank lines. Selector names, declarations,
-variables, media queries, and cascade order are unchanged.
+Feature CSS stays in this stable cascade order. `guidance.css` owns only the Guide, contextual help,
+tour panel, active target, narrow-screen guidance, and reduced-motion rules.
 
 ## Workflow-test organization
 
-The eight Playwright workflows live in:
+The eight established product workflows and the focused guidance workflow live in:
 
 ```text
 tests/execution-lifecycle.spec.ts
@@ -206,6 +222,7 @@ tests/live-machine.spec.ts
 tests/comparative-replay.spec.ts
 tests/investigation-workbench.spec.ts
 tests/saved-investigation-cases.spec.ts
+tests/operator-guidance.spec.ts
 ```
 
 Support modules use domain names: `createExecution`, `createRetryExecution`,

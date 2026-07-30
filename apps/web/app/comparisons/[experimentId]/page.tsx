@@ -4,6 +4,7 @@ import { ComparisonConfigurations } from "@/features/comparisons/comparison-conf
 import { ComparisonMachines } from "@/features/comparisons/comparison-machines";
 import { ComparisonSummary } from "@/features/comparisons/comparison-summary";
 import { AddToCase } from "@/features/investigation-cases/add-to-case";
+import { ConceptHelp } from "@/features/guidance/concept-help";
 import { getComparison, getInvestigationCases } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
@@ -44,13 +45,19 @@ export default async function ComparisonDetailPage({
             <span>Same retained input · two normal execution envelopes</span>
           </div>
         </div>
-        <div className="comparison-links">
+        <div className="comparison-links" data-guide-anchor="comparison-source-links">
           <Link href={`/executions/${originalExecution.executionId}`}>Original detail</Link>
           {variantExecution ? (
             <Link href={`/executions/${variantExecution.executionId}`}>Variant detail</Link>
           ) : null}
         </div>
       </section>
+      <ConceptHelp
+        title="How should I interpret this comparison?"
+        what="Comparative Replay keeps retained input fixed and creates a normal variant execution from a bounded configuration change."
+        why="Named dimensions preserve tradeoffs that a universal score would hide."
+        lookFor="Compare resolved conditions, follow both recorded machines, and open either source execution when a dimension needs more evidence."
+      />
 
       {experiment.unavailableReason ? (
         <section className="panel comparison-unavailable">

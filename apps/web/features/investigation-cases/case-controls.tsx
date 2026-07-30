@@ -86,7 +86,11 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
 
   return (
     <>
-      <section className="panel" aria-labelledby="case-update-heading">
+      <section
+        className="panel"
+        aria-labelledby="case-update-heading"
+        data-guide-anchor="case-controls"
+      >
         <div className="panel-heading">
           <div>
             <h2 id="case-update-heading">Current interpretation</h2>

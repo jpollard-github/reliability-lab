@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageTour } from "@/features/guidance/page-tour";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,10 +24,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <Link href="/">Executions</Link>
             <Link href="/investigations">Investigations</Link>
             <Link href="/investigation-cases">Cases</Link>
+            <Link href="/guide">Guide</Link>
             <a href="http://localhost:4000/docs">API docs</a>
           </nav>
         </header>
         <main>{children}</main>
+        <PageTour />
       </body>
     </html>
   );

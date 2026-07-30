@@ -3,7 +3,11 @@ import type { ComparisonView, ExecutionBudget, ExecutionPolicy } from "@reliabil
 export function ComparisonConfigurations({ comparison }: { comparison: ComparisonView }) {
   const { experiment, originalExecution } = comparison;
   return (
-    <section className="comparison-configs" aria-label="Execution configurations">
+    <section
+      className="comparison-configs"
+      aria-label="Execution configurations"
+      data-guide-anchor="comparison-configurations"
+    >
       <ConfigurationCard
         budget={originalExecution.budget}
         model={originalExecution.attempts[0]?.model ?? originalExecution.model}

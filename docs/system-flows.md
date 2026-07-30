@@ -211,3 +211,23 @@ replay/comparison/case operations write through their existing API/core/persiste
 Terminal UI evidence remains authoritative persisted events or refreshed API state. Relevant tests
 are live-machine unit tests plus `apps/web/tests/live-machine.spec.ts`,
 `comparative-replay.spec.ts`, and `saved-investigation-cases.spec.ts`.
+
+## 10. Operator guidance render and tour state
+
+1. `/guide` renders `GuidePage` from plain workflow, scenario, glossary, and limitation data in
+   `features/guidance/guide-content.ts`.
+2. Existing route pages compose `ConceptHelp` and expose semantic `data-guide-anchor` values on
+   product-owned sections.
+3. `PageTour` reads only the current pathname and resolves one of six static tours through
+   `resolveTourForPath`.
+4. On explicit launch, `TourLauncher` inventories current anchors and calls the pure `prepareTour`.
+5. Missing optional steps are skipped and reported. A missing required step stops with a named
+   message.
+6. Browser-only presentation state moves the step index, scrolls and annotates the current target,
+   honors reduced motion, and restores focus on close.
+
+**Boundary/evidence review:** the Guide and contextual content are server-rendered and require no API
+read. The focused tour client imports only reviewable guidance data and pure state; it stores no
+identity or evidence and performs no product mutation. Relevant tests are
+`apps/web/features/guidance/guide-content.test.ts`, `tour-state.test.ts`, and
+`apps/web/tests/operator-guidance.spec.ts`.

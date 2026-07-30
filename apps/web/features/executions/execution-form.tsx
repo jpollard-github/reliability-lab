@@ -53,7 +53,7 @@ export function ExecutionForm() {
 
   return (
     <form className="dev-form" onSubmit={(event) => void submit(event)}>
-      <div>
+      <div data-guide-anchor="execution-scenario">
         <label htmlFor="scenario">Deterministic scenario</label>
         <select
           id="scenario"
@@ -67,7 +67,7 @@ export function ExecutionForm() {
           ))}
         </select>
       </div>
-      <button type="submit" disabled={submitting}>
+      <button data-guide-anchor="start-execution" type="submit" disabled={submitting}>
         {submitting ? "Starting…" : "Start and watch execution"}
       </button>
       {error ? (

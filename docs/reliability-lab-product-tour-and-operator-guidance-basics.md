@@ -1,6 +1,8 @@
 # Reliability Lab: Product Tour and Operator Guidance Basics
 
-> The repository now teaches engineers how the system works. The next movement should teach operators how to use the product without reading the repository.
+> Established: the repository and product now teach operators how to use Reliability Lab without
+> requiring source-code context. This document preserves the product rationale and acceptance
+> boundary; `product-tour-and-operator-guidance.md` maps the implementation.
 
 ## Why this is the right next step
 
@@ -37,7 +39,8 @@ Adding more machinery before checking whether a new operator can understand thos
 
 Product Tour and Operator Guidance is therefore not decorative polish.
 
-It is a Horizon 5 product movement that tests whether the existing system communicates its value.
+It is an established Horizon 5 product movement that tests whether the existing system communicates
+its value.
 
 ---
 
@@ -253,9 +256,7 @@ Tour targets should be semantic and explicit.
 Example:
 
 ```tsx
-<section data-guide-anchor="live-machine">
-  ...
-</section>
+<section data-guide-anchor="live-machine">...</section>
 ```
 
 Avoid selectors based on:
@@ -303,8 +304,8 @@ A simple accessible disclosure is often enough:
 
 ```tsx
 <ConceptHelp title="What is replay capability?">
-  Replay is available only while the encrypted retained input can currently
-  be read under retention and key policy.
+  Replay is available only while the encrypted retained input can currently be read under retention
+  and key policy.
 </ConceptHelp>
 ```
 
@@ -479,4 +480,5 @@ Product Tour and Operator Guidance is established when a fresh operator can:
 
 The movement is not complete merely because a few tooltips exist.
 
-It is complete when the interface teaches the product honestly.
+It is complete because the accepted interface teaches the product honestly through the Guide,
+contextual help, and stateless tours while preserving the limitations above.

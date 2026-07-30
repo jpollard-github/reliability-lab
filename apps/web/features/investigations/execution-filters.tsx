@@ -19,7 +19,11 @@ export function ExecutionFilters({
   const active = activeFilterDescriptions(current);
   return (
     <>
-      <form className="investigation-filter-form" method="get">
+      <form
+        className="investigation-filter-form"
+        data-guide-anchor="workbench-filters"
+        method="get"
+      >
         {first(raw.from) && first(raw.to) ? (
           <>
             <input name="from" type="hidden" value={first(raw.from)} />

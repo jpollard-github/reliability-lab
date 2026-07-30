@@ -8,6 +8,7 @@ const requiredDocuments = [
   "docs/reliability-lab-ownership-and-design-review-basics.md",
   "docs/design-review-walkthrough.md",
   "docs/change-recipes.md",
+  "docs/product-tour-and-operator-guidance.md",
 ];
 const requiredReadmeLinks = requiredDocuments.map((document) => `(${document})`);
 

@@ -6,6 +6,7 @@ import {
   type SearchValue,
 } from "@/features/investigation-cases/case-list-state";
 import { getInvestigationCases } from "@/lib/server-api";
+import { ConceptHelp } from "@/features/guidance/concept-help";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,18 @@ export default async function InvestigationCasesPage({
           local · demo-tenant
         </div>
       </section>
+      <ConceptHelp
+        title="What does an investigation case preserve?"
+        what="A case saves an exact scope and links to authoritative evidence instead of copying execution or comparison contents."
+        why="Append-only notes preserve corrections over time, while current finding and resolution fields may evolve. This prototype cannot identify the actor."
+        lookFor="Confirm the fixed range, evidence counts and links, note history, current status, and the explicit actor limitation."
+      />
 
-      <section className="panel" aria-labelledby="new-case-heading">
+      <section
+        className="panel"
+        aria-labelledby="new-case-heading"
+        data-guide-anchor="case-creation"
+      >
         <div className="panel-heading">
           <div>
             <h2 id="new-case-heading">

@@ -2,7 +2,7 @@ import type { ComparisonChange, ComparisonView } from "@reliability-lab/contract
 
 export function ComparisonSummary({ comparison }: { comparison: ComparisonView }) {
   return (
-    <section className="panel comparison-summary">
+    <section className="panel comparison-summary" data-guide-anchor="comparison-dimensions">
       <div className="panel-heading">
         <div>
           <p className="eyebrow">Normalized evidence</p>

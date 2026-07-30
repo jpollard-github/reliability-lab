@@ -12,7 +12,7 @@
   "dependencies": {
     "@fastify/cors": "^11.0.0",
     "@fastify/swagger": "^9.0.0",
-    "@fastify/swagger-ui": "^6.1.0",
+    "@fastify/swagger-ui": "^6.1.1",
     "@fastify/type-provider-typebox": "^6.0.0",
     "@reliability-lab/contracts": "workspace:*",
     "@reliability-lab/core": "workspace:*",

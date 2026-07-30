@@ -7,7 +7,11 @@ export function SaveInvestigationPanel({
   model: Pick<InvestigationWorkbenchModel, "providerEvidence" | "savedScope" | "executions">;
 }) {
   return (
-    <section className="panel" aria-labelledby="save-investigation-heading">
+    <section
+      className="panel"
+      aria-labelledby="save-investigation-heading"
+      data-guide-anchor="workbench-saved-scope"
+    >
       <div className="panel-heading">
         <div>
           <h2 id="save-investigation-heading">Save investigation</h2>

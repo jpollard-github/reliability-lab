@@ -13,14 +13,14 @@ export function CaseList({
   raw: Record<string, SearchValue>;
 }) {
   return (
-    <section className="panel" aria-labelledby="case-list-heading">
+    <section className="panel" aria-labelledby="case-list-heading" data-guide-anchor="case-list">
       <div className="panel-heading">
         <div>
           <h2 id="case-list-heading">Saved cases</h2>
           <p>{page.total} matching tenant-scoped cases.</p>
         </div>
       </div>
-      <form className="case-list-filters" method="get">
+      <form className="case-list-filters" data-guide-anchor="case-filters" method="get">
         <label>
           Search title or question
           <input defaultValue={first(raw.q)} maxLength={256} name="q" />
