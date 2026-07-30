@@ -53,7 +53,9 @@ product mutation. Opening it preserves form values, route state, and the current
 
 Product sections expose semantic `data-guide-anchor` values. They name durable concepts such as
 `execution-scenario`, `live-machine`, `replay-capability`, `workbench-summary`, and
-`case-evidence`. Tours do not use incidental nesting, text matching, or child indexes.
+`case-evidence` and `case-review`. The case-detail tour uses `case-review` to explain current
+bounded summaries and fixed readiness checks before it reaches conclusion controls and packet
+download. Tours do not use incidental nesting, text matching, or child indexes.
 
 When changing an anchor:
 
@@ -94,8 +96,9 @@ required anchors, navigation clamping, and restart. `apps/web/tests/operator-gui
 covers primary navigation, Guide content, keyboard disclosure behavior, tour navigation and active
 targets, URL/form preservation, focus return, optional-anchor reporting, and 390 px fit.
 
-Existing execution, Live Machine, comparison, Workbench, and saved-case workflows remain separate
-and unchanged.
+The saved-case workflow additionally verifies the case-review step against a real derived review.
+Existing execution, Live Machine, comparison, Workbench, and saved-case product operations remain
+separate from tour state.
 
 ## Limitations
 
@@ -103,6 +106,8 @@ Tours describe only the current DOM and real evidence. They do not manufacture m
 completion, identify a user, provide analytics, position tooltips, or cross routes automatically.
 The Guide repeats the product's security, provider-effect, replay-capability, ranking, and
 answer-quality limitations rather than advancing those claims.
+Case guidance likewise describes readiness as workflow completeness and review packets as internal
+trace artifacts; it does not claim conclusion truth.
 
 ## Add or change a tour step
 

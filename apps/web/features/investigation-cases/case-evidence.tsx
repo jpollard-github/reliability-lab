@@ -20,8 +20,11 @@ export function CaseEvidence({
     >
       <div className="panel-heading">
         <div>
-          <h2 id="linked-evidence-heading">Linked evidence</h2>
-          <p>Removing a link keeps the authoritative execution or comparison intact.</p>
+          <h2 id="linked-evidence-heading">Manage evidence links</h2>
+          <p>
+            Add or remove associations here. Removing a link keeps the authoritative evidence
+            intact.
+          </p>
         </div>
       </div>
       {detail.evidence.length ? (

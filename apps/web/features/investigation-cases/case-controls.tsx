@@ -10,6 +10,7 @@ import { CaseEvidence } from "./case-evidence";
 import {
   addInvestigationCaseEvidence,
   addInvestigationCaseNote,
+  downloadInvestigationCaseReviewPacket,
   removeInvestigationCaseEvidence,
   updateInvestigationCase,
 } from "./case-mutations";
@@ -84,6 +85,19 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
     if (ok) form.reset();
   }
 
+  async function downloadPacket() {
+    setBusy("Review packet download");
+    setMessage("");
+    try {
+      await downloadInvestigationCaseReviewPacket(detail.case.caseId);
+      setMessage("Review packet download complete.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Review packet download failed");
+    } finally {
+      setBusy("");
+    }
+  }
+
   return (
     <>
       <section
@@ -94,8 +108,13 @@ export function CaseControls({ detail }: { detail: InvestigationCaseDetail }) {
         <div className="panel-heading">
           <div>
             <h2 id="case-update-heading">Current interpretation</h2>
-            <p>Current fields may evolve; timeline entries preserve metadata about the change.</p>
+            <p>
+              Current fields may evolve. A resolved case requires both a finding and resolution.
+            </p>
           </div>
+          <button disabled={Boolean(busy)} onClick={() => void downloadPacket()} type="button">
+            Download review packet
+          </button>
         </div>
         <form className="case-edit-form" onSubmit={updateCase}>
           <div className="case-form-grid">

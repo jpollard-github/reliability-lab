@@ -397,7 +397,11 @@ An engineer should be able to:
 7. open linked evidence;
 8. return to the saved workbench scope;
 9. list and filter saved cases;
-10. do all of this without copying sensitive execution content.
+10. review bounded current summaries for every evidence link;
+11. see explicit unavailable states and fixed conclusion-readiness checks;
+12. resolve only after recording both finding and resolution;
+13. download a deterministic internal Markdown review packet;
+14. do all of this without copying sensitive execution content.
 
 ---
 
@@ -433,6 +437,9 @@ Those features can wait until there is a demonstrated workflow.
 | Note               | Append-only observation made during investigation                    |
 | Finding            | Current interpretation supported by evidence                         |
 | Resolution         | Final or current decision based on the investigation                 |
+| Evidence review    | Bounded current summary derived from each authoritative link         |
+| Readiness          | Five fixed workflow-completeness checks, not a correctness score     |
+| Review packet      | Safe internal Markdown projection with trace links and limitations   |
 | Case timeline      | Metadata history of important case changes                           |
 | Actor unavailable  | Honest statement that authentication does not yet identify people    |
 
@@ -475,6 +482,11 @@ It implements:
 - append-only notes;
 - metadata-only lifecycle timeline events;
 - links back to the exact saved workbench scope and current evidence pages;
+- derived bounded execution, comparison, and provider-observation summaries;
+- explicit unavailable state for every link that cannot currently be summarized;
+- five fixed conclusion-readiness checks without a score;
+- a resolved-state invariant requiring non-empty finding and resolution;
+- a tenant-scoped deterministic Markdown review packet with exclusions and internal trace links;
 - memory and PostgreSQL persistence;
 - no actor fields.
 
@@ -486,4 +498,7 @@ comparison.
 The tenant header is still not authentication. A timestamp says when an operation occurred, but the
 system cannot truthfully say who performed it. See
 [ADR 0009](adr/0009-saved-investigation-cases-and-evidence-references.md) for the persistence and
-reference decision.
+reference decision, [ADR 0010](adr/0010-derived-case-evidence-review-and-safe-review-packets.md) for
+the derived-review decision, and
+[Evidence-Backed Case Conclusions Basics](reliability-lab-evidence-backed-case-conclusions-basics.md)
+for the review/readiness/packet model.

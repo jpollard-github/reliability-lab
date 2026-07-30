@@ -193,14 +193,19 @@ export const pageTours = {
         body: "The overview pairs the reliability question with the fixed evidence boundary.",
       },
       {
+        anchor: "case-review",
+        title: "Evidence review and readiness",
+        body: "Current authoritative summaries and explicit unavailable states support a deterministic completeness checklist. Ready does not mean correct.",
+      },
+      {
         anchor: "case-controls",
         title: "Current interpretation",
-        body: "Finding, resolution, importance, and lifecycle status may evolve.",
+        body: "Finding and resolution may evolve, but both are required while the case remains resolved. Download the bounded review packet here.",
       },
       {
         anchor: "case-evidence",
-        title: "Evidence references",
-        body: "Links point to authoritative execution or comparison evidence without copying it.",
+        title: "Manage evidence references",
+        body: "Add or remove authoritative links without deleting or copying their source evidence.",
       },
       {
         anchor: "case-notes",

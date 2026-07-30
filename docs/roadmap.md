@@ -131,7 +131,8 @@ Those remain possible future work, not prerequisites for Horizon 5.
 
 ### Horizon 5: An operator’s reliability lab
 
-**Established movements: Saved Investigation Cases and Product Tour and Operator Guidance.**
+**Established movements: Saved Investigation Cases, Product Tour and Operator Guidance, and
+Evidence-Backed Case Conclusions and Review Packets.**
 Investigation persists beyond one browser session without becoming a generic ticketing system, and
 the product now teaches the established operator workflow. The cross-cutting Human-Comprehension and
 Ownership Pass has established Phase 1 contracts/core, Phase 2 persistence/API composition, Phase 3
@@ -161,9 +162,18 @@ focused contextual concept help, and stateless on-demand tours for all six estab
 families. It teaches the current product and its limitations without adding a broad scenario
 catalog, analytics, stored progress, or a second demonstration application.
 
+The established fourth movement, **Evidence-Backed Case Conclusions and Review Packets**, derives
+bounded current summaries for execution, comparison, and provider-observation links; shows every
+link as available or explicitly unavailable; applies five deterministic workflow-readiness checks;
+requires finding and resolution before resolving; and exports the same safe projection as escaped
+Markdown with internal trace links and explicit exclusions. It does not copy source evidence,
+generate conclusions with AI, score truth, establish causation, or turn the packet into a
+public-safe report.
+
 Horizon 5 is not complete. A broader scenario catalog and explicitly configured external trace/log
 correlation remain later possibilities when the workflow justifies them. The product still does not
-claim universal provider health, alerting, or the full Horizon 5 completion signal.
+claim universal provider health or alerting. The supported-conclusion completion signal below is
+now established for the bounded saved-case workflow, while broader Horizon 5 scope remains open.
 
 **Completion signal.** A developer can move from an investigation case to a supported reliability conclusion without querying tables or reading application source.
 
@@ -208,6 +218,8 @@ Human-Comprehension and Ownership Pass complete
         ↓
 Product Tour and Operator Guidance established
         ↓
+Evidence-Backed Case Conclusions and Review Packets established
+        ↓
 Evaluate the next broader Horizon 5 movement
 ```
 
@@ -217,9 +229,10 @@ worker mode and fences stale claims without overstating exactly-once provider be
 Investigation Workbench Foundation and Saved Investigation Cases are established. Contracts/core
 (Phase 1), persistence/API composition (Phase 2), operator-console/test organization (Phase 3), and
 ownership documentation/design review (Phase 4) now make those capabilities easier to locate,
-explain, defend, and safely modify. Product Tour and Operator Guidance is established without
-advancing Horizon 6 claims. The next broader Horizon 5 movement remains intentionally unelected;
+explain, defend, and safely modify. Product Tour and Operator Guidance and Evidence-Backed Case
+Conclusions and Review Packets are established without advancing Horizon 6 claims. The next broader
+Horizon 5 movement remains intentionally unelected;
 candidates include a guided scenario catalog and policy experiments, explicitly configured
-trace/log correlation, or deeper investigation conclusions and operator recovery. None is declared
+trace/log correlation, or deeper operator recovery. None is declared
 complete. Cancellation, Redis coordination, generic outbox tooling, resumable workflow machinery,
 and cloud infrastructure are not prerequisites for evaluating that choice.

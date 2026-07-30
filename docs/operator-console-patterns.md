@@ -34,7 +34,7 @@ Server Components own initial reads and evidence presentation. Examples include:
 
 - Workbench summary/trend/provider/execution sections;
 - execution and comparison detail evidence;
-- saved-case list, overview, notes, and timeline.
+- saved-case list, overview, derived evidence review, readiness, notes, and timeline;
 - Guide content and native contextual disclosures.
 
 Client Components are focused mutation or live-interaction islands:
@@ -43,7 +43,7 @@ Client Components are focused mutation or live-interaction islands:
 - `features/executions/replay-controls.tsx`;
 - `features/live-machine/live-execution-view.tsx` and its controllers;
 - `features/comparisons/comparison-builder.tsx`;
-- saved-case creation, add-to-case, controls, and evidence removal.
+- saved-case creation, add-to-case, controls, evidence removal, and review-packet download;
 - `features/guidance/page-tour.tsx` and `tour-launcher.tsx`.
 
 Client modules never import `lib/server-api.ts` or the server-only Workbench loader. The structural
@@ -144,7 +144,8 @@ requests, and safe error extraction. Feature-specific mutation names remain in t
 
 - replay and deletion in `features/executions/replay-controls.tsx`;
 - comparison submission in `features/comparisons/comparison-builder.tsx`;
-- saved-case requests in `features/investigation-cases/case-mutations.ts`.
+- saved-case requests and tenant-aware packet download in
+  `features/investigation-cases/case-mutations.ts`.
 
 There is no generated SDK or generic application data framework.
 
@@ -172,11 +173,17 @@ The saved-case feature separates:
 - current controls: `case-controls.tsx`;
 - typed browser requests: `case-mutations.ts`;
 - linked evidence: `case-evidence.tsx`;
+- bounded current evidence summaries: `case-evidence-review.tsx`;
+- five fixed conclusion checks: `conclusion-readiness.tsx`;
 - overview/scope: `case-overview.tsx`;
 - notes: `case-notes.tsx`;
 - metadata timeline: `case-timeline.tsx`.
 
-Notes remain append-only, evidence remains a current link, and no actor identity is fabricated.
+The case detail route obtains both detail and derived review through `lib/server-api.ts`, so evidence
+review and readiness are useful in the first HTML response and with JavaScript disabled. The
+review-packet button is a focused client action because browsers must receive and save the Markdown
+body. Notes remain append-only, source evidence remains authoritative, unavailable links remain
+visible, and no actor identity or correctness score is fabricated.
 
 ## Operator guidance
 

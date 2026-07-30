@@ -79,12 +79,16 @@ export const operatorWorkflow: WorkflowStage[] = [
   },
   {
     name: "Preserve",
-    action: "Save an exact question, scope, evidence references, and evolving interpretation.",
-    evidence: "Saved range and filters, linked evidence, notes, timeline, finding, and resolution.",
+    action:
+      "Save an exact question and scope, review current linked evidence, record a finding and resolution, then download the bounded review packet.",
+    evidence:
+      "Saved range and filters, available or unavailable evidence summaries, readiness checks, notes, timeline, finding, resolution, and source routes.",
     href: "/investigation-cases",
     control: "Save investigation or Create a case",
-    conclusion: "The case preserves a durable investigation record and links to source evidence.",
-    nonConclusion: "The case copied source evidence or identified the human actor.",
+    conclusion:
+      "The case record is complete enough to resolve and every packet claim can be traced to an internal authoritative source.",
+    nonConclusion:
+      "Readiness proves the conclusion is true, source evidence was copied, or a human actor was identified.",
   },
 ];
 
@@ -162,6 +166,18 @@ const glossaryEntries: Array<[string, string]> = [
   [
     "Investigation case",
     "A durable question, saved scope, references, notes, and current conclusion.",
+  ],
+  [
+    "Evidence review",
+    "A bounded current summary or explicit unavailable state resolved from each linked authoritative source.",
+  ],
+  [
+    "Conclusion readiness",
+    "A deterministic record-completeness checklist; it is not correctness, confidence, or truth.",
+  ],
+  [
+    "Review packet",
+    "A tenant-scoped Markdown artifact with the case record, bounded evidence summaries, source routes, exclusions, and limitations.",
   ],
   [
     "Tenant routing context",

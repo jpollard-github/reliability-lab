@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { encodeCaseCursor, type ExecutionService } from "@reliability-lab/core";
+import {
+  encodeCaseCursor,
+  type ExecutionService,
+  type MemoryInvestigationCaseRepository,
+} from "@reliability-lab/core";
 import type { buildApp } from "../src/app.js";
 import { buildTestApp } from "./support/build-test-app.js";
 
 describe("API saved investigation cases", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   let service: ExecutionService;
+  let cases: MemoryInvestigationCaseRepository;
 
   beforeEach(async () => {
-    ({ app, service } = await buildTestApp());
+    ({ app, service, cases } = await buildTestApp());
   });
 
   afterEach(async () => app.close());
@@ -183,5 +188,126 @@ describe("API saved investigation cases", () => {
       },
     });
     expect(html.statusCode).toBe(400);
+  });
+
+  it("returns bounded review JSON, explicit unavailable evidence, and a safe Markdown packet", async () => {
+    const execution = await service.execute({
+      tenantId: "tenant-a",
+      body: {
+        provider: "fake-primary",
+        model: "v1",
+        input: "SECRET_PROMPT_INPUT",
+      },
+    });
+    const from = new Date(Date.now() - 60_000).toISOString();
+    const to = new Date(Date.now() + 60_000).toISOString();
+    const create = await app.inject({
+      method: "POST",
+      url: "/v1/investigation-cases",
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: {
+        title: "Packet review",
+        question: "Does the bounded evidence support the conclusion?",
+        savedScope: { range: { from, to } },
+      },
+    });
+    const caseId = create.json().case.caseId as string;
+    await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${caseId}/evidence`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: { type: "execution", executionId: execution.executionId },
+    });
+    await cases.addEvidence(
+      "tenant-a",
+      {
+        evidenceId: "missing-evidence",
+        caseId,
+        type: "execution",
+        executionId: "missing-execution",
+        addedAt: new Date().toISOString(),
+        url: "/executions/missing-execution",
+      },
+      "execution:missing-execution",
+      {
+        eventId: "missing-evidence-event",
+        caseId,
+        type: "case.evidence_added",
+        occurredAt: new Date().toISOString(),
+        metadata: { evidenceId: "missing-evidence", evidenceType: "execution" },
+      },
+    );
+    await app.inject({
+      method: "POST",
+      url: `/v1/investigation-cases/${caseId}/notes`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: { body: "SECRET_NOTE_BODY" },
+    });
+
+    const incomplete = await app.inject({
+      method: "PATCH",
+      url: `/v1/investigation-cases/${caseId}`,
+      headers: { "x-tenant-id": "tenant-a" },
+      payload: { status: "resolved" },
+    });
+    expect(incomplete.statusCode).toBe(400);
+    expect(incomplete.json()).toMatchObject({
+      error: "invalid_case_conclusion",
+      message: "Resolved cases require a non-empty current finding and resolution",
+    });
+
+    const review = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${caseId}/review`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(review.statusCode).toBe(200);
+    expect(review.json()).toMatchObject({
+      case: { caseId, status: "open" },
+      noteCount: 1,
+      readiness: { ready: false },
+      evidence: [
+        {
+          type: "execution",
+          availability: "available",
+          summary: { executionId: execution.executionId },
+        },
+        {
+          type: "execution",
+          availability: "unavailable",
+          reason: "authoritative_evidence_not_found",
+        },
+      ],
+    });
+    expect(review.body).not.toContain("SECRET_PROMPT_INPUT");
+    expect(review.body).not.toContain("SECRET_NOTE_BODY");
+
+    const packet = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${caseId}/review-packet`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(packet.statusCode).toBe(200);
+    expect(packet.headers["content-type"]).toContain("text/markdown");
+    expect(packet.headers["content-disposition"]).toBe(
+      `attachment; filename="reliability-case-${caseId}.md"`,
+    );
+    expect(packet.body).toMatch(/^# Reliability case: Packet review/u);
+    expect(packet.body).toContain("authoritative\\_evidence\\_not\\_found");
+    expect(packet.body).not.toContain("SECRET_PROMPT_INPUT");
+    expect(packet.body).not.toContain("SECRET_NOTE_BODY");
+
+    for (const url of [
+      `/v1/investigation-cases/${caseId}/review`,
+      `/v1/investigation-cases/${caseId}/review-packet`,
+    ]) {
+      const wrongTenant = await app.inject({
+        method: "GET",
+        url,
+        headers: { "x-tenant-id": "tenant-b" },
+      });
+      expect(wrongTenant.statusCode).toBe(404);
+      expect(wrongTenant.json().error).toBe("not_found");
+    }
   });
 });

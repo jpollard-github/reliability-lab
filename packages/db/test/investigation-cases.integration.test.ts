@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import {
   encodeCaseCursor,
   ExecutionService,
+  InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
   MemoryReplayCapsuleStore,
@@ -17,6 +18,7 @@ import {
   PostgresComparisonExperimentRepository,
   PostgresExecutionRepository,
   PostgresInvestigationCaseRepository,
+  PostgresInvestigationReadRepository,
 } from "../src/index.js";
 import { useIntegrationDatabase } from "./support/database.js";
 
@@ -30,10 +32,11 @@ describe("Postgres saved investigation cases", () => {
     const promptMarker = `prohibited-prompt-${randomUUID()}`;
     const executionRepository = new PostgresExecutionRepository(connection.db);
     const comparisonRepository = new PostgresComparisonExperimentRepository(connection.db);
+    const replayCapsules = new MemoryReplayCapsuleStore();
     const executionService = new ExecutionService({
       repository: executionRepository,
       comparisons: comparisonRepository,
-      replayCapsules: new MemoryReplayCapsuleStore(),
+      replayCapsules,
       providers: new MapProviderRegistry([
         new DeterministicFakeProvider({ id: "fake-primary" }),
         new DeterministicFakeProvider({ id: "fake-fallback" }),
@@ -145,6 +148,36 @@ describe("Postgres saved investigation cases", () => {
     ]);
     expect(JSON.stringify(detail.timeline)).not.toContain("Second attempt recovered");
     expect(JSON.stringify(detail.timeline)).not.toContain("The selected retry recovered");
+    const review = await new InvestigationCaseReviewService({
+      cases: new PostgresInvestigationCaseRepository(connection.db),
+      executions: new PostgresExecutionRepository(connection.db),
+      comparisons: new PostgresComparisonExperimentRepository(connection.db),
+      investigations: new PostgresInvestigationReadRepository(connection.db),
+      replayCapsules,
+      now: () => fixedNow,
+    }).get(tenantId, created.case.caseId);
+    expect(review.evidence.map((item) => item.evidenceId)).toEqual(
+      detail.evidence.map((item) => item.evidenceId),
+    );
+    expect(review.evidence.find((item) => item.type === "provider_observation")).toMatchObject({
+      availability: "available",
+      summary: {
+        provider: "fake-primary",
+        model: "v1",
+        range,
+      },
+    });
+    expect(review.readiness.ready).toBe(true);
+    expect(JSON.stringify(review)).not.toContain(promptMarker);
+    await expect(
+      new InvestigationCaseReviewService({
+        cases: new PostgresInvestigationCaseRepository(connection.db),
+        executions: new PostgresExecutionRepository(connection.db),
+        comparisons: new PostgresComparisonExperimentRepository(connection.db),
+        investigations: new PostgresInvestigationReadRepository(connection.db),
+        replayCapsules,
+      }).get(otherTenant, created.case.caseId),
+    ).rejects.toThrow("Investigation case not found");
     await expect(reconstructed.get(otherTenant, created.case.caseId)).rejects.toThrow(
       "Investigation case not found",
     );

@@ -1,6 +1,7 @@
 import { createClient, type RedisClientType } from "redis";
 import {
   ExecutionService,
+  InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
   MemoryComparisonExperimentRepository,
@@ -114,20 +115,30 @@ const service = new ExecutionService({
   replayRetentionMs: replayConfig.retentionMs,
   ...(durableStore ? { durableAcceptance: durableStore } : {}),
 });
+const caseRepository = database
+  ? new PostgresInvestigationCaseRepository(database)
+  : new MemoryInvestigationCaseRepository();
+const investigations = database
+  ? new PostgresInvestigationReadRepository(database)
+  : new MemoryInvestigationReadRepository(repository);
 const investigationCases = new InvestigationCaseService({
-  cases: database
-    ? new PostgresInvestigationCaseRepository(database)
-    : new MemoryInvestigationCaseRepository(),
+  cases: caseRepository,
   executions: repository,
   comparisons,
+});
+const investigationCaseReviews = new InvestigationCaseReviewService({
+  cases: caseRepository,
+  executions: repository,
+  comparisons,
+  investigations,
+  replayCapsules,
 });
 
 const app = await buildApp({
   service,
   investigationCases,
-  investigations: database
-    ? new PostgresInvestigationReadRepository(database)
-    : new MemoryInvestigationReadRepository(repository),
+  investigationCaseReviews,
+  investigations,
   enableFailureInjection: process.env.ENABLE_FAILURE_INJECTION === "true",
   readiness: async () => {
     const checks: Record<string, string> = {

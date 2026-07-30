@@ -6,6 +6,13 @@ export class InvestigationCaseInputError extends Error {
   }
 }
 
+export class InvestigationCaseConclusionError extends InvestigationCaseInputError {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvestigationCaseConclusionError";
+  }
+}
+
 export class InvestigationCaseNotFoundError extends Error {
   constructor() {
     super("Investigation case not found");

@@ -138,6 +138,39 @@ describe("InvestigationCaseService", () => {
     expect(reopened.case.resolvedAt).toBeUndefined();
   });
 
+  it("requires finding and resolution for resolved state and permits clearing after reopen", async () => {
+    const { service } = harness();
+    const created = await service.create("tenant-a", baseCreate());
+    await expect(
+      service.update("tenant-a", created.case.caseId, { status: "resolved" }),
+    ).rejects.toThrow("Resolved cases require a non-empty current finding and resolution");
+    await expect(
+      service.update("tenant-a", created.case.caseId, {
+        status: "resolved",
+        finding: "Evidence supports the current interpretation.",
+      }),
+    ).rejects.toThrow("Resolved cases require a non-empty current finding and resolution");
+    const resolved = await service.update("tenant-a", created.case.caseId, {
+      status: "resolved",
+      finding: "Evidence supports the current interpretation.",
+      resolution: "Retain the bounded policy.",
+    });
+    await expect(
+      service.update("tenant-a", created.case.caseId, { finding: null }),
+    ).rejects.toThrow("Resolved cases require a non-empty current finding and resolution");
+    await expect(
+      service.update("tenant-a", created.case.caseId, { resolution: null }),
+    ).rejects.toThrow("Resolved cases require a non-empty current finding and resolution");
+    const reopened = await service.update("tenant-a", resolved.case.caseId, {
+      status: "investigating",
+      finding: null,
+      resolution: null,
+    });
+    expect(reopened.case).toMatchObject({ status: "investigating" });
+    expect(reopened.case.finding).toBeUndefined();
+    expect(reopened.case.resolution).toBeUndefined();
+  });
+
   it("validates tenant-owned evidence and makes duplicate links idempotent", async () => {
     const { service, executions, comparisons } = harness();
     await executions.create(execution("tenant-a", "execution-a"));

@@ -34,6 +34,16 @@
   .case-list-meta {
     justify-items: start;
   }
+  .case-review-item-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+  .case-review-facts {
+    grid-template-columns: 1fr;
+  }
+  .case-review-facts dd {
+    margin-bottom: 0.35rem;
+  }
   .comparison-fields {
     grid-template-columns: 1fr 1fr;
   }

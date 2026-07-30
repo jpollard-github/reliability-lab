@@ -13,7 +13,11 @@ import type {
 } from "@reliability-lab/contracts";
 import type { ComparisonExperimentRepository } from "../comparison/repository.js";
 import type { ExecutionRepository } from "../execution/ports.js";
-import { InvestigationCaseInputError, InvestigationCaseNotFoundError } from "./errors.js";
+import {
+  InvestigationCaseConclusionError,
+  InvestigationCaseInputError,
+  InvestigationCaseNotFoundError,
+} from "./errors.js";
 import { evidenceIdentity, evidenceUrl } from "./evidence.js";
 import type {
   InvestigationCaseListQuery,
@@ -25,6 +29,7 @@ import { exactRange, plainText } from "./validation.js";
 
 const CASE_PAGE_DEFAULT = 25;
 const CASE_PAGE_MAX = 100;
+const CASE_EVIDENCE_MAX = 50;
 
 /**
  * Coordinates saved-case state, append-only notes, typed evidence, and metadata events.
@@ -107,6 +112,11 @@ export class InvestigationCaseService {
     if (input.resolution === null || input.resolution?.trim() === "") delete next.resolution;
     else if (input.resolution !== undefined)
       next.resolution = plainText(input.resolution, "resolution", 0, 10_000);
+    if (next.status === "resolved" && (!next.finding?.trim() || !next.resolution?.trim())) {
+      throw new InvestigationCaseConclusionError(
+        "Resolved cases require a non-empty current finding and resolution",
+      );
+    }
     if (input.status === "resolved" && current.status !== "resolved") next.resolvedAt = occurredAt;
     if (input.status && input.status !== "resolved") delete next.resolvedAt;
     const changedFields = (
@@ -161,8 +171,15 @@ export class InvestigationCaseService {
   }
 
   async addEvidence(tenantId: TenantId, caseId: string, input: InvestigationCaseEvidenceInput) {
-    await this.get(tenantId, caseId);
+    const detail = await this.get(tenantId, caseId);
     const canonical = await this.#canonicalEvidence(tenantId, input);
+    const identity = evidenceIdentity(canonical);
+    const alreadyLinked = detail.evidence.some((item) => evidenceIdentity(item) === identity);
+    if (!alreadyLinked && detail.evidence.length >= CASE_EVIDENCE_MAX) {
+      throw new InvestigationCaseInputError(
+        `An investigation case may link at most ${CASE_EVIDENCE_MAX} evidence references`,
+      );
+    }
     const addedAt = this.#now().toISOString();
     const evidence: InvestigationCaseEvidence = {
       evidenceId: this.#id(),
@@ -174,7 +191,7 @@ export class InvestigationCaseService {
     return this.#cases.addEvidence(
       tenantId,
       evidence,
-      evidenceIdentity(canonical),
+      identity,
       this.#event(caseId, "case.evidence_added", addedAt, {
         evidenceId: evidence.evidenceId,
         evidenceType: evidence.type,

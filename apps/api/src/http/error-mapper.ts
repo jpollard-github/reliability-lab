@@ -4,6 +4,7 @@ import {
   ComparisonNotFoundError,
   ExecutionNotFoundError,
   IdempotencyConflictError,
+  InvestigationCaseConclusionError,
   InvestigationCaseInputError,
   InvestigationCaseNotFoundError,
   InvestigationQueryError,
@@ -19,6 +20,9 @@ export function installErrorHandler(app: FastifyInstance) {
 }
 
 function mapError(error: unknown) {
+  if (error instanceof InvestigationCaseConclusionError) {
+    return { error: "invalid_case_conclusion", message: error.message, statusCode: 400 };
+  }
   if (error instanceof InvestigationCaseInputError) {
     return { error: "invalid_investigation_case", message: error.message, statusCode: 400 };
   }

@@ -5,6 +5,7 @@ import type {
   InvestigationCaseEvidenceInput,
 } from "@reliability-lab/contracts";
 import { requestJson } from "@/lib/client-api";
+import { browserApiUrl, browserTenantId, isRecord } from "@/lib/client-api";
 
 interface CaseUpdateDraft {
   title: string;
@@ -59,4 +60,34 @@ export function removeInvestigationCaseEvidence(
     `/v1/investigation-cases/${encodeURIComponent(caseId)}/evidence/${encodeURIComponent(evidenceId)}`,
     { method: "DELETE" },
   );
+}
+
+export async function downloadInvestigationCaseReviewPacket(caseId: string): Promise<void> {
+  const response = await fetch(
+    `${browserApiUrl}/v1/investigation-cases/${encodeURIComponent(caseId)}/review-packet`,
+    { headers: { "x-tenant-id": browserTenantId } },
+  );
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as unknown;
+    const message =
+      isRecord(body) && typeof body.message === "string"
+        ? body.message
+        : `Review packet failed with HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = packetFilename(response.headers.get("content-disposition"), caseId);
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function packetFilename(disposition: string | null, caseId: string): string {
+  const headerName = disposition?.match(/filename="([^"]+)"/iu)?.[1];
+  const candidate = headerName ?? `reliability-case-${caseId}.md`;
+  return candidate.replace(/[^A-Za-z0-9._-]+/gu, "-").slice(0, 160);
 }

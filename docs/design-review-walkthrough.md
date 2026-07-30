@@ -13,7 +13,9 @@ or through a PostgreSQL worker with atomic acceptance, leases, heartbeats, and f
 Eligible retained input becomes a current encrypted replay capability; it can drive an ordinary
 replay or a controlled original-versus-variant comparison. Operators investigate bounded evidence
 through the Workbench and preserve a question, interpretation, notes, and typed evidence references
-as a saved case.
+as a saved case. A case can derive bounded current summaries for every link, expose five fixed
+conclusion-readiness checks, enforce meaningful resolved state, and export the same safe projection
+as a deterministic Markdown review packet.
 
 The important boundaries are equally explicit: this prototype does not establish factual answer
 correctness, exactly-once provider effects, authenticated tenancy, RBAC, row-level security,
@@ -44,6 +46,9 @@ Execute → Explain → Watch → Replay → Compare → Investigate → Preserv
    provider/model observations. PostgreSQL uses three purpose-named query modules.
 7. **Preserve.** `InvestigationCaseService` canonicalizes exact Workbench scope and stores bounded
    interpretation, append-only notes, and typed evidence links rather than copied envelopes.
+   `InvestigationCaseReviewService` resolves current safe summaries and readiness; a resolved case
+   requires both finding and resolution, and the packet renderer exports that projection with
+   limitations and trace links.
 
 Portable shapes live in `packages/contracts`; domain behavior and ports live in `packages/core`;
 provider implementations live in `packages/providers`; PostgreSQL adapters live in `packages/db`;
@@ -83,7 +88,8 @@ Then inspect:
 - `execution/envelope.ts` for execution versus attempt evidence;
 - `replay/capability.ts` for current replay states;
 - `comparison/experiment.ts` for variation and projection contracts;
-- `investigation/workbench.ts` and `investigation/cases.ts` for bounded reads and preservation.
+- `investigation/workbench.ts`, `investigation/cases.ts`, and `investigation/case-review.ts` for
+  bounded reads, preservation, and derived review.
 
 The root is an export map, not an implementation owner. The rationale is in
 [TypeScript patterns](typescript-patterns.md#explicit-event-payloads-and-stored-events).
@@ -239,7 +245,17 @@ hydrates current case state, notes, evidence, timeline, and the saved Workbench 
 `CaseTimeline` renders that metadata, and “Open saved workbench scope” follows
 `detail.links.savedWorkbench`.
 
+`InvestigationCaseReviewService` resolves those references against their current authoritative
+ports and returns bounded execution, comparison, and provider-observation summaries. Every link is
+represented as available or explicitly unavailable. `projectConclusionReadiness` checks exact
+scope, linked evidence, reviewed references, finding, and resolution without scoring correctness.
+`InvestigationCaseService.update` refuses a resolved state unless finding and resolution are both
+non-empty. `CaseEvidenceReview` and `ConclusionReadiness` render in the server response;
+`renderInvestigationCaseReviewPacket` produces escaped deterministic Markdown from the same
+projection.
+
 Proof is in `packages/core/test/investigation-cases.test.ts`,
+`packages/core/test/investigation-case-review.test.ts`,
 `packages/db/test/investigation-cases.integration.test.ts`,
 `apps/api/test/investigation-cases.test.ts`, and
 `apps/web/tests/saved-investigation-cases.spec.ts`.
@@ -304,6 +320,8 @@ names the expected layers for representative work.
 | Bounded investigation read models          | Query cost and semantics are explicit                             | Compatibility list remains unbounded                   |
 | URL-backed Workbench state                 | Scope is bookmarkable, returnable, and preservable                | Parameter compatibility must be maintained             |
 | Evidence-linked cases                      | Source evidence stays authoritative and is not duplicated         | A case can outlive replay capability                   |
+| Derived case review and Markdown packet    | UI and handoff share one bounded current projection               | Internal trace artifact, not a public or truth report  |
+| Fixed readiness checks                     | Workflow completeness is legible without a fake score             | Readiness cannot establish correctness or causation    |
 | Server/browser API split                   | Private configuration cannot drift into client code               | Two intentionally small access modules                 |
 
 ## Guarantees and non-guarantees
@@ -317,6 +335,8 @@ names the expected layers for representative work.
 | Reads and references carry tenant predicates                | repository ports/adapters and cross-tenant tests                                   | Tenant header is not authenticated identity or DB-enforced RLS                   |
 | Investigation queries are bounded by tenant and `[from,to)` | named PostgreSQL query modules and fixed-query integration test                    | Results are selected evidence, not an SLA or universal provider health           |
 | Saved notes are append-only and evidence is referenced      | case service/transactions/tests                                                    | Case prose is plaintext and has no authenticated author                          |
+| Resolved cases have a finding and resolution                | case service invariant and unit/API/browser tests                                  | The content is operator interpretation, not verified truth                       |
+| Review items never silently lose linked evidence            | review contracts/service and unit/API/integration tests                            | A source can be explicitly unavailable at review time                            |
 | Replay deletion revokes current capability                  | vault adapter and replay tests                                                     | Tombstoning does not guarantee physical backup erasure                           |
 
 ## Current limitations
@@ -331,16 +351,20 @@ names the expected layers for representative work.
 - Environment keyrings are not managed KMS; replay deletion is not physical backup erasure.
 - Cost is normalized but not enforced.
 - Provider observations are bounded evidence summaries, not universal health or confidence claims.
+- Conclusion readiness is deterministic workflow completeness, not factual correctness, causation,
+  or a confidence score. Review packets contain internal links and are not public-safe reports.
 - The compatibility execution list is unbounded.
 - There is no broad scenario catalog or configured external trace/log investigation integration.
 - Horizon 5 remains incomplete.
 
-## Future Product Tour and Operator Guidance
+## What comes next
 
-The next movement is an operator-facing teaching layer: a future on-demand tour, contextual help,
-workflow guidance, and links to the API and human documentation. It is not implemented in this pass,
-and no tour UI or route exists. After that movement, broader Horizon 5 product work may resume when
-the workflow justifies it. See [the roadmap](roadmap.md#near-term-direction).
+The on-demand Guide, contextual help, and route-specific tours are established. Evidence-backed
+case conclusions now establish the supported-conclusion slice of Horizon 5: an operator can trace
+current bounded evidence, complete the interpretation, resolve it, and download a safe internal
+packet without querying tables or reading source. Horizon 5 as a whole remains incomplete; the
+broader scenario catalog, external trace/log investigation integration, and later operational
+workflows remain future work. See [the roadmap](roadmap.md#near-term-direction).
 
 ## Suggested interview questions and honest answers
 

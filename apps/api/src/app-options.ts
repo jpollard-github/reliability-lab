@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from "fastify";
 import type {
   ExecutionService,
+  InvestigationCaseReviewService,
   InvestigationCaseService,
   InvestigationReadRepository,
 } from "@reliability-lab/core";
@@ -10,6 +11,7 @@ export interface AppOptions {
   service: ExecutionService;
   investigations: InvestigationReadRepository;
   investigationCases: InvestigationCaseService;
+  investigationCaseReviews: InvestigationCaseReviewService;
   readiness?: () => Promise<{ ready: boolean; checks: Record<string, string> }>;
   logger?: FastifyBaseLogger | boolean;
   enableFailureInjection?: boolean;

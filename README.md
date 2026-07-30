@@ -72,6 +72,8 @@ Implemented now:
 - Saved Investigation Cases with exact canonical workbench scopes, current findings and resolution,
   typed execution/comparison/provider-observation references, append-only notes, metadata-only
   lifecycle timelines, archive status, and stable tenant-scoped case pagination
+- derived case evidence review with explicit unavailable states, deterministic conclusion
+  readiness, a resolved-state finding/resolution invariant, and tenant-aware Markdown review packets
 - server-rendered product Guide, native contextual concept help, and stateless on-demand tours for
   all six established operator route families
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
@@ -114,6 +116,10 @@ flowchart LR
   API --> Case[Investigation case service]
   Case --> CaseStore[Case repository port]
   CaseStore --> PG
+  API --> CaseReview[Derived case review service]
+  CaseReview --> Repo
+  CaseReview --> Experiment
+  CaseReview --> CaseStore
   Service --> OTel[OpenTelemetry]
   API --> Pino[Redacted structured logs]
   Web[Next.js operator console] --> API
@@ -132,6 +138,7 @@ Plain-language guides:
 - [Lease Safety and Fencing basics](docs/reliability-lab-lease-safety-basics.md)
 - [Investigation Workbench basics](docs/reliability-lab-investigation-workbench-basics.md)
 - [Saved Investigation Cases basics](docs/reliability-lab-saved-investigation-cases-basics.md)
+- [Evidence-Backed Case Conclusions basics](docs/reliability-lab-evidence-backed-case-conclusions-basics.md)
 - [Owned Software basics](docs/reliability-lab-owned-software-basics.md)
 - [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
 - [Persistence and API patterns](docs/persistence-and-api-patterns.md)
@@ -180,6 +187,10 @@ Plain-language guides:
 14. An operator may persist the exact resolved workbench range and canonical filters as a case.
     Cases reference current execution/comparison/provider evidence without copying envelopes,
     prompts, outputs, attempts, events, replay material, or command payloads.
+15. A separate derived case-review service resolves each linked source into a bounded current
+    summary or explicit unavailable state, projects five fixed readiness checks, and renders the
+    same safe projection as a tenant-scoped Markdown packet. A case can remain `resolved` only with
+    a non-empty finding and resolution.
 
 ## Repository layout
 
@@ -304,6 +315,20 @@ curl -sS http://localhost:4000/v1/investigation-cases \
 
 Case requests accept bounded plain text and typed internal evidence references only. They have no
 author or owner field because the prototype does not authenticate people.
+
+Read the derived case review or download its Markdown packet:
+
+```bash
+curl -sS http://localhost:4000/v1/investigation-cases/CASE_ID/review \
+  -H 'x-tenant-id: demo-tenant'
+
+curl -sS -OJ http://localhost:4000/v1/investigation-cases/CASE_ID/review-packet \
+  -H 'x-tenant-id: demo-tenant'
+```
+
+Every linked reference remains visible as available or unavailable. Readiness is a fixed
+record-completeness checklist, not a score or correctness claim. An update that would leave the case
+`resolved` requires both a non-empty current finding and resolution.
 
 Delete retained replay data idempotently:
 

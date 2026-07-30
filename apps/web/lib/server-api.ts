@@ -6,6 +6,7 @@ import type {
   ExecutionSummaryPage,
   InvestigationCaseDetail,
   InvestigationCasePage,
+  InvestigationCaseReview,
   ProviderObservationPage,
   ReliabilitySummary,
 } from "@reliability-lab/contracts";
@@ -74,6 +75,22 @@ export async function getInvestigationCase(
   if (!response.ok)
     throw new Error(`Investigation case detail failed with HTTP ${response.status}`);
   return (await response.json()) as InvestigationCaseDetail;
+}
+
+export async function getInvestigationCaseReview(
+  caseId: string,
+): Promise<InvestigationCaseReview | null> {
+  const response = await fetch(
+    `${apiUrl}/v1/investigation-cases/${encodeURIComponent(caseId)}/review`,
+    {
+      headers: { "x-tenant-id": tenantId },
+      cache: "no-store",
+    },
+  );
+  if (response.status === 404) return null;
+  if (!response.ok)
+    throw new Error(`Investigation case review failed with HTTP ${response.status}`);
+  return (await response.json()) as InvestigationCaseReview;
 }
 
 async function getInvestigationResponse<T>(

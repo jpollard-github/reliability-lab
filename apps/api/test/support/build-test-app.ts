@@ -1,5 +1,6 @@
 import {
   ExecutionService,
+  InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
   MemoryComparisonExperimentRepository,
@@ -14,27 +15,48 @@ import { buildApp } from "../../src/app.js";
 export async function buildTestApp() {
   const repository = new MemoryExecutionRepository();
   const comparisons = new MemoryComparisonExperimentRepository();
+  const cases = new MemoryInvestigationCaseRepository();
+  const investigations = new MemoryInvestigationReadRepository(repository);
+  const replayCapsules = new MemoryReplayCapsuleStore();
   const service = new ExecutionService({
     repository,
     comparisons,
-    replayCapsules: new MemoryReplayCapsuleStore(),
+    replayCapsules,
     providers: new MapProviderRegistry([
       new DeterministicFakeProvider({ id: "fake-primary" }),
       new DeterministicFakeProvider({ id: "fake-fallback" }),
     ]),
   });
+  const investigationCases = new InvestigationCaseService({
+    cases,
+    executions: repository,
+    comparisons,
+  });
+  const investigationCaseReviews = new InvestigationCaseReviewService({
+    cases,
+    executions: repository,
+    comparisons,
+    investigations,
+    replayCapsules,
+  });
   const app = await buildApp({
     service,
-    investigationCases: new InvestigationCaseService({
-      cases: new MemoryInvestigationCaseRepository(),
-      executions: repository,
-      comparisons,
-    }),
-    investigations: new MemoryInvestigationReadRepository(repository),
+    investigationCases,
+    investigationCaseReviews,
+    investigations,
     logger: false,
     enableFailureInjection: true,
   });
-  return { app, service };
+  return {
+    app,
+    service,
+    repository,
+    comparisons,
+    cases,
+    investigations,
+    investigationCases,
+    investigationCaseReviews,
+  };
 }
 
 export async function waitForTerminal(

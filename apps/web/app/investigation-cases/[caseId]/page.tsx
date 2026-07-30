@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CaseControls } from "@/features/investigation-cases/case-controls";
+import { CaseEvidenceReview } from "@/features/investigation-cases/case-evidence-review";
 import { CaseNotes } from "@/features/investigation-cases/case-notes";
 import { CaseOverview } from "@/features/investigation-cases/case-overview";
 import { CaseTimeline } from "@/features/investigation-cases/case-timeline";
-import { getInvestigationCase } from "@/lib/server-api";
+import { ConclusionReadiness } from "@/features/investigation-cases/conclusion-readiness";
+import { getInvestigationCase, getInvestigationCaseReview } from "@/lib/server-api";
 import { ConceptHelp } from "@/features/guidance/concept-help";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +17,11 @@ export default async function InvestigationCaseDetailPage({
   params: Promise<{ caseId: string }>;
 }) {
   const { caseId } = await params;
-  const detail = await getInvestigationCase(caseId);
-  if (!detail) notFound();
+  const [detail, review] = await Promise.all([
+    getInvestigationCase(caseId),
+    getInvestigationCaseReview(caseId),
+  ]);
+  if (!detail || !review) notFound();
   const item = detail.case;
 
   return (
@@ -58,12 +63,14 @@ export default async function InvestigationCaseDetailPage({
       </section>
       <ConceptHelp
         title="How should I read this case history?"
-        what="Evidence remains authoritative at its source links. Notes are append-only, while finding, resolution, importance, and status are current interpretation."
-        why="Separating references, immutable notes, and mutable conclusions keeps the investigation reviewable without claiming an authenticated actor."
-        lookFor="Reopen the exact saved Workbench scope, inspect linked evidence, and distinguish note history from current fields and metadata events."
+        what="Evidence summaries are resolved from current authoritative sources. Notes are append-only, while finding, resolution, importance, and status are current interpretation."
+        why="Readiness measures record completeness, not correctness. The downloadable packet is a bounded review artifact, not a copy of raw evidence."
+        lookFor="Inspect available and unavailable evidence, satisfy the readiness checklist, then trace packet claims back through internal source links."
       />
 
       <CaseOverview detail={detail} />
+      <CaseEvidenceReview review={review} />
+      <ConclusionReadiness readiness={review.readiness} />
       <CaseControls detail={detail} />
       <section className="case-two-column">
         <CaseNotes notes={detail.notes} />

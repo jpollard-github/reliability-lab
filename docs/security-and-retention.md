@@ -100,6 +100,14 @@ presence flags. Note bodies, finding text, and resolution text remain only in th
 records and are not duplicated into timeline metadata, logs, or trace attributes. Logs identify case
 ID and operation type. Repository exports contain source and safe fixtures, never runtime case rows.
 
+Case review resolves current source evidence through tenant-scoped ports and emits only bounded
+status, timing, policy, comparison-condition, aggregate, and trace-link fields. Every link remains
+present as available or explicitly unavailable. The Markdown packet is rendered from that same
+projection, escapes operator prose, uses a sanitized filename, and explicitly excludes prompts,
+messages, outputs, attempts/events, replay commands/capsules, note bodies, headers, credentials, and
+raw provider payloads. The packet still contains plaintext case interpretation and internal URLs;
+it is an internal review artifact, not a public-safe export.
+
 The `X-Tenant-Id` header is routing context, not a person. Cases deliberately have no author, owner,
 assignee, or resolver field. Authenticated authorship, role-based access, and PostgreSQL row-level
 security remain absent and are required before production use.

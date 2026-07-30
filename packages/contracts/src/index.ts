@@ -11,3 +11,4 @@ export * from "./replay/replay.js";
 export * from "./comparison/experiment.js";
 export * from "./investigation/workbench.js";
 export * from "./investigation/cases.js";
+export * from "./investigation/case-review.js";

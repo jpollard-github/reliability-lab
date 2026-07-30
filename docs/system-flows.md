@@ -152,6 +152,33 @@ ordered notes/evidence/timeline, and `savedWorkbench`. Relevant tests are
 `apps/api/test/investigation-cases.test.ts`, and
 `apps/web/tests/saved-investigation-cases.spec.ts`.
 
+### 6a. Derived case evidence review and packet
+
+1. `InvestigationCaseReviewService.get` loads the tenant-scoped case detail, then resolves every
+   linked reference through the existing execution, replay, comparison, or investigation-read
+   port. It does not use HTTP or SQL directly.
+2. Each resolver emits a bounded safe projection or an explicit unavailable state. It never copies
+   prompt messages, outputs, replay commands/capsules, note bodies, headers, or provider payloads.
+3. `projectConclusionReadiness` evaluates five fixed checks: exact scope, linked evidence, every
+   reference explicitly reviewed, finding, and resolution. Readiness is deterministic workflow
+   completeness, not a score or correctness claim.
+4. A transition to `resolved` is accepted only when both a non-empty finding and resolution are
+   present. Historical inconsistent rows remain readable; a subsequent update must restore the
+   invariant or move the case away from `resolved`.
+5. `GET /v1/investigation-cases/:caseId/review` returns the typed projection.
+   `GET /v1/investigation-cases/:caseId/review-packet` passes that same projection to
+   `renderInvestigationCaseReviewPacket` and returns deterministic escaped Markdown.
+6. The case page obtains the review through the server-only API client. Only the packet download is
+   a browser mutation, and it carries the configured tenant header.
+
+**Boundary/evidence review:** source repositories remain authoritative; the review service derives
+current safe summaries at read time. The packet contains internal trace links and explicit
+limitations, so it is an operator handoff artifact, not a public report. Relevant tests are
+`packages/core/test/investigation-case-review.test.ts`,
+`packages/db/test/investigation-cases.integration.test.ts`,
+`apps/api/test/investigation-cases.test.ts`, and
+`apps/web/tests/saved-investigation-cases.spec.ts`.
+
 ## 7. API composition and errors
 
 1. `apps/api/src/server.ts` constructs memory or PostgreSQL services and calls the stable

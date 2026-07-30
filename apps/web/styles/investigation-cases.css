@@ -205,6 +205,123 @@
   margin: 0;
   padding: 0;
 }
+.case-evidence-review,
+.conclusion-readiness {
+  padding: 1.2rem;
+}
+.case-review-list,
+.readiness-checks,
+.comparison-dimension-review {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.case-review-list {
+  display: grid;
+  gap: 0.8rem;
+}
+.case-review-list > li {
+  min-width: 0;
+}
+.case-review-list article {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  background: #0e1218;
+}
+.case-review-item-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.case-review-item-heading > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.case-review-item-heading strong,
+.case-review-facts dd {
+  overflow-wrap: anywhere;
+}
+.case-review-type,
+.case-review-availability,
+.readiness-state {
+  color: var(--muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.case-review-availability,
+.readiness-state {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+}
+.availability-available,
+.readiness-ready .readiness-state {
+  border-color: #356f60;
+  color: var(--success);
+}
+.availability-unavailable {
+  border-color: #814852;
+  color: var(--danger);
+}
+.case-review-facts {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.45fr) minmax(0, 1fr);
+  gap: 0.4rem 0.8rem;
+  margin: 0;
+}
+.case-review-facts dt {
+  color: var(--muted);
+}
+.case-review-facts dd {
+  margin: 0;
+}
+.unavailable-evidence {
+  border-left: 3px solid var(--danger);
+  padding-left: 0.8rem;
+}
+.unavailable-evidence p {
+  margin: 0.25rem 0;
+}
+.comparison-dimension-review {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.8rem;
+}
+.comparison-dimension-review li {
+  display: grid;
+  gap: 0.2rem;
+}
+.readiness-caveat {
+  border-left: 3px solid var(--warning);
+  padding-left: 0.8rem;
+  color: var(--muted);
+}
+.readiness-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.7rem;
+}
+.readiness-checks li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+.readiness-checks li > span {
+  color: var(--accent);
+}
+.readiness-checks p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+}
 .evidence-list li {
   display: flex;
   align-items: center;

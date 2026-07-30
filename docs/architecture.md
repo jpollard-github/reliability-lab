@@ -6,10 +6,11 @@ The architecture is reflected in named source modules rather than implemented in
 barrels. The contracts, core, and DB package roots are public export maps. Internal modules import
 the file that directly owns each symbol.
 
-Contracts are grouped into execution, replay, comparison, Investigation Workbench, and saved-case
-families. Core separates the public `ExecutionService` facade from execution preparation, event
+Contracts are grouped into execution, replay, comparison, Investigation Workbench, saved-case, and
+derived case-review families. Core separates the public `ExecutionService` facade from execution preparation, event
 construction, guarded provider policy, structured-output validation, backoff, durable lease
-control, replay retention, comparison projection, investigation reads, and saved-case behavior.
+control, replay retention, comparison projection, investigation reads, saved-case behavior, and
+case-review projection.
 DB separates connection creation, domain schema definitions, repositories, mapping, fixed read
 queries, transactions, runtime configuration, and cryptographic lifecycles. API separates a small
 Fastify composition root, platform plugins, safe error mapping, TypeBox schemas, query parsing, and
@@ -116,6 +117,22 @@ resolved time. Notes have no update/delete path. Timeline metadata records IDs, 
 changed field names, presence booleans, and status transitions; it does not duplicate note, finding,
 or resolution prose. Archive is the retention action; there is no hard-delete endpoint.
 
+## Derived case review boundary
+
+`InvestigationCaseReviewService` is a separate framework-independent read orchestrator. It receives
+the case, execution, replay, comparison, and investigation-read ports at composition time and
+resolves every evidence link into a bounded safe projection or explicit unavailable state. It
+preserves evidence order, caps concurrent resolution work, and adds no persistence table: the
+authoritative source remains the current execution, comparison, replay-capability, or provider
+observation read.
+
+The same `InvestigationCaseReview` contract feeds the JSON route, server-rendered case detail, and
+deterministic Markdown packet. `projectConclusionReadiness` owns five fixed completeness checks.
+`InvestigationCaseService.update` separately owns the write invariant that `resolved` requires both
+finding and resolution. The packet renderer escapes operator prose, exposes only internal trace
+links, and names exclusions and limitations. Neither readiness nor packet generation claims
+correctness, causation, confidence, or public-safe disclosure.
+
 ## Durable job boundary
 
 The durable job row is a scheduling record, not replay retention. It stores safe lease metadata and
@@ -173,6 +190,9 @@ share replay capabilities.
 - **Case persistence:** bounded operational prose is plaintext, while evidence is typed references.
   No prompt, output, capsule, command, ciphertext, credential, raw provider body, or arbitrary URL is
   accepted. The tenant header is not an authenticated author.
+- **Case review and packet:** current bounded summaries are derived through tenant-scoped ports.
+  Packets exclude prompts, outputs, commands, capsules, note bodies, credentials, and provider
+  payloads. Their internal URLs and plaintext conclusions still require controlled handling.
 - **Command and replay storage:** plaintext exists transiently only while encrypting/decrypting or
   calling a provider. It is not a metadata column, API response, audit field, log, or span.
 - **Dashboard:** the fixed development tenant is not authentication. The browser receives typed,
@@ -180,15 +200,16 @@ share replay capabilities.
 
 ## Failure and consistency boundaries
 
-| Guarantee                                                  | Evidence                                                                          | Non-guarantee                                       | Reason                                                                  |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
-| Atomic durable acceptance in PostgreSQL worker mode        | `PostgresDurableExecutionStore.acceptExecution` and its rollback integration test | In-process acceptance survives API loss             | In-process continuation deliberately remains process-local              |
-| Current-claim heartbeat, finish, and cleanup are fenced    | `JobClaim.claimVersion`, exact PostgreSQL predicates, lease tests                 | Exactly-once provider calls                         | PostgreSQL and a remote provider share no transaction                   |
-| Execution decisions are append-only evidence               | `ExecutionEventRecorder`, repository/event tests                                  | Universal event/projection/outbox atomicity         | Continuation writes retain explicit consistency boundaries              |
-| PostgreSQL replay capsules are encrypted at rest           | `encryptReplayCapsule`, replay crypto and vault tests                             | Production KMS or physical backup erasure           | Environment keyrings and tombstones are prototype boundaries            |
-| Repository reads and evidence references are tenant scoped | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
-| Investigation reads are tenant/range bounded               | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
-| Saved notes append and evidence remains referenced         | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |
+| Guarantee                                                          | Evidence                                                                          | Non-guarantee                                       | Reason                                                                  |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| Atomic durable acceptance in PostgreSQL worker mode                | `PostgresDurableExecutionStore.acceptExecution` and its rollback integration test | In-process acceptance survives API loss             | In-process continuation deliberately remains process-local              |
+| Current-claim heartbeat, finish, and cleanup are fenced            | `JobClaim.claimVersion`, exact PostgreSQL predicates, lease tests                 | Exactly-once provider calls                         | PostgreSQL and a remote provider share no transaction                   |
+| Execution decisions are append-only evidence                       | `ExecutionEventRecorder`, repository/event tests                                  | Universal event/projection/outbox atomicity         | Continuation writes retain explicit consistency boundaries              |
+| PostgreSQL replay capsules are encrypted at rest                   | `encryptReplayCapsule`, replay crypto and vault tests                             | Production KMS or physical backup erasure           | Environment keyrings and tombstones are prototype boundaries            |
+| Repository reads and evidence references are tenant scoped         | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
+| Investigation reads are tenant/range bounded                       | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
+| Saved notes append and evidence remains referenced                 | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |
+| Case reviews represent every link and resolved state is meaningful | Review service/invariant and unit/API/integration/browser tests                   | Correctness, causation, or conclusion truth         | Readiness is workflow completeness over bounded current evidence        |
 
 Worker mode makes acceptance durable, including comparison variants and concurrency-safe
 idempotency. Claim fencing prevents an older claim from extending, finishing, or deleting the

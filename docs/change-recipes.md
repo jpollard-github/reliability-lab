@@ -316,6 +316,39 @@ new capability or mutating the evidence being explained.
 See [Product Tour and Operator Guidance](product-tour-and-operator-guidance.md) for the step-level
 procedure.
 
+## 12. Revise evidence-backed case conclusions
+
+**Product intent.** Change how a saved case derives current, bounded evidence or communicates
+workflow readiness without creating a copied evidence store or a correctness score.
+
+- **Primary owners:** review schemas in `packages/contracts/src/investigation/case-review.ts`;
+  evidence resolution and readiness in
+  `packages/core/src/investigation-cases/case-review-service.ts`; packet rendering in
+  `review-packet.ts`.
+- **Adjacent modules:** the existing execution/replay/comparison/investigation repository ports,
+  `InvestigationCaseService.update` for the resolved invariant, case routes, server/browser API
+  clients, and the named case review/readiness components.
+- **Contract implications:** keep every evidence item tied to its link identity and model
+  unavailability explicitly. Add no raw prompt, output, command, capsule, note body, credential, or
+  provider payload.
+- **Persistence implications:** none for a projection-only change. A new authoritative evidence
+  source must first receive a tenant-scoped owner and integration coverage; do not persist derived
+  review copies.
+- **API implications:** JSON and Markdown routes must use the same review projection. Preserve
+  tenant-scoped not-found behavior, bounded response schemas, metadata-only logs, safe content
+  disposition, and escaped deterministic Markdown.
+- **Web implications:** initial review/readiness stays server-rendered and useful without
+  JavaScript. Packet download is the focused tenant-aware client action.
+- **Tests:** cover every evidence type, ordering, unavailable states, sensitive-field exclusion,
+  readiness transitions, historical inconsistent rows, cross-tenant reads, packet determinism,
+  no-JavaScript rendering, and narrow-screen overflow.
+- **Documentation:** update the evidence-backed conclusion basics, ADR if the durable decision
+  changes, system flow, design review, operator pattern, product tour, and codebase find-it drill.
+- **Invariant:** `resolved` requires non-empty finding and resolution. Readiness reports workflow
+  completeness only and never proves factual correctness, causation, or universal provider health.
+- **Avoid:** copied envelopes, AI-written findings, a numeric score, silently dropping unavailable
+  links, public-safe packet claims, or resolving a blank conclusion.
+
 ## Verification chooser
 
 | Change boundary                            | Minimum focused evidence before broader verification     |

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ExecutionService,
+  InvestigationCaseReviewService,
   InvestigationCaseService,
   MapProviderRegistry,
   MemoryComparisonExperimentRepository,
@@ -118,20 +119,30 @@ describe("API execution event stream", () => {
     };
     const gatedRepository = new MemoryExecutionRepository();
     const gatedComparisons = new MemoryComparisonExperimentRepository();
+    const gatedCases = new MemoryInvestigationCaseRepository();
+    const gatedInvestigations = new MemoryInvestigationReadRepository(gatedRepository);
+    const gatedReplayCapsules = new MemoryReplayCapsuleStore();
     const gatedService = new ExecutionService({
       repository: gatedRepository,
       comparisons: gatedComparisons,
-      replayCapsules: new MemoryReplayCapsuleStore(),
+      replayCapsules: gatedReplayCapsules,
       providers: new MapProviderRegistry([provider]),
     });
     const gatedApp = await buildApp({
       service: gatedService,
       investigationCases: new InvestigationCaseService({
-        cases: new MemoryInvestigationCaseRepository(),
+        cases: gatedCases,
         executions: gatedRepository,
         comparisons: gatedComparisons,
       }),
-      investigations: new MemoryInvestigationReadRepository(gatedRepository),
+      investigationCaseReviews: new InvestigationCaseReviewService({
+        cases: gatedCases,
+        executions: gatedRepository,
+        comparisons: gatedComparisons,
+        investigations: gatedInvestigations,
+        replayCapsules: gatedReplayCapsules,
+      }),
+      investigations: gatedInvestigations,
       logger: false,
       enableFailureInjection: true,
       eventStreamPollMs: 1,

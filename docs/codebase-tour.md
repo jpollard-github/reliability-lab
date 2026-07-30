@@ -52,6 +52,7 @@ packages/contracts/src/
   investigation/
     workbench.ts               bounded search and aggregate read contracts
     cases.ts                   saved cases, evidence, notes, and timeline
+    case-review.ts             bounded derived evidence review and readiness
   index.ts                     public package barrel
 ```
 
@@ -99,6 +100,8 @@ packages/core/src/
     statistics.ts
   investigation-cases/
     investigation-case-service.ts
+    case-review-service.ts
+    review-packet.ts
     saved-scope.ts
     evidence.ts
     cursor.ts
@@ -244,6 +247,8 @@ apps/web/
       case-controls.tsx
       case-mutations.ts
       case-evidence.tsx
+      case-evidence-review.tsx
+      conclusion-readiness.tsx
       case-overview.tsx
       case-notes.tsx
       case-timeline.tsx
@@ -285,7 +290,7 @@ stateless guidance client island.
 - `packages/providers/src/index.ts`, `packages/observability/src/index.ts`, and
   `packages/testkit/src/index.ts` are their package entrypoints.
 - `apps/api/src/server.ts` selects memory or PostgreSQL adapters and constructs `ExecutionService`,
-  investigation reads, and `InvestigationCaseService`.
+  investigation reads, `InvestigationCaseService`, and the derived `InvestigationCaseReviewService`.
 - `apps/worker/src/server.ts` constructs `ExecutionService`, `DurableExecutionWorker`, and the
   PostgreSQL job adapter.
 - `apps/api/src/app.ts` installs platform/error infrastructure and typed domain route plugins.
@@ -306,6 +311,9 @@ stateless guidance client island.
 | Heartbeat lease cancellation       | `packages/core/src/durable/lease-heartbeat-controller.ts` — `LeaseHeartbeatController`                                                                         |
 | Fallback dependence signal         | `packages/core/src/investigation/signals.ts` — `deriveInvestigationSignals`                                                                                    |
 | Saved-scope canonicalization       | `packages/core/src/investigation-cases/saved-scope.ts` — `canonicalizeSavedScope`                                                                              |
+| Derived case review                | `packages/core/src/investigation-cases/case-review-service.ts` — `InvestigationCaseReviewService`                                                              |
+| Conclusion readiness               | `packages/core/src/investigation-cases/case-review-service.ts` — `projectConclusionReadiness`                                                                  |
+| Safe Markdown review packet        | `packages/core/src/investigation-cases/review-packet.ts` — `renderInvestigationCaseReviewPacket`                                                               |
 
 ## Persistence and API “find it” drill
 
@@ -362,12 +370,15 @@ stateless guidance client island.
 | 15  | Replay deletion mutation               | `apps/web/features/executions/replay-controls.tsx` — `ReplayControls`, inner `deleteCapsule` handler                            |
 | 16  | Case note mutation                     | `apps/web/features/investigation-cases/case-mutations.ts` — `addInvestigationCaseNote`                                          |
 | 17  | Case evidence rendering                | `apps/web/features/investigation-cases/case-evidence.tsx` — `CaseEvidence`                                                      |
-| 18  | Case timeline rendering                | `apps/web/features/investigation-cases/case-timeline.tsx` — `CaseTimeline`                                                      |
-| 19  | Retry Playwright fixture               | `apps/web/tests/support/executions.ts` — `createRetryExecution`                                                                 |
-| 20  | Comparative Replay Playwright workflow | `apps/web/tests/comparative-replay.spec.ts` — `compares a retrying execution with an immediate-fallback variant`                |
-| 21  | Saved Investigation Cases workflow     | `apps/web/tests/saved-investigation-cases.spec.ts` — `saves a complete investigation case and reopens its exact evidence scope` |
-| 22  | Investigation styles                   | `apps/web/styles/investigations.css`                                                                                            |
-| 23  | Responsive styles                      | `apps/web/styles/responsive.css`                                                                                                |
+| 18  | Derived evidence review rendering      | `apps/web/features/investigation-cases/case-evidence-review.tsx` — `CaseEvidenceReview`                                         |
+| 19  | Conclusion-readiness rendering         | `apps/web/features/investigation-cases/conclusion-readiness.tsx` — `ConclusionReadiness`                                        |
+| 20  | Review-packet browser download         | `apps/web/features/investigation-cases/case-mutations.ts` — `downloadInvestigationCaseReviewPacket`                             |
+| 21  | Case timeline rendering                | `apps/web/features/investigation-cases/case-timeline.tsx` — `CaseTimeline`                                                      |
+| 22  | Retry Playwright fixture               | `apps/web/tests/support/executions.ts` — `createRetryExecution`                                                                 |
+| 23  | Comparative Replay Playwright workflow | `apps/web/tests/comparative-replay.spec.ts` — `compares a retrying execution with an immediate-fallback variant`                |
+| 24  | Saved Investigation Cases workflow     | `apps/web/tests/saved-investigation-cases.spec.ts` — `saves a complete investigation case and reopens its exact evidence scope` |
+| 25  | Investigation styles                   | `apps/web/styles/investigations.css`                                                                                            |
+| 26  | Responsive styles                      | `apps/web/styles/responsive.css`                                                                                                |
 
 ## Operator guidance “find it” drill
 
@@ -394,6 +405,29 @@ stateless guidance client island.
 | 19  | Route-resolution unit tests    | `apps/web/features/guidance/tour-state.test.ts`                            |
 | 20  | Adding or changing a tour step | `docs/product-tour-and-operator-guidance.md` — “Add or change a tour step” |
 
+## Evidence-backed conclusion “find it” drill
+
+| #   | Responsibility                                      | Final file and symbol or route                                                                                               |
+| --- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Review response and readiness contracts             | `packages/contracts/src/investigation/case-review.ts`                                                                        |
+| 2   | Evidence-link orchestration and bounded projections | `packages/core/src/investigation-cases/case-review-service.ts` — `InvestigationCaseReviewService`                            |
+| 3   | Execution and comparison evidence sources           | Existing execution, replay, and comparison repository ports passed to the review service                                     |
+| 4   | Provider-observation evidence source                | Existing `InvestigationReadRepository.observeProviders` port passed to the review service                                    |
+| 5   | Per-link availability state                         | `packages/core/src/investigation-cases/case-review-service.ts` — evidence resolver results                                   |
+| 6   | Five fixed readiness checks                         | `packages/core/src/investigation-cases/case-review-service.ts` — `projectConclusionReadiness`                                |
+| 7   | Resolved-case conclusion invariant                  | `packages/core/src/investigation-cases/investigation-case-service.ts` — `InvestigationCaseService.update`                    |
+| 8   | Deterministic Markdown projection                   | `packages/core/src/investigation-cases/review-packet.ts` — `renderInvestigationCaseReviewPacket`                             |
+| 9   | Tenant-scoped JSON review                           | `GET /v1/investigation-cases/:caseId/review` in `apps/api/src/routes/investigation-cases.ts`                                 |
+| 10  | Tenant-scoped Markdown packet                       | `GET /v1/investigation-cases/:caseId/review-packet` in `apps/api/src/routes/investigation-cases.ts`                          |
+| 11  | Server read boundary                                | `apps/web/lib/server-api.ts` — `getInvestigationCaseReview`                                                                  |
+| 12  | Browser download boundary                           | `apps/web/features/investigation-cases/case-mutations.ts` — `downloadInvestigationCaseReviewPacket`                          |
+| 13  | Evidence-review UI                                  | `apps/web/features/investigation-cases/case-evidence-review.tsx` — `CaseEvidenceReview`                                      |
+| 14  | Readiness UI                                        | `apps/web/features/investigation-cases/conclusion-readiness.tsx` — `ConclusionReadiness`                                     |
+| 15  | Packet control and conclusion feedback              | `apps/web/features/investigation-cases/case-controls.tsx` — `CaseControls`                                                   |
+| 16  | Guide content and case-detail tour                  | `apps/web/features/guidance/guide-content.ts` and `tour-registry.ts` — `pageTours.caseDetail`                                |
+| 17  | Core, HTTP, PostgreSQL, and browser tests           | `packages/core/test/investigation-case-review.test.ts`, API/DB tests, and `apps/web/tests/saved-investigation-cases.spec.ts` |
+| 18  | Change recipe                                       | [Revise evidence-backed case conclusions](change-recipes.md#12-revise-evidence-backed-case-conclusions)                      |
+
 ## Recommended reading order
 
 1. `README.md`, then `docs/reliability-lab-basics.md`
@@ -414,16 +448,17 @@ The companion [system flows](system-flows.md) follows concrete calls across thos
 
 ## Where would I change…?
 
-| Proposed change             | First owner to open                                 | Complete recipe                                                                            |
-| --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Execution event             | `packages/contracts/src/execution/events.ts`        | [Add an execution event](change-recipes.md#1-add-an-execution-event)                       |
-| Normalized failure category | `packages/contracts/src/execution/status.ts`        | [Add a normalized failure category](change-recipes.md#2-add-a-normalized-failure-category) |
-| Provider adapter            | `packages/providers/src/`                           | [Add a provider adapter](change-recipes.md#3-add-a-provider-adapter)                       |
-| Reliability-policy input    | `packages/contracts/src/execution/policy.ts`        | [Add a reliability-policy input](change-recipes.md#4-add-a-reliability-policy-input)       |
-| Workbench filter            | `packages/contracts/src/investigation/workbench.ts` | [Add a Workbench filter](change-recipes.md#5-add-an-investigation-workbench-filter)        |
-| Investigation signal        | `packages/core/src/investigation/signals.ts`        | [Add an investigation signal](change-recipes.md#6-add-an-investigation-signal)             |
-| Saved-case evidence type    | `packages/contracts/src/investigation/cases.ts`     | [Add a saved-case evidence type](change-recipes.md#7-add-a-saved-case-evidence-type)       |
-| API read endpoint           | `apps/api/src/routes/`                              | [Add an API read endpoint](change-recipes.md#8-add-an-api-read-endpoint)                   |
-| Operator-console section    | `apps/web/features/`                                | [Add an operator-console section](change-recipes.md#9-add-an-operator-console-section)     |
-| Playwright workflow         | `apps/web/tests/`                                   | [Add a Playwright workflow](change-recipes.md#10-add-a-playwright-workflow)                |
-| Operator guidance           | `apps/web/features/guidance/`                       | [Add or revise operator guidance](change-recipes.md#11-add-or-revise-operator-guidance)    |
+| Proposed change             | First owner to open                                 | Complete recipe                                                                                         |
+| --------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Execution event             | `packages/contracts/src/execution/events.ts`        | [Add an execution event](change-recipes.md#1-add-an-execution-event)                                    |
+| Normalized failure category | `packages/contracts/src/execution/status.ts`        | [Add a normalized failure category](change-recipes.md#2-add-a-normalized-failure-category)              |
+| Provider adapter            | `packages/providers/src/`                           | [Add a provider adapter](change-recipes.md#3-add-a-provider-adapter)                                    |
+| Reliability-policy input    | `packages/contracts/src/execution/policy.ts`        | [Add a reliability-policy input](change-recipes.md#4-add-a-reliability-policy-input)                    |
+| Workbench filter            | `packages/contracts/src/investigation/workbench.ts` | [Add a Workbench filter](change-recipes.md#5-add-an-investigation-workbench-filter)                     |
+| Investigation signal        | `packages/core/src/investigation/signals.ts`        | [Add an investigation signal](change-recipes.md#6-add-an-investigation-signal)                          |
+| Saved-case evidence type    | `packages/contracts/src/investigation/cases.ts`     | [Add a saved-case evidence type](change-recipes.md#7-add-a-saved-case-evidence-type)                    |
+| API read endpoint           | `apps/api/src/routes/`                              | [Add an API read endpoint](change-recipes.md#8-add-an-api-read-endpoint)                                |
+| Operator-console section    | `apps/web/features/`                                | [Add an operator-console section](change-recipes.md#9-add-an-operator-console-section)                  |
+| Playwright workflow         | `apps/web/tests/`                                   | [Add a Playwright workflow](change-recipes.md#10-add-a-playwright-workflow)                             |
+| Operator guidance           | `apps/web/features/guidance/`                       | [Add or revise operator guidance](change-recipes.md#11-add-or-revise-operator-guidance)                 |
+| Case review or packet       | `packages/core/src/investigation-cases/`            | [Revise evidence-backed case conclusions](change-recipes.md#12-revise-evidence-backed-case-conclusions) |
