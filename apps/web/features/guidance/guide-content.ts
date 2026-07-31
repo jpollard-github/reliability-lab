@@ -108,7 +108,7 @@ export const deterministicScenarios: ScenarioGuide[] = [
     expected: "A rate-limited first attempt schedules a bounded retry that succeeds.",
     evidence: "A normalized rate-limit failure, retry.scheduled, a second attempt, and success.",
     concept: "Recorded retry recovery is different from first-attempt success.",
-    nextAction: "Open playback, then compare with an immediate-fallback variation.",
+    nextAction: "Open Timeline playback, then compare with an immediate-fallback variation.",
   },
   {
     id: "fallback",
@@ -137,6 +137,10 @@ export const deterministicScenarios: ScenarioGuide[] = [
 ];
 
 const glossaryEntries: Array<[string, string]> = [
+  [
+    "Deterministic scenario",
+    "A repeatable fake-provider lab instrument that can inject known failures without any external provider request.",
+  ],
   ["Execution", "One policy-driven request envelope and its complete recorded lifecycle."],
   ["Attempt", "One provider call within an execution; an execution may contain several attempts."],
   ["Reliability policy", "Bounded rules for attempts, backoff, fallback, and related controls."],
@@ -148,10 +152,14 @@ const glossaryEntries: Array<[string, string]> = [
   ["Append-only event", "Durable lifecycle evidence added in sequence rather than rewritten."],
   ["Live stream", "Delivery of newly persisted events to the current browser view."],
   [
-    "Recorded playback",
-    "Presentation of persisted event history; it does not rerun the execution.",
+    "Timeline playback",
+    "Presentation of recorded evidence only; it makes no provider call, creates no execution, mutates no evidence, and uses no replay retention.",
   ],
   ["Replay capability", "The current evidence-backed state that says whether replay is available."],
+  [
+    "Replay",
+    "A new linked execution using retained input; it makes a new provider call and records new evidence.",
+  ],
   [
     "Replay capsule",
     "Retained replay input protected and governed separately from display evidence.",
@@ -184,6 +192,10 @@ const glossaryEntries: Array<[string, string]> = [
     "One ordinary controlled comparison started from execution evidence already linked to a case, then linked back as comparison evidence.",
   ],
   [
+    "Live execution",
+    "An ordinary execution through a configured external provider; it may incur cost and cannot use deterministic failure injection.",
+  ],
+  [
     "Tenant routing context",
     "The tenant header used to isolate prototype data; not authenticated identity.",
   ],
@@ -201,7 +213,7 @@ export const honestLimitations = [
   "The prototype has no RBAC or database row-level security.",
   "Replay key handling does not constitute a production KMS claim.",
   "Provider observations are bounded evidence, not a universal provider-health ranking.",
-  "Recorded playback changes presentation only; it does not rerun or mutate an execution.",
+  "Timeline playback presents recorded evidence only; it makes no provider call, creates no execution, mutates no evidence, and uses no replay retention.",
   "Replay depends on the execution's current replay capability and retained input.",
   "Comparison creation and case-evidence linking are separate operations; an explicit partial state may require link-only recovery.",
 ];

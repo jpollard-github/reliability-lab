@@ -14,6 +14,7 @@ import { executionRoutes } from "./routes/executions.js";
 import { investigationCaseRoutes } from "./routes/investigation-cases.js";
 import { investigationRoutes } from "./routes/investigations.js";
 import { operationsRoutes } from "./routes/operations.js";
+import { providerRoutes } from "./routes/providers.js";
 import { replayRoutes } from "./routes/replay.js";
 
 export async function buildApp(options: AppOptions) {
@@ -33,8 +34,10 @@ export async function buildApp(options: AppOptions) {
   await app.register(operationsRoutes, {
     ...(options.readiness === undefined ? {} : { readiness: options.readiness }),
   });
+  await app.register(providerRoutes, { providerCapabilities: options.providerCapabilities });
   await app.register(executionRoutes, {
     service: options.service,
+    providerCapabilities: options.providerCapabilities,
     ...(options.enableFailureInjection === undefined
       ? {}
       : { enableFailureInjection: options.enableFailureInjection }),

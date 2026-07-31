@@ -47,6 +47,8 @@ packages/contracts/src/
   replay/
     capability.ts              current replay capability states
     replay.ts                  replay result and controlled variation
+  provider/
+    capabilities.ts            public-safe configured-provider projection
   comparison/
     experiment.ts              experiment and projection contracts
   investigation/
@@ -72,6 +74,7 @@ packages/core/src/
     execution-events.ts        generated event metadata and append boundary
     execution-failure.ts       budget and terminal failure projection
     structured-output-validator.ts
+    live-provider-request.ts   server-owned live model and bounded request guard
     retry-backoff.ts
     execution-state.ts
     commands.ts
@@ -183,6 +186,7 @@ apps/api/src/
     comparisons.ts
     investigations.ts
     investigation-cases.ts
+    providers.ts
   routes/
     operations.ts
     executions.ts
@@ -191,6 +195,7 @@ apps/api/src/
     comparisons.ts
     investigations.ts
     investigation-cases.ts
+    providers.ts               configuration-only provider capability read
   event-stream.ts              transport-independent SSE iterator/formatter
   server.ts                    memory/PostgreSQL service composition
 ```
@@ -211,6 +216,7 @@ apps/web/
   features/
     executions/
       execution-form.tsx
+      live-execution-form.tsx
       execution-table.tsx
       replay-controls.tsx
     live-machine/
@@ -276,6 +282,7 @@ apps/web/
     investigation-workbench.spec.ts
     saved-investigation-cases.spec.ts
     operator-guidance.spec.ts
+    live-provider-execution.spec.ts
     support/
 ```
 
@@ -291,6 +298,8 @@ stateless guidance client island.
 - `packages/db/src/index.ts` preserves `@reliability-lab/db`.
 - `packages/providers/src/index.ts`, `packages/observability/src/index.ts`, and
   `packages/testkit/src/index.ts` are their package entrypoints.
+- `packages/providers/src/provider-runtime.ts` constructs the same adapter set for API and worker;
+  `openai-compatible-http-provider.ts` owns the bounded generic Chat Completions wire boundary.
 - Each package `package.json` selects TypeScript source only under Node's `development` condition
   and emitted `dist/index.js` by default. Each package `tsconfig.build.json` owns its runtime emit.
 - `apps/api/src/server.ts` selects memory or PostgreSQL adapters and constructs `ExecutionService`,
@@ -310,6 +319,9 @@ stateless guidance client island.
 | Generated execution event metadata | `packages/core/src/execution/execution-events.ts` — `ExecutionEventRecorder`                                                                                   |
 | Execution preparation              | `packages/core/src/execution/execution-builder.ts` — `prepareExecution`                                                                                        |
 | Provider attempt loop              | `packages/core/src/execution/execution-runner.ts` — `ExecutionRunner.#runPolicy`                                                                               |
+| Live request bounds                | `packages/core/src/execution/live-provider-request.ts` — `validateLiveProviderRequest`                                                                         |
+| Provider capability construction   | `packages/providers/src/provider-runtime.ts` — `buildProviderRuntime`                                                                                          |
+| Generic live transport             | `packages/providers/src/openai-compatible-http-provider.ts` — `OpenAICompatibleHttpProvider`                                                                   |
 | Retry delay                        | `packages/core/src/execution/retry-backoff.ts` — `calculateRetryDelay`                                                                                         |
 | Structured-output validation       | `packages/core/src/execution/structured-output-validator.ts` — `StructuredOutputValidator`                                                                     |
 | Replay capability inspection       | `packages/core/src/replay/replay-store.ts` — `ReplayCapsuleStore.inspect`                                                                                      |
@@ -348,6 +360,7 @@ stateless guidance client island.
 | 19  | API error mapping                    | `apps/api/src/http/error-mapper.ts` — `mapError`, `installErrorHandler`                            |
 | 20  | Swagger registration                 | `apps/api/src/plugins/platform.ts` — `registerPlatformPlugins`                                     |
 | 21  | Case comparison route                | `POST /v1/investigation-cases/:caseId/comparisons` in `apps/api/src/routes/investigation-cases.ts` |
+| 22  | Provider capability route            | `apps/api/src/routes/providers.ts` — `providerRoutes`                                              |
 
 ## Tests
 
@@ -391,6 +404,8 @@ stateless guidance client island.
 | 27  | Shared comparison variation fields     | `apps/web/features/comparisons/comparison-variation-fields.tsx` — `ComparisonVariationFields`                                   |
 | 28  | Case experiment eligibility            | `apps/web/features/investigation-cases/case-policy-experiments.tsx` — `CasePolicyExperiments`                                   |
 | 29  | Case experiment client action          | `apps/web/features/investigation-cases/case-experiment-form.tsx` — `CaseExperimentForm`                                         |
+| 30  | Configured live execution              | `apps/web/features/executions/live-execution-form.tsx` — `LiveExecutionForm`                                                    |
+| 31  | Provider capability server read        | `apps/web/lib/server-api.ts` — `getProviderCapabilities`                                                                        |
 
 ## Operator guidance “find it” drill
 

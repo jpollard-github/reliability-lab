@@ -37,6 +37,8 @@ Choose the path that matches the question you are trying to answer.
    explains how a case launches and recovers one bounded comparison.
 7. [Horizon 5 Closure basics](docs/reliability-lab-horizon-5-closure-basics.md) records the bounded
    completion signal, durable partial-result recovery, and explicit non-claims.
+8. [Live Provider Proof basics](docs/reliability-lab-live-provider-proof-basics.md) explains the
+   bounded post-Horizon-5 capability route, operator path, transport choice, and proof commands.
 
 **Modify the system**
 
@@ -62,6 +64,8 @@ Implemented now:
 - injectable policy engine with bounded exponential backoff and jitter, retry, fallback, latency
   budgets, JSON Schema output validation, in-memory rate limiter, and in-memory circuit breaker
 - deterministic fake provider and a narrow OpenAI-compatible HTTP adapter
+- public-safe provider capability projection, shared API/worker provider construction, and a
+  bounded live execution path that appears only for eligible server configuration
 - tenant-scoped Fastify API with immediate `202` acceptance, persisted-event SSE with cursor resume,
   TypeBox validation, idempotency, OpenAPI, Swagger UI, replay, and redacted Pino logging
 - Drizzle PostgreSQL schema, migration, and repository for executions, attempts, events, and
@@ -70,7 +74,7 @@ Implemented now:
   metadata-only lifecycle audit, and read-old/write-current key versions
 - OpenTelemetry spans with console export by default and optional OTLP export
 - Next.js operator console with a live evidence-driven machine view, incremental event timeline,
-  recorded-history playback, replay control, guided comparative replay variants, side-by-side
+  Timeline playback, replay control, guided comparative replay variants, side-by-side
   machines, and dimension-level evidence comparisons
 - Investigation Workbench with explicit bounded time windows, aggregate outcome and recovery
   signals, attempt-level provider/model observations, URL-backed drill-down filters, stable cursor
@@ -153,6 +157,7 @@ Plain-language guides:
 - [Saved Investigation Cases basics](docs/reliability-lab-saved-investigation-cases-basics.md)
 - [Evidence-Backed Case Conclusions basics](docs/reliability-lab-evidence-backed-case-conclusions-basics.md)
 - [Case-Driven Policy Experiments basics](docs/reliability-lab-case-driven-policy-experiments-basics.md)
+- [Live Provider Proof basics](docs/reliability-lab-live-provider-proof-basics.md)
 - [Owned Software basics](docs/reliability-lab-owned-software-basics.md)
 - [Persistence and API Composition basics](docs/reliability-lab-persistence-api-basics.md)
 - [Persistence and API patterns](docs/persistence-and-api-patterns.md)
@@ -177,9 +182,10 @@ Plain-language guides:
    version, decrypts the command, and invokes the same core continuation engine. Serialized,
    observed heartbeats maintain a confirmed lease deadline.
 5. The engine retains replay material independently when policy permits, resolves the provider, and
-   records `attempt.started` before provider work. Failed attempts record normalized evidence before
-   retry, fallback, or stop. In worker mode a generic lease guard checks ownership at meaningful
-   continuation boundaries, including immediately after a provider returns.
+   records `attempt.started` before provider work. Live requests must match the server-configured
+   model and bounded operator constraints and cannot use failure injection. Failed attempts record
+   normalized evidence before retry, fallback, or stop. In worker mode a generic lease guard checks
+   ownership at meaningful continuation boundaries, including immediately after a provider returns.
 6. A configured fallback runs once after primary policy exhaustion and makes a successful outcome
    `degraded`.
 7. Structured output is validated with Ajv. Requested validation records either success or
@@ -258,6 +264,11 @@ port 3000. Durable mode fails closed rather than falling back to in-process cont
 - API: <http://localhost:4000>
 - Swagger UI: <http://localhost:4000/docs>
 - OpenAPI JSON: <http://localhost:4000/openapi.json>
+
+`GET /v1/providers` returns configuration evidence only; it does not call or health-check a
+provider. With a valid `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL`, the home
+page adds a separate **Live provider execution** section. The browser receives the provider ID and
+safe model label, never the endpoint or key. Live input retention remains off by default.
 
 ## Demo requests
 
@@ -417,6 +428,8 @@ KMS.
 | `pnpm verify`, `verify:full`                     | Static/unit build checks, then DB and browser checks    |
 | `pnpm audit:deps`, `audit:unused`, `audit`       | Read-only dependency/dead-code observation              |
 | `pnpm audit:runtime`                             | Built workspace export and process import smoke         |
+| `pnpm verify:local-provider-wire`                | Built API against one loopback mock provider request    |
+| `pnpm verify:live-provider`                      | Explicitly guarded one-request external provider proof  |
 | `pnpm db:generate`, `db:migrate`, `db:studio`    | Drizzle workflows                                       |
 | `pnpm export:repo`, `export:working`             | Guarded compressed exports                              |
 
@@ -429,8 +442,9 @@ typed event ordering, SSE backfill/cursors/terminal close, machine projection, v
 and conservative dimension-level comparison. PostgreSQL integration proves atomic rollback,
 ciphertext-only command persistence, concurrent idempotency, lease exclusivity/reclaim, ambiguity
 without a duplicate call, command cleanup, key rotation, tenant isolation, replay lifecycle
-independence, and atomic comparison variants. Playwright starts separate API and worker processes.
-Seven focused workflow/guidance specs cover durable execution, Live Machine, Comparative Replay,
+independence, and atomic comparison variants. Playwright starts separate API and worker processes
+plus a loopback provider. Eight focused workflow/guidance specs cover durable execution, Live
+Machine, live provider execution, Comparative Replay,
 Investigation Workbench, Saved Investigation Cases, case-driven experiments, and operator guidance.
 Unique idempotency keys and explicit terminal drains keep the workflows independent. There are
 deliberately no broad snapshots.
@@ -445,6 +459,8 @@ persistence creation, and replay-driven execution. Local development exports spa
 setting `OTEL_EXPORTER_OTLP_ENDPOINT` switches to OTLP/HTTP. Each envelope and API submission
 contains a 32-character trace correlation ID, and logs include it with the execution ID and tenant.
 Prompt bodies and messages are excluded from span attributes and redacted from Pino records.
+Live adapter tests additionally prove that authorization, raw provider bodies, endpoints, input,
+timeouts, and oversized responses do not cross the normalized result boundary.
 
 ## Security and retention
 
@@ -458,6 +474,9 @@ The environment keyring is a prototype, not managed production key infrastructur
 Investigation cases can contain bounded operational prose in plaintext. They never copy prompt,
 output, replay, command, credential, or provider-body content, and lifecycle events omit note,
 finding, and resolution text. Tenant routing still cannot establish authorship.
+Provider capability responses exclude keys, endpoints, query strings, headers, and raw
+configuration. Live model selection is server-owned, failure injection is rejected before fetch,
+responses are size bounded, and provider error bodies are never returned.
 
 ## Design tradeoffs
 
@@ -468,8 +487,9 @@ finding, and resolution text. Tenant routing still cannot establish authorship.
 - Events are append-only, while the execution row is a query projection updated to its latest state.
 - The memory repository keeps unit tests and an infrastructure-free demo honest, but is not shared
   or durable.
-- The narrow live adapter avoids SDK/domain coupling but supports only chat completions and focused
-  JSON Schema response formatting.
+- The narrow generic live adapter avoids SDK/domain coupling and preserves cross-provider Chat
+  Completions compatibility. OpenAI-specific Responses support is a separately elected future
+  adapter; see ADR 0013.
 - Execution list capability hydration uses bounded parallel per-row vault inspection. This keeps
   state current for the small prototype but needs batching or a join before large pagination.
 - Capsule lifecycle/audit mutations are transactional inside the vault, but execution projection
@@ -516,3 +536,5 @@ PostgreSQL replay deletion is a tombstone, not physical backup erasure. Audits l
 actors, environment keyrings are not KMS, Redis implementations are skeletons, cost is normalized
 but not enforced, and circuit/rate state is process-local. Case experiment creation is not
 idempotent across clients or HTTP retries, and comparison creation is not atomic with case linking.
+The provider capability route reports configuration rather than health. A live proof is one bounded
+execution, not an SLA, price, quota, answer-quality, or universal provider-health claim.

@@ -12,7 +12,10 @@ import {
   SubmissionResponseSchema,
 } from "../schemas/executions.js";
 
-type ExecutionRouteOptions = Pick<AppOptions, "service" | "enableFailureInjection">;
+type ExecutionRouteOptions = Pick<
+  AppOptions,
+  "service" | "enableFailureInjection" | "providerCapabilities"
+>;
 
 export const executionRoutes: FastifyPluginAsync<ExecutionRouteOptions> = async (app, options) => {
   const api = app.withTypeProvider<TypeBoxTypeProvider>();
@@ -34,6 +37,21 @@ export const executionRoutes: FastifyPluginAsync<ExecutionRouteOptions> = async 
       },
     },
     async (request, reply) => {
+      const capability = options.providerCapabilities.find(
+        (item) => item.id === request.body.provider,
+      );
+      if (
+        capability?.kind === "live" &&
+        (!capability.operatorEligible ||
+          request.body.model !== capability.modelLabel ||
+          request.body.failureMode !== undefined)
+      ) {
+        return reply.code(400).send({
+          error: "live_provider_request_not_allowed",
+          message: "The live provider request does not match the server-owned configuration",
+          statusCode: 400,
+        });
+      }
       if (request.body.failureMode && !options.enableFailureInjection) {
         return reply.code(400).send({
           error: "failure_injection_disabled",

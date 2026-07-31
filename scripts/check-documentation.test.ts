@@ -11,6 +11,7 @@ const ownershipDocuments = [
   "change-recipes.md",
   "product-tour-and-operator-guidance.md",
   "reliability-lab-case-driven-policy-experiments-basics.md",
+  "reliability-lab-live-provider-proof-basics.md",
   "built-runtime.md",
 ];
 

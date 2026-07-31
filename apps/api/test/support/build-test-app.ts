@@ -10,10 +10,15 @@ import {
   MemoryInvestigationReadRepository,
   MemoryReplayCapsuleStore,
 } from "@reliability-lab/core";
-import { DeterministicFakeProvider } from "@reliability-lab/providers";
+import { buildProviderRuntime } from "@reliability-lab/providers";
 import { buildApp } from "../../src/app.js";
 
-export async function buildTestApp(options: { failNextCaseComparisonLink?: boolean } = {}) {
+export async function buildTestApp(
+  options: {
+    failNextCaseComparisonLink?: boolean;
+    providerEnvironment?: NodeJS.ProcessEnv;
+  } = {},
+) {
   const repository = new MemoryExecutionRepository();
   const comparisons = new MemoryComparisonExperimentRepository();
   const cases = new MemoryInvestigationCaseRepository();
@@ -30,14 +35,12 @@ export async function buildTestApp(options: { failNextCaseComparisonLink?: boole
   }
   const investigations = new MemoryInvestigationReadRepository(repository);
   const replayCapsules = new MemoryReplayCapsuleStore();
+  const providerRuntime = buildProviderRuntime(options.providerEnvironment ?? {});
   const service = new ExecutionService({
     repository,
     comparisons,
     replayCapsules,
-    providers: new MapProviderRegistry([
-      new DeterministicFakeProvider({ id: "fake-primary" }),
-      new DeterministicFakeProvider({ id: "fake-fallback" }),
-    ]),
+    providers: new MapProviderRegistry(providerRuntime.providers),
   });
   const investigationCases = new InvestigationCaseService({
     cases,
@@ -57,6 +60,7 @@ export async function buildTestApp(options: { failNextCaseComparisonLink?: boole
   });
   const app = await buildApp({
     service,
+    providerCapabilities: providerRuntime.capabilities,
     investigationCases,
     investigationCaseReviews,
     investigationCaseExperiments,

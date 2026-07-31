@@ -36,7 +36,7 @@ export function MachineReadout({
           playbackActive
             ? `Step ${playbackCount} of ${eventCount}`
             : projection.terminal
-              ? "Recorded history"
+              ? "Timeline playback"
               : "Live edge"
         }
       />

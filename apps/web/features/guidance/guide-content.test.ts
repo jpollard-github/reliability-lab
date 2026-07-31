@@ -33,6 +33,14 @@ describe("canonical operator guide content", () => {
       expect.arrayContaining(["Evidence review", "Conclusion readiness", "Review packet"]),
     );
     expect(glossary.map((entry) => entry.term)).toContain("Case-driven policy experiment");
+    expect(glossary.map((entry) => entry.term)).toEqual(
+      expect.arrayContaining([
+        "Deterministic scenario",
+        "Timeline playback",
+        "Replay",
+        "Live execution",
+      ]),
+    );
     expect(operatorWorkflow.at(-1)).toMatchObject({
       name: "Preserve",
       conclusion: expect.stringMatching(/complete enough to resolve/i),
@@ -41,5 +49,6 @@ describe("canonical operator guide content", () => {
     expect(honestLimitations).toHaveLength(9);
     expect(honestLimitations.join(" ")).toMatch(/exactly-once/i);
     expect(honestLimitations.join(" ")).toMatch(/universal provider-health ranking/i);
+    expect(honestLimitations.join(" ")).toMatch(/Timeline playback presents recorded evidence/i);
   });
 });

@@ -10,6 +10,7 @@ const requiredDocuments = [
   "docs/change-recipes.md",
   "docs/product-tour-and-operator-guidance.md",
   "docs/reliability-lab-case-driven-policy-experiments-basics.md",
+  "docs/reliability-lab-live-provider-proof-basics.md",
   "docs/built-runtime.md",
 ];
 const requiredReadmeLinks = requiredDocuments.map((document) => `(${document})`);

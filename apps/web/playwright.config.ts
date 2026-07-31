@@ -16,6 +16,9 @@ const durableEnvironment = {
   }),
   WORKER_POLL_INTERVAL_MS: "500",
   WORKER_HEALTH_PORT: "4001",
+  OPENAI_COMPATIBLE_BASE_URL: "http://127.0.0.1:4010/v1",
+  OPENAI_API_KEY: "local-playwright-provider-key",
+  OPENAI_MODEL: "local-playwright-model",
 };
 
 export default defineConfig({
@@ -29,6 +32,12 @@ export default defineConfig({
     ? {}
     : {
         webServer: [
+          {
+            command: "pnpm --dir ../.. dev:provider-mock",
+            url: "http://127.0.0.1:4010/healthz",
+            reuseExistingServer: false,
+            timeout: 60_000,
+          },
           {
             command: "pnpm --dir ../.. db:migrate && pnpm --dir ../.. dev:api",
             url: "http://127.0.0.1:4000/healthz",

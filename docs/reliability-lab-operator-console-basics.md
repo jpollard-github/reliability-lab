@@ -407,7 +407,7 @@ The Live Machine View has two related but distinct concerns.
 - merging persisted events;
 - maintaining the live edge.
 
-### Recorded playback
+### Timeline playback
 
 - stopped;
 - playing;

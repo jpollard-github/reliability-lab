@@ -23,7 +23,7 @@ test("compares a retrying execution with an immediate-fallback variant", async (
   await expect(retries).toContainText("0");
   await expect(retries).toContainText("improved");
 
-  await page.getByRole("button", { name: "Play event history" }).first().click();
+  await page.getByRole("button", { name: "Start timeline playback" }).first().click();
   await expect(page.getByText(/Step \d+ of \d+/).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Original detail" })).toHaveAttribute(
     "href",

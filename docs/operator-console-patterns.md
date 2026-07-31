@@ -119,7 +119,7 @@ machine steps.
 
 ## Playback controller
 
-`features/live-machine/use-event-playback.ts` owns recorded presentation state:
+`features/live-machine/use-event-playback.ts` owns Timeline playback presentation state:
 
 - active versus live edge;
 - playing and paused;

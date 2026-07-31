@@ -6,6 +6,7 @@ import type {
   InvestigationCaseService,
   InvestigationReadRepository,
 } from "@reliability-lab/core";
+import type { ProviderCapability } from "@reliability-lab/contracts";
 
 /** Dependencies supplied by the API composition root; route plugins receive only what they use. */
 export interface AppOptions {
@@ -14,6 +15,7 @@ export interface AppOptions {
   investigationCases: InvestigationCaseService;
   investigationCaseReviews: InvestigationCaseReviewService;
   investigationCaseExperiments: InvestigationCaseExperimentService;
+  providerCapabilities: ProviderCapability[];
   readiness?: () => Promise<{ ready: boolean; checks: Record<string, string> }>;
   logger?: FastifyBaseLogger | boolean;
   enableFailureInjection?: boolean;

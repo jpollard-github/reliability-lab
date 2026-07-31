@@ -24,11 +24,7 @@ import {
   PostgresReplayCapsuleStore,
 } from "@reliability-lab/db";
 import { OpenTelemetryExecutionTracer, startTelemetry } from "@reliability-lab/observability";
-import {
-  DeterministicFakeProvider,
-  OpenAICompatibleHttpProvider,
-  type LlmProvider,
-} from "@reliability-lab/providers";
+import { buildProviderRuntime } from "@reliability-lab/providers";
 import { buildApp } from "./app.js";
 import { readExecutionRuntimeConfig, readReplayRuntimeConfig } from "./config.js";
 
@@ -46,22 +42,7 @@ const telemetry = startTelemetry({
     : {}),
 });
 
-const providers: LlmProvider[] = [
-  new DeterministicFakeProvider({ id: "fake-primary", seed: 17 }),
-  new DeterministicFakeProvider({ id: "fake-fallback", seed: 29 }),
-];
-if (
-  process.env.OPENAI_COMPATIBLE_BASE_URL &&
-  process.env.OPENAI_API_KEY &&
-  process.env.OPENAI_MODEL
-) {
-  providers.push(
-    new OpenAICompatibleHttpProvider({
-      baseUrl: process.env.OPENAI_COMPATIBLE_BASE_URL,
-      apiKey: process.env.OPENAI_API_KEY,
-    }),
-  );
-}
+const providerRuntime = buildProviderRuntime(process.env);
 
 let closeDatabase: (() => Promise<void>) | undefined;
 let databasePool: ReturnType<typeof createDatabase>["pool"] | undefined;
@@ -115,7 +96,7 @@ const service = new ExecutionService({
   repository,
   comparisons,
   replayCapsules,
-  providers: new MapProviderRegistry(providers),
+  providers: new MapProviderRegistry(providerRuntime.providers),
   tracer: new OpenTelemetryExecutionTracer(),
   allowLivePromptRetention: replayConfig.allowLivePromptRetention,
   replayRetentionMs: replayConfig.retentionMs,
@@ -172,6 +153,7 @@ const investigationCaseExperiments = new InvestigationCaseExperimentService({
 
 const app = await buildApp({
   service,
+  providerCapabilities: providerRuntime.capabilities,
   investigationCases,
   investigationCaseReviews,
   investigationCaseExperiments,

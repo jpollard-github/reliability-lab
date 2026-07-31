@@ -7,6 +7,7 @@ import type {
   InvestigationCaseDetail,
   InvestigationCasePage,
   InvestigationCaseReview,
+  ProviderCapabilityList,
   ProviderObservationPage,
   ReliabilitySummary,
 } from "@reliability-lab/contracts";
@@ -30,6 +31,15 @@ export async function getProviderObservations(
   params: URLSearchParams = new URLSearchParams(),
 ): Promise<ProviderObservationPage> {
   return getInvestigationResponse<ProviderObservationPage>("providers", params);
+}
+
+export async function getProviderCapabilities(): Promise<ProviderCapabilityList> {
+  const response = await fetch(`${apiUrl}/v1/providers`, {
+    headers: { "x-tenant-id": tenantId },
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Provider capabilities failed with HTTP ${response.status}`);
+  return (await response.json()) as ProviderCapabilityList;
 }
 
 export async function getExecution(executionId: string): Promise<ExecutionEnvelope | null> {

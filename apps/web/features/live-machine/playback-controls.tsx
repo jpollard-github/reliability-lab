@@ -35,7 +35,7 @@ export function PlaybackControls({
         Restart
       </button>
       <button type="button" onClick={toggle} disabled={eventCount < 2}>
-        {active && playing ? "Pause" : active ? "Resume" : "Play event history"}
+        {active && playing ? "Pause" : active ? "Resume" : "Start timeline playback"}
       </button>
       <button
         type="button"

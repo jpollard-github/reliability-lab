@@ -13,8 +13,9 @@ It has three complementary surfaces:
 - `ConceptHelp` adds native, contextual disclosures at genuine concept boundaries;
 - `Tour this page` starts a stateless tour of the current established route family.
 
-The Guide owns the seven-stage operator workflow, five existing deterministic scenarios, canonical
-glossary, honest limitations, and contextual workflow links. Its introduction contains only the
+The Guide owns the seven-stage operator workflow, five existing deterministic scenarios, the
+optional configured live-execution distinction, canonical glossary, honest limitations, and
+contextual workflow links. Its introduction contains only the
 page identity and description; product orientation and its evidence boundaries share one coherent
 full-width panel. It does not fetch evidence or simulate a second application.
 
@@ -52,7 +53,8 @@ product mutation. Opening it preserves form values, route state, and the current
 ## Stable anchors
 
 Product sections expose semantic `data-guide-anchor` values. They name durable concepts such as
-`execution-scenario`, `live-machine`, `replay-capability`, `workbench-summary`, and
+`execution-scenario`, optional `live-provider-execution`, `live-machine`, `replay-capability`,
+`workbench-summary`, and
 `case-evidence`, `case-experiment`, and `case-review`. The case-detail tour explains that only
 linked replay-capable execution evidence can start one controlled comparison, then uses
 `case-review` to explain current bounded summaries and fixed readiness checks before it reaches
@@ -109,6 +111,9 @@ Tours describe only the current DOM and real evidence. They do not manufacture m
 completion, identify a user, provide analytics, position tooltips, or cross routes automatically.
 The Guide repeats the product's security, provider-effect, replay-capability, ranking, and
 answer-quality limitations rather than advancing those claims.
+It explicitly distinguishes deterministic scenarios, Timeline playback, replay, and live execution:
+only replay and live execution create provider calls; only replay depends on retained input;
+Timeline playback is presentation only; failure injection belongs only to deterministic scenarios.
 Case guidance likewise describes readiness as workflow completeness and review packets as internal
 trace artifacts; it does not claim conclusion truth. Experiment guidance describes one controlled
 variation over fixed retained input; it does not claim a recommendation, winner, statistical

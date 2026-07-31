@@ -24,6 +24,7 @@ import {
 import { ExecutionNotFoundError } from "./errors.js";
 import { ExecutionFailureRecorder } from "./execution-failure.js";
 import type { ExecutionEventRecorder } from "./execution-events.js";
+import { validateLiveProviderRequest } from "./live-provider-request.js";
 import { calculateRetryDelay } from "./retry-backoff.js";
 import { StructuredOutputValidator } from "./structured-output-validator.js";
 import {
@@ -260,6 +261,24 @@ export class ExecutionRunner {
         guard,
       );
     }
+    const liveRequestError = validateLiveProviderRequest({
+      body,
+      policy: execution.policy,
+      budget: execution.budget,
+      capability:
+        primary.capability ??
+        ({
+          id: primary.id,
+          kind: primary.kind === "live" ? "live" : "deterministic",
+          modelLabel: body.model,
+          transportFamily:
+            primary.kind === "live" ? "openai_compatible_chat_completions" : "in_process_fixture",
+          configured: true,
+          supportsFailureInjection: primary.kind === "fake",
+          operatorEligible: true,
+        } as const),
+    });
+    if (liveRequestError) return this.#failures.fail(execution, liveRequestError, guard);
 
     const capsule: ReplayCapsule = {
       providerRequest: {

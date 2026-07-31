@@ -65,7 +65,7 @@ export default async function ExecutionDetailPage({
       </section>
       <ConceptHelp
         title="How should I interpret this execution evidence?"
-        what="Live mode follows newly persisted events; recorded playback only changes the visible presentation point. Replay is a separate new execution and depends on current capability."
+        what="Live mode follows newly persisted events; Timeline playback presents recorded evidence only. Replay is a separate new execution and depends on current capability."
         why="Normalized outcomes, including degraded recovery, explain recorded control flow without claiming answer quality or exactly-once provider effects."
         lookFor="Check replay state and reason, compare live status with playback status, then inspect normalized outcome and event-derived investigation signals."
       />

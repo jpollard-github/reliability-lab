@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initialPlaybackState, playbackReducer } from "./use-event-playback.js";
 
-describe("recorded event playback", () => {
+describe("Timeline playback", () => {
   it("restarts, pauses, steps, and returns to the live edge", () => {
     let state = playbackReducer(initialPlaybackState(4), { type: "restart", eventCount: 4 });
     expect(state).toMatchObject({ active: true, count: 1, playing: true });

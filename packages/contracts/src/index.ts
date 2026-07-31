@@ -2,6 +2,7 @@
 export * from "./common/identifiers.js";
 export * from "./execution/status.js";
 export * from "./execution/provider.js";
+export * from "./provider/capabilities.js";
 export * from "./execution/policy.js";
 export * from "./execution/events.js";
 export * from "./execution/envelope.js";

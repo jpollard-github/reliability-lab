@@ -39,14 +39,14 @@ test("lists an execution and opens its event timeline", async ({ page, request }
   await expect(page.getByText("execution · succeeded")).toBeVisible();
   await expect(page.getByTitle("Replay capsule is available")).toBeVisible();
 
-  await page.getByRole("button", { name: "Play event history" }).click();
+  await page.getByRole("button", { name: "Start timeline playback" }).click();
   await page.getByRole("button", { name: "Pause" }).click();
   await expect(page.getByText(/Step \d+ of \d+/)).toBeVisible();
   await page.getByRole("button", { name: "Step" }).click();
   await page.getByRole("button", { name: "Restart" }).click();
   await page.getByRole("button", { name: "Pause" }).click();
   await page.getByRole("button", { name: "Live edge" }).click();
-  await expect(page.getByText("Recorded history", { exact: true })).toBeVisible();
+  await expect(page.getByText("Timeline playback", { exact: true })).toBeVisible();
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete replay data" }).click();

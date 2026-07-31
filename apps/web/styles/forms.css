@@ -10,6 +10,43 @@
   font-size: 0.75rem;
   margin-bottom: 0.35rem;
 }
+.live-execution-form {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem 1.2rem 1.2rem;
+}
+.live-execution-form label {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.live-execution-form textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+}
+.live-provider-warning {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+.live-execution-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
 select {
   min-width: 210px;
   padding: 0.62rem;

@@ -197,6 +197,19 @@ A broader scenario catalog, explicitly configured external trace/log correlation
 campaigns, universal provider health, and generic recovery remain later candidates rather than
 implicit prerequisites or missing Horizon 5 checkboxes.
 
+**Bounded post-Horizon-5 provider proof — established without reopening the horizon.** The
+repository now projects safe configured-provider capabilities, keeps deterministic fake scenarios
+visibly separate from an optional cost-warned live execution path, and runs that live path through
+the ordinary execution engine. API and worker share provider construction; live provider/model,
+input, schema, policy, budget, failure-injection, timeout, response-size, normalization, retention,
+and redaction boundaries are tested. Automatic proof uses a loopback wire-compatible provider. A
+real external proof remains an explicit one-request opt-in and is not part of normal verification.
+
+This establishes configuration and one bounded transport path, not health, SLA, answer quality,
+price, quota, exactly-once effects, production credentials, universal provider comparison, Horizon
+6 identity, or production readiness. Timeline playback remains recorded presentation only; replay
+remains a separate new execution requiring current retained input.
+
 ### Horizon 6: A tenant-safe service
 
 **Status: not implemented.** Naming this next horizon does not begin or imply its identity,
@@ -260,3 +273,5 @@ explicitly configured trace/log correlation, broader statistical campaigns, univ
 provider-health views, and deeper operator recovery remain unelected future candidates.
 Cancellation, Redis coordination, generic outbox tooling, resumable workflow machinery, and cloud
 infrastructure are not retroactive prerequisites for this horizon signal.
+The bounded live-provider proof is a post-closure validation of the existing ordinary execution
+path; it does not add another roadmap horizon or begin Horizon 6.

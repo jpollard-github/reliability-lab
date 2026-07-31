@@ -104,6 +104,15 @@ describe("API execution event stream", () => {
     const provider: LlmProvider = {
       id: "gated",
       kind: "fake",
+      capability: {
+        id: "gated",
+        kind: "deterministic",
+        modelLabel: "v1",
+        transportFamily: "in_process_fixture",
+        configured: true,
+        supportsFailureInjection: true,
+        operatorEligible: true,
+      },
       execute: async (request) => {
         await gate;
         return {
@@ -136,6 +145,7 @@ describe("API execution event stream", () => {
     });
     const gatedApp = await buildApp({
       service: gatedService,
+      providerCapabilities: [provider.capability!],
       investigationCases: gatedCaseService,
       investigationCaseReviews: new InvestigationCaseReviewService({
         cases: gatedCases,

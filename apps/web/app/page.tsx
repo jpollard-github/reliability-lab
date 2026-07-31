@@ -1,16 +1,24 @@
 import Link from "next/link";
 import { ExecutionForm } from "@/features/executions/execution-form";
 import { ExecutionTable } from "@/features/executions/execution-table";
+import { LiveExecutionForm } from "@/features/executions/live-execution-form";
+import { selectOperatorLiveProvider } from "@/features/executions/provider-capability";
 import { ConceptHelp } from "@/features/guidance/concept-help";
-import { getInvestigationSummary, searchInvestigationExecutions } from "@/lib/server-api";
+import {
+  getInvestigationSummary,
+  getProviderCapabilities,
+  searchInvestigationExecutions,
+} from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [executionPage, summary] = await Promise.all([
+  const [executionPage, summary, providerCapabilities] = await Promise.all([
     searchInvestigationExecutions(),
     getInvestigationSummary(),
+    getProviderCapabilities(),
   ]);
+  const liveProvider = selectOperatorLiveProvider(providerCapabilities.data);
 
   return (
     <>
@@ -44,15 +52,29 @@ export default async function HomePage() {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Development console</h2>
+            <h2>Deterministic lab scenarios</h2>
             <p>
-              Runs use the deterministic fake provider. Failure injection must be enabled in the
-              API.
+              Repeatable fake-provider instruments exercise known policy and failure evidence.
+              Failure injection must be enabled in the API.
             </p>
           </div>
         </div>
         <ExecutionForm />
       </section>
+      {liveProvider ? (
+        <section className="panel" data-guide-anchor="live-provider-execution">
+          <div className="panel-heading">
+            <div>
+              <h2>Live provider execution</h2>
+              <p>
+                An ordinary execution through the configured external provider. Failure injection is
+                unavailable on this path.
+              </p>
+            </div>
+          </div>
+          <LiveExecutionForm provider={liveProvider} />
+        </section>
+      ) : null}
       <section className="panel" data-guide-anchor="recent-executions">
         <div className="panel-heading">
           <div>

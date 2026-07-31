@@ -209,6 +209,19 @@ The replay capsule is treated as a controlled, revocable capability. It may be e
 
 The execution evidence should remain useful even when no replay capsule exists.
 
+### Deterministic scenario, Timeline playback, replay, and live execution
+
+These are four different operations:
+
+- A deterministic scenario is a repeatable fake-provider lab instrument. It can inject known
+  failure evidence without any external request.
+- Timeline playback presents a prefix of recorded events. It makes no provider call, creates no
+  execution, mutates no evidence, and uses no retained replay input.
+- Replay creates a new linked execution from retained input. It makes a new provider call and
+  records new evidence.
+- Live execution uses a configured external provider through the ordinary execution engine. It may
+  incur cost, cannot use failure injection, and does not retain request input by default.
+
 ---
 
 ## A concrete example
@@ -295,19 +308,22 @@ Those could become related areas later, but they are not required to understand 
 
 ## Working vocabulary
 
-| Term               | Plain meaning                                                                     |
-| ------------------ | --------------------------------------------------------------------------------- |
-| Execution          | The complete lifecycle of one LLM-powered request                                 |
-| Attempt            | One provider/model call within an execution                                       |
-| Reliability        | Predictable, explainable handling of normal operation and expected failure        |
-| Reliability policy | Rules governing retry, fallback, validation, budgets, and stopping                |
-| Execution evidence | The operational record of what happened and why                                   |
-| Replay capsule     | Retained sensitive input needed to reproduce an execution                         |
-| Replay             | Running a controlled version of a previous execution again                        |
-| Incident           | A problematic or unusual execution worth investigating                            |
-| Investigation case | A clearer, less dramatic term for an execution selected for study                 |
-| Degraded success   | The request succeeded, but only after retry, fallback, or another recovery action |
-| Normalized failure | A provider-specific error translated into a stable project-level category         |
+| Term                   | Plain meaning                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| Execution              | The complete lifecycle of one LLM-powered request                                 |
+| Attempt                | One provider/model call within an execution                                       |
+| Reliability            | Predictable, explainable handling of normal operation and expected failure        |
+| Reliability policy     | Rules governing retry, fallback, validation, budgets, and stopping                |
+| Execution evidence     | The operational record of what happened and why                                   |
+| Replay capsule         | Retained sensitive input needed to reproduce an execution                         |
+| Replay                 | Running a controlled version of a previous execution again                        |
+| Incident               | A problematic or unusual execution worth investigating                            |
+| Investigation case     | A clearer, less dramatic term for an execution selected for study                 |
+| Degraded success       | The request succeeded, but only after retry, fallback, or another recovery action |
+| Normalized failure     | A provider-specific error translated into a stable project-level category         |
+| Deterministic scenario | A repeatable fake-provider lab instrument                                         |
+| Timeline playback      | Presentation of recorded evidence only; no provider call or mutation              |
+| Live execution         | An ordinary execution through a configured external provider                      |
 
 ---
 

@@ -21,6 +21,12 @@ export const pageTours = {
         body: "This action creates a real local execution and opens its evidence as it arrives.",
       },
       {
+        anchor: "live-provider-execution",
+        title: "Configured live execution",
+        body: "When a live provider is safely configured, this separate path makes one ordinary external execution. It may incur cost, cannot inject failures, and does not retain request input for replay by default.",
+        optional: true,
+      },
+      {
         anchor: "recent-executions",
         title: "Recent executions",
         body: "Open any execution to inspect its envelope, attempts, events, and replay capability.",
@@ -54,8 +60,8 @@ export const pageTours = {
       },
       {
         anchor: "playback-controls",
-        title: "Playback controls",
-        body: "Restart, play, step, change speed, or return to live edge. These controls change presentation only.",
+        title: "Timeline playback",
+        body: "Restart, play, step, change speed, or return to live edge. Timeline playback presents recorded evidence only: no provider call, new execution, mutation, or replay-retention use.",
       },
       {
         anchor: "machine-route",

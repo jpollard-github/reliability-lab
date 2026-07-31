@@ -17,6 +17,11 @@ as a saved case. A case can derive bounded current summaries for every link, exp
 conclusion-readiness checks, enforce meaningful resolved state, and export the same safe projection
 as a deterministic Markdown review packet.
 
+A bounded post-Horizon-5 proof also exposes safe configured-provider capability evidence and,
+only when an eligible live provider is configured, a separate cost-warned live submit path. That
+path uses the same ordinary execution engine, events, detail, Timeline playback, replay,
+comparison, Workbench, case, experiment, review, and packet surfaces as deterministic scenarios.
+
 The important boundaries are equally explicit: this prototype does not establish factual answer
 correctness, exactly-once provider effects, authenticated tenancy, RBAC, row-level security,
 production KMS, universal provider health, empirical usability, or production readiness. The
@@ -62,7 +67,7 @@ presents only API evidence. The [codebase tour](codebase-tour.md) is the complet
 | ------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Portable contracts | `packages/contracts/src/index.ts` and named contract folders                                        | Validated requests, envelopes, events, replay/comparison/investigation/case shapes |
 | Domain policy      | `packages/core/src/execution/`, `durable/`, `comparison/`, `investigation/`, `investigation-cases/` | Commands, ports, normalized evidence, domain errors                                |
-| Provider edge      | `packages/providers/src/index.ts`                                                                   | `ProviderRequest` in; normalized `ProviderResult` out                              |
+| Provider edge      | `packages/providers/src/provider-runtime.ts` and named adapters                                     | Safe capabilities; `ProviderRequest` in; normalized `ProviderResult` out           |
 | PostgreSQL edge    | `packages/db/src/`                                                                                  | Port operations translated to rows, SQL, transactions, and ciphertext              |
 | API process        | `apps/api/src/server.ts` and `apps/api/src/app.ts`                                                  | HTTP validation, tenant routing, status/error mapping, SSE                         |
 | Worker process     | `apps/worker/src/server.ts`                                                                         | Claimed encrypted commands and guarded continuation                                |
@@ -72,6 +77,23 @@ There are two execution processes, not two execution engines. In-process continu
 PostgreSQL worker both delegate to `ExecutionRunner` through `ExecutionService`; see
 `packages/core/test/execution-service.test.ts` and
 `packages/db/test/durable-execution.integration.test.ts`.
+
+### Provider configuration is evidence, not health
+
+`buildProviderRuntime` constructs the same providers for API and worker and emits a bounded safe
+projection. `GET /v1/providers` returns it under tenant routing without a provider call. The
+projection excludes endpoint, credential, headers, query strings, raw configuration, and request or
+response bodies.
+
+The home page always exposes deterministic fake-provider lab instruments. It exposes live execution
+only for an eligible capability. The browser cannot choose an arbitrary live model or inject
+failure. Core bounds live input, messages, schema, policy, and budget; the adapter rechecks the
+server model, sends `store: false`, normalizes failures, and caps response bytes.
+
+Timeline playback is presentation of recorded evidence only. Replay is a new linked execution using
+retained input and therefore another provider call. Live retention stays default-deny. The generic
+adapter keeps Chat Completions compatibility; ADR 0013 reserves an OpenAI-specific Responses adapter
+as a separate future decision.
 
 ## The 15-to-30-minute repository walkthrough
 

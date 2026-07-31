@@ -18,7 +18,8 @@ feature route plugins.
 
 See the [codebase tour](codebase-tour.md) for the current tree and the
 [system-flow guide](system-flows.md) for concrete call paths. Phase 3 now establishes named web
-features, server/client API boundaries, split stream/playback controllers, ordered feature styles,
+features, server/client API boundaries, split stream/Timeline playback controllers, ordered feature
+styles,
 and workflow-named Playwright specs. Phase 4 establishes the evidence-based
 [design review](design-review-walkthrough.md), [change recipes](change-recipes.md), and portable
 documentation audit without changing runtime architecture.
@@ -30,7 +31,8 @@ contracts, extract the tenant boundary, and map domain errors to HTTP. `apps/wor
 durable continuation process. `packages/core` owns acceptance
 preparation, continuation, provider policy, events, replay capability, and comparison behavior
 through ports. `packages/providers` implements deterministic fake and focused OpenAI-compatible
-HTTP adapters. `packages/db` stores execution evidence, durable jobs, comparison experiments, saved
+HTTP adapters plus shared API/worker provider construction. `packages/db` stores execution evidence,
+durable jobs, comparison experiments, saved
 investigation cases, and the separately encrypted PostgreSQL Replay Vault. `apps/web` talks only to
 the API and never
 receives command or capsule bodies.
@@ -38,9 +40,33 @@ receives command or capsule bodies.
 The web route pages remain server-rendered composition roots. `lib/server-api.ts` is server-only and
 owns initial reads; `lib/client-api.ts` exposes browser-safe public configuration for focused
 mutation islands. The Investigation Workbench uses a pure URL-state module plus a server-only loader
-that starts its three bounded reads concurrently. Live stream and recorded playback state are
+that starts its three bounded reads concurrently. Live stream and Timeline playback state are
 separate browser controllers. Presentation is grouped under execution, live-machine, comparison,
 investigation, and saved-case feature folders.
+
+## Provider capability and live execution boundary
+
+`buildProviderRuntime` is the single provider-construction owner for API and worker. It returns
+adapters plus a public-safe capability projection. `GET /v1/providers` exposes that projection under
+the ordinary tenant-routing header without calling a provider. Configuration is not provider
+health. Keys, endpoints, query strings, headers, and raw environment objects never enter the
+contract or browser.
+
+The home-page Server Component reads capabilities through `lib/server-api.ts`. Deterministic
+scenarios remain the always-present fake-provider lab. A focused client form appears only for an
+eligible configured live provider and submits the provider ID and safe server-owned model label
+through the ordinary execution endpoint.
+
+Core validates live model identity, input/message size, structured-schema size, retry/backoff
+policy, latency/cost budget, and failure-injection exclusion before provider work. The adapter
+rechecks model and failure injection, bounds the response body, sends `store: false`, and normalizes
+errors without reading or returning raw failure bodies. Live request retention remains default-deny
+and independent from Timeline playback. Replay, when durable retention is explicitly enabled,
+creates another ordinary provider execution.
+
+The generic adapter retains the Chat Completions wire family for current cross-provider
+compatibility. A future OpenAI-specific Responses adapter is a separate elected boundary; see
+[ADR 0013](adr/0013-generic-chat-completions-and-future-openai-responses-adapter.md).
 
 `EXECUTION_MODE=in_process` is the infrastructure-free default: the API persists acceptance,
 returns `202`, and continues in that process. In `postgres_worker`, one PostgreSQL transaction

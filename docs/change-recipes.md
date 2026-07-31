@@ -404,3 +404,36 @@ comparison system.
 Every completed change still receives the repository-appropriate final checks from `AGENTS.md`.
 Architecture changes also update this recipe map so the next maintainer does not follow a stale
 path.
+
+## 14. Change provider capability or live execution behavior
+
+**Product intent.** Change one safe configured-provider fact or one bounded external execution
+behavior without exposing configuration or creating a second execution engine.
+
+- **Primary owners:** portable projection in
+  `packages/contracts/src/provider/capabilities.ts`; construction in
+  `packages/providers/src/provider-runtime.ts`; live wire behavior in
+  `openai-compatible-http-provider.ts`; core bounds in
+  `packages/core/src/execution/live-provider-request.ts`.
+- **Adjacent modules:** `apps/api/src/routes/providers.ts`, execution submission, API/worker
+  composition, `apps/web/lib/server-api.ts`, `LiveExecutionForm`, Guide/tour terminology, and the
+  local/external proof scripts.
+- **Contract implications:** expose only provider ID, deterministic/live kind, safe model label,
+  transport family, configured/failure-injection/operator flags, and a fixed safe unavailable
+  reason. Never add endpoint, key, query, header, raw config, body, or health claims.
+- **Runtime implications:** API and worker must use the same construction owner. Live model
+  identity and bounded input/schema/policy/budget stay server enforced. Failure injection must stop
+  before fetch.
+- **Retention implications:** Timeline playback uses recorded events only. Replay remains a new
+  execution gated by separately configured retained input; do not enable retention to make the
+  live form work.
+- **Tests:** injected-fetch adapter cases, capability/config redaction, API/OpenAPI validation,
+  core request bounds, one built loopback wire drill, and loopback-only Playwright/no-JavaScript
+  coverage. Normal verification must make no paid request.
+- **External proof:** keep `pnpm verify:live-provider` explicitly opt-in, one request, one attempt,
+  bounded, non-sensitive, and safe-output-only.
+- **Documentation:** Live Provider Proof basics, ADR 0013 if the transport decision changes,
+  architecture, flows, codebase tour, Guide/tours, security, README, and roadmap.
+- **Avoid:** browser provider config, selectable arbitrary live models, raw error bodies, health
+  inference from configuration, automatic external calls, hidden Responses/Chat Completions
+  switching, or test retries that multiply cost.

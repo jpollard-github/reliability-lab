@@ -41,6 +41,8 @@ The variant is not a simulated row in a report. It goes through the normal execu
 - terminal outcome.
 
 That matters because the comparison is built from real execution evidence rather than guesses.
+Timeline playback of either side is different: it only presents each execution's recorded events
+and never creates a variant or calls a provider.
 
 ```text
 Original retained input
@@ -150,6 +152,7 @@ It asks:
 The system requires this to be explicit so an accidental no-op is not presented as a meaningful variant.
 
 A reproducibility check may still produce different model output when a live model is nondeterministic. That difference is evidence, not automatically a failure.
+It is therefore still a new provider execution, unlike Timeline playback.
 
 ---
 

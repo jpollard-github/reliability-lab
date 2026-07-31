@@ -206,7 +206,7 @@ the server-only `workbench-loader.ts` performs the three established bounded rea
 Summary cards, trend, provider observations, filters, and the execution explorer have separately
 locatable components.
 
-The Live Machine separates stream/reconnect/event merge from recorded playback state and from
+The Live Machine separates stream/reconnect/event merge from Timeline playback state and from
 readout, controls, route, and raw timeline presentation. Comparative Replay separates form-string
 draft parsing and preset values from submission and detail presentation. Saved cases separate
 typed browser mutations, controls, evidence, notes, timeline, overview, creation, linking, and list

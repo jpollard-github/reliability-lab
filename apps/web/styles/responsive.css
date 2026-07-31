@@ -60,6 +60,10 @@
     align-items: stretch;
     flex-direction: column;
   }
+  .live-execution-meta {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .attempts article {
     grid-template-columns: 1fr 1fr;
   }

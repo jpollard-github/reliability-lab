@@ -3,6 +3,31 @@
 These walkthroughs name the files and functions that execute each established workflow. Phase 2
 gives transport routes, persistence adapters, queries, mapping, and transactions distinct homes.
 
+## 0. Provider capability and configured live execution
+
+1. `buildProviderRuntime` constructs deterministic adapters and, only from complete valid server
+   configuration, one OpenAI-compatible live adapter. API and worker call the same owner.
+2. `providerRoutes` exposes `GET /v1/providers` under the tenant-routing header. It returns safe
+   capabilities and performs no provider call; configuration is not health.
+3. The home-page Server Component reads those capabilities through `getProviderCapabilities`.
+   Deterministic lab scenarios always render. `LiveExecutionForm` renders only for an eligible live
+   capability.
+4. The focused form sends the safe provider ID/model label, one bounded non-sensitive input, one
+   attempt, no fallback, and a bounded latency budget through ordinary `POST /v1/executions`.
+5. The route and `validateLiveProviderRequest` reject browser-selected models, failure injection,
+   oversized input/schema, and out-of-bounds policy/budget values.
+6. `OpenAICompatibleHttpProvider` rechecks model/failure controls, sends one Chat Completions
+   request with `store: false`, bounds the response, and emits only normalized result evidence.
+7. The same envelope, attempts, events, detail, Timeline playback, Workbench, case, experiment,
+   review, and packet surfaces consume the resulting ordinary execution.
+
+**Boundary/evidence review:** capabilities exclude key, endpoint, raw configuration, headers, query
+strings, request bodies, and provider bodies. Live retention remains default-deny. Timeline
+playback is recorded presentation only; replay is a separate new provider execution requiring
+current retained input. Adapter proof lives in `packages/providers/test/`, route proof in
+`apps/api/test/providers.test.ts`, built loopback proof in `scripts/verify-local-provider-wire.mjs`,
+and browser proof in `apps/web/tests/live-provider-execution.spec.ts`.
+
 ## 1. In-process execution
 
 1. `apps/api/src/routes/executions.ts` validates `POST /v1/executions` and calls
@@ -257,8 +282,9 @@ trend, provider observations, compact executions, and exact URL/saved scope. Rel
    sequence, parses SSE frames, merges events without duplicates, reconnects, and refreshes the
    terminal snapshot.
 2. `projectExecutionEvents` remains the pure authority for machine steps and actual event span.
-3. `useEventPlayback` changes only presentation state; readout, controls, machine route, and raw
-   timeline render the selected persisted prefix.
+3. `useEventPlayback` owns Timeline playback and changes only presentation state; readout, controls,
+   machine route, and raw timeline render the selected persisted prefix. It makes no provider call,
+   creates no execution, mutates no evidence, and uses no replay retention.
 4. Browser mutations use `lib/client-api.ts` public configuration plus feature-specific requests.
 5. Replay deletion remains in `features/executions/replay-controls.tsx`; comparison drafts become
    variations in `features/comparisons/comparison-draft.ts`.

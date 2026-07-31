@@ -16,11 +16,7 @@ import {
   readReplayRuntimeConfig,
 } from "@reliability-lab/db";
 import { OpenTelemetryExecutionTracer, startTelemetry } from "@reliability-lab/observability";
-import {
-  DeterministicFakeProvider,
-  OpenAICompatibleHttpProvider,
-  type LlmProvider,
-} from "@reliability-lab/providers";
+import { buildProviderRuntime } from "@reliability-lab/providers";
 import { readWorkerRuntimeConfig } from "./config.js";
 
 if (process.env.RELIABILITY_LAB_RUNTIME_IMPORT_SMOKE === "true") {
@@ -53,28 +49,13 @@ await pool.query("select 1 from replay_capsules limit 0");
 await pool.query("select 1 from comparison_experiments limit 0");
 const jobs = new PostgresDurableExecutionStore(db, executionConfig.keyring);
 const replayCapsules = new PostgresReplayCapsuleStore(db, replayConfig.keyring);
-const providers: LlmProvider[] = [
-  new DeterministicFakeProvider({ id: "fake-primary", seed: 17 }),
-  new DeterministicFakeProvider({ id: "fake-fallback", seed: 29 }),
-];
-if (
-  process.env.OPENAI_COMPATIBLE_BASE_URL &&
-  process.env.OPENAI_API_KEY &&
-  process.env.OPENAI_MODEL
-) {
-  providers.push(
-    new OpenAICompatibleHttpProvider({
-      baseUrl: process.env.OPENAI_COMPATIBLE_BASE_URL,
-      apiKey: process.env.OPENAI_API_KEY,
-    }),
-  );
-}
+const providerRuntime = buildProviderRuntime(process.env);
 
 const service = new ExecutionService({
   repository: new PostgresExecutionRepository(db),
   comparisons: new PostgresComparisonExperimentRepository(db),
   replayCapsules,
-  providers: new MapProviderRegistry(providers),
+  providers: new MapProviderRegistry(providerRuntime.providers),
   tracer: new OpenTelemetryExecutionTracer(),
   allowLivePromptRetention: replayConfig.allowLivePromptRetention,
   replayRetentionMs: replayConfig.retentionMs,

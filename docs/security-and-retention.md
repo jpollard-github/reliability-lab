@@ -66,6 +66,27 @@ policy metadata, not prompt content. Capsule and execution-command bodies, ciphe
 tags, and keys are absent from API contracts. `.env*` except `.env.example`, logs, exports, and
 local volumes are ignored or refused by export tooling.
 
+## Provider capabilities and live transport
+
+`GET /v1/providers` is a server-derived configuration projection, not a provider probe or health
+endpoint. It exposes provider ID, deterministic/live kind, safe model label, transport family,
+configured/failure-injection/operator flags, and a fixed unavailable reason. It excludes API keys,
+base URLs, query strings, authorization, cookies, raw environment objects, request bodies, and
+provider response bodies.
+
+API and worker construct providers through the same runtime owner. Live execution requires the
+server-configured model, rejects failure injection, and bounds input/messages, structured schema,
+retry/backoff policy, latency/cost budget, timeout, and response size. The browser cannot submit a
+provider endpoint or credential. The generic adapter sends `store: false`, never reads or returns a
+failed provider body, and normalizes HTTP, network, abort, timeout, malformed, and oversized
+responses.
+
+Normal tests and automatic proof use loopback providers only. The external proof command makes no
+request unless its explicit opt-in and complete URL/key/model configuration are present, limits the
+ordinary execution to one attempt, and prints no endpoint, key, input, output, or provider body.
+Live request retention remains default-deny. Timeline playback uses recorded evidence only; replay
+is a separately authorized new execution using retained input.
+
 ## Comparative replay
 
 The comparison API cannot accept messages, input, or a replacement prompt. It can only request

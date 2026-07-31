@@ -86,20 +86,20 @@ test("navigates an on-demand tour without changing product state and restores fo
 
   const tour = page.getByRole("dialog", { name: "Executions page tour" });
   await expect(tour).toBeVisible();
-  await expect(tour.getByText("Step 1 of 5: Execution summary")).toBeVisible();
+  await expect(tour.getByText("Step 1 of 6: Execution summary")).toBeVisible();
   await expect(page.locator('[data-guide-anchor="execution-summary"]')).toHaveAttribute(
     "data-guide-active",
     "true",
   );
 
   await tour.getByRole("button", { name: "Next" }).click();
-  await expect(tour.getByText("Step 2 of 5: Deterministic scenario")).toBeVisible();
+  await expect(tour.getByText("Step 2 of 6: Deterministic scenario")).toBeVisible();
   await expect(page.locator('[data-guide-anchor="execution-scenario"]')).toHaveAttribute(
     "data-guide-active",
     "true",
   );
   await tour.getByRole("button", { name: "Back" }).click();
-  await expect(tour.getByText("Step 1 of 5: Execution summary")).toBeVisible();
+  await expect(tour.getByText("Step 1 of 6: Execution summary")).toBeVisible();
 
   await expect(page).toHaveURL(originalUrl);
   await expect(page.getByLabel("Deterministic scenario")).toHaveValue("success");

@@ -29,7 +29,7 @@ The underlying capabilities are established:
 - deterministic executions;
 - normalized failure evidence;
 - persisted event streaming;
-- recorded playback;
+- Timeline playback;
 - encrypted replay capability;
 - controlled comparison;
 - bounded investigation;
@@ -53,7 +53,7 @@ A new operator should be able to answer:
 3. What is an execution?
 4. What is an attempt?
 5. What evidence does the system record?
-6. What is live, and what is recorded playback?
+6. What is live, and what is Timeline playback?
 7. When is replay available?
 8. What changes during Comparative Replay?
 9. What do Workbench signals mean?
@@ -205,7 +205,7 @@ Explain:
 1. execution envelope and status;
 2. replay capability;
 3. live persisted event stream;
-4. recorded playback;
+4. Timeline playback;
 5. machine route;
 6. normalized outcome;
 7. investigation signals;
@@ -469,7 +469,7 @@ Product Tour and Operator Guidance is established when a fresh operator can:
 2. explain the product’s purpose;
 3. distinguish execution from attempt;
 4. launch an existing deterministic scenario;
-5. identify live evidence and recorded playback;
+5. identify live evidence and Timeline playback;
 6. understand replay capability;
 7. understand what a comparison changes;
 8. interpret Workbench signals without treating them as rankings;

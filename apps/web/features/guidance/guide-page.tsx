@@ -50,6 +50,21 @@ export function GuidePage() {
                 separately governed replay capsule and appears only through current capability.
               </dd>
             </div>
+            <div>
+              <dt>Deterministic scenario versus live execution</dt>
+              <dd>
+                A deterministic scenario is a repeatable fake-provider lab instrument. A live
+                execution is an ordinary external provider call that may incur cost and cannot use
+                failure injection.
+              </dd>
+            </div>
+            <div>
+              <dt>Timeline playback versus replay</dt>
+              <dd>
+                Timeline playback presents recorded evidence only. Replay creates a new linked
+                execution, makes a new provider call, and records new evidence from retained input.
+              </dd>
+            </div>
           </dl>
         </section>
       </section>
