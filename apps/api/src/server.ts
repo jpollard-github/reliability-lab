@@ -140,10 +140,14 @@ const investigationCaseReviews = new InvestigationCaseReviewService({
   replayCapsules,
   onDiagnostic: (diagnostic) => {
     const { operation: evidenceOperation, ...metadata } = diagnostic;
+    const operation =
+      evidenceOperation === "read_comparison_link_recovery"
+        ? "case.comparison_recovery_read_failed"
+        : "case.evidence_current_read_failed";
     process.stderr.write(
       `${JSON.stringify({
         level: "error",
-        operation: "case.evidence_current_read_failed",
+        operation,
         evidenceOperation,
         ...metadata,
       })}\n`,

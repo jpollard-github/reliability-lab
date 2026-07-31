@@ -46,6 +46,7 @@ export interface InvestigationCaseRepository {
     evidence: InvestigationCaseEvidence,
     identity: string,
     events: InvestigationCaseTimelineEvent[],
+    eventsWhenAlreadyPresent?: InvestigationCaseTimelineEvent[],
   ): Promise<{ evidence: InvestigationCaseEvidence; added: boolean }>;
   removeEvidence(
     tenantId: TenantId,

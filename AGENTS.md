@@ -102,6 +102,122 @@ Never commit `.env`, credentials, provider keys, replay encryption keys, raw pro
 local database volumes. Keep `.env.example` fake and explanatory. Redact authorization headers,
 cookies, keys, messages, and input from logs. Live-provider request-body retention is default-deny.
 
+## Permanent product baseline
+
+- Reliability Lab is an evidence workbench for bounded LLM execution policy. It is not an answer
+  judge, generic chat product, model benchmark, or universal provider-health monitor.
+- The established operator loop is `Execute → Explain → Watch → Replay → Compare → Investigate →
+Preserve → Experiment → Conclude`. Preserve those links when changing one movement.
+- Horizon 5 is established against the repository's bounded operator drill. That is a workflow
+  signal, not empirical usability research, production readiness, or a Horizon 6 tenancy claim.
+- Horizon 6 has not begun. Do not infer authentication, authorization, authorship, RBAC, RLS, or
+  production isolation from the transparent tenant header or tenant predicates.
+- Future candidates remain optional until explicitly elected. Do not add a generic scenario
+  catalog, campaign engine, recovery platform, telemetry warehouse, or provider-health product to
+  complete a focused task.
+
+## Canonical implementation flow
+
+Use this order when tracing or changing an operator-visible behavior:
+
+1. Portable TypeBox schema and `Static<>` type in `packages/contracts`.
+2. Framework-independent invariant, coordinator, projection, or port in `packages/core`.
+3. Memory adapter for local behavior and deterministic tests.
+4. PostgreSQL query or atomic command in `packages/db` when durability is part of the claim.
+5. Fastify schema, route, and safe log mapping in `apps/api`.
+6. Server read or focused browser mutation in `apps/web`.
+7. Unit, API, integration, and Playwright evidence proportional to the claim.
+8. Architecture, flow, recipe, tour, status, and roadmap wording that matches the code.
+
+Do not skip directly from UI intent to database shape. Do not duplicate core semantics in Fastify,
+Next.js, SQL, or test helpers.
+
+## Truth and evidence rules
+
+- Append-only lifecycle events explain what happened. Mutable rows and derived reviews describe
+  current state. Keep those roles distinct.
+- A current capability must be read from its authoritative owner. Historical success does not prove
+  that replay material, comparison evidence, or a tenant-scoped source is still available.
+- Missing, unavailable, running, failed, degraded, and partial results are data states, not generic
+  errors to hide.
+- Derived projections must be deterministic, bounded, tenant-scoped, and explicit about omitted or
+  unavailable evidence. Avoid scores when fixed checks or dimensions preserve more truth.
+- Evidence references remain references. Never copy raw prompts, messages, outputs, attempts,
+  event bodies, replay capsules, encrypted commands, credentials, or provider request bodies into
+  investigation cases or review packets.
+- Finding and resolution are operator interpretation. Tests may prove presence and consistency, not
+  factual truth or causation.
+- Timeline metadata stays bounded and operational. Do not put note, finding, resolution, prompt, or
+  output prose into lifecycle events or diagnostics.
+
+## Tenant and sensitive-data boundary
+
+- Every case, execution, comparison, replay, investigation, and durable-job read or mutation must
+  carry the tenant predicate through its authoritative port and adapter.
+- Wrong-tenant resources must be indistinguishable from missing resources at transport and review
+  boundaries.
+- Tenant routing is not authenticated identity. Do not add actor, owner, assignee, approver, or
+  author claims without an explicit identity design.
+- Logs and diagnostics may include bounded identifiers, operation names, safe event types, and
+  constrained error names. They must exclude exception messages when those may contain payloads.
+- Review packets are internal trace artifacts, not public-safe reports. Preserve their explicit
+  exclusions and escaped internal links.
+
+## Runtime and dependency contract
+
+- Development resolves workspace packages to source through the `development` condition.
+  Production uses emitted JavaScript and declarations through default/type package exports.
+- API and worker production entrypoints run `dist/server.js`. Never point a production script back
+  at TypeScript source to make a build pass.
+- `pnpm build` includes `pnpm audit:runtime`; keep the built-runtime smoke explicit when package
+  exports, build configs, or process entrypoints change.
+- App Router pages are Server Component composition roots. Use `lib/server-api.ts` for current
+  server reads and focused client helpers for browser mutations. Do not introduce Server Actions,
+  middleware, or proxy behavior incidentally.
+- Dependency audits are observational. Record exact advisory paths and versions; do not auto-fix,
+  force, override, suppress, or weaken an audit without a separately authorized remediation task.
+- Review lockfile changes for unrelated churn. A source or documentation task should not update
+  dependencies.
+
+## Recovery and consistency discipline
+
+- Do not call a cross-resource workflow atomic when it is not. Preserve partial success with a safe
+  identifier and a narrow continuation that operates on the existing resource.
+- A durable recovery projection should come from existing authoritative state and explicit
+  lifecycle completion where practical. Do not add a recovery table merely to mirror events and
+  evidence.
+- Recovery actions must be idempotent and must not repeat the original external effect. Test reload,
+  process re-instantiation, wrong tenant, repeated action, and later evidence removal when relevant.
+- Use fixed-size batches or purpose-built bounded queries. Never create unbounded concurrency from
+  arbitrary event or evidence counts.
+
+## Review and archive discipline
+
+- At task start record the branch, commit, and dirty state. Existing changes belong to the user;
+  preserve them and report overlap.
+- Review `git diff --check`, the full diff/stat, untracked files, and dependency/lockfile changes
+  before final verification.
+- Run operator drills against the real API, worker, database, and server-rendered page when the
+  claim crosses those boundaries. Browser interception alone does not prove durable recovery.
+- No-JavaScript review should inspect server-rendered truth, even when the final mutation requires a
+  small client island.
+- Create the repository-review archive only after all edits and checks. Dry-run first, inspect the
+  manifest, create once, hash it, and make no later edits without rerunning appropriate checks and
+  recreating the archive.
+- Never commit, push, deploy, or create a remote unless the user explicitly asks.
+
+## Horizon and documentation discipline
+
+- Status prose must say whether a document is current, historical, or a completed plan. Add a
+  banner to superseded plans instead of rewriting their historical sequence as if it were current.
+- The design review gives the short truthful explanation; architecture owns boundaries; system
+  flows own sequences; the codebase tour owns find-it paths; change recipes own modification steps;
+  ADRs own durable decisions; the roadmap owns established versus future.
+- Update counts only when they help navigation, and verify them from the current suite. Prefer
+  workflow names over brittle totals.
+- A roadmap sentence is not implementation evidence. Cite current symbols, routes, tests, and
+  operator drills before claiming a movement established.
+
 ## Repository skills
 
 - `$export-repo`: package tracked and non-ignored repository files using `pnpm export:repo`; use when

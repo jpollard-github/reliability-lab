@@ -197,8 +197,12 @@ limitations, so it is an operator handoff artifact, not a public report. Relevan
 6. If that separate link fails, the comparison remains authoritative. The service records
    `case.comparison_link_failed` when possible and returns
    `comparison_created_link_failed` with a safe link-only recovery identifier.
-7. Recovery uses the existing evidence-link endpoint. It does not call comparison creation again.
-   Once linked, the ordinary review and packet projection resolve the comparison.
+7. `InvestigationCaseReviewService` reconstructs pending recovery from timeline failures and
+   completions, current comparison evidence, and current tenant-scoped comparison reads. The
+   bounded result survives API re-instantiation and server-rendered page reload.
+8. Recovery uses the existing evidence-link endpoint. It does not call comparison creation again.
+   The evidence transaction records `case.comparison_link_recovered`; once linked, the ordinary
+   review and packet projection resolve the comparison and the pending section disappears.
 
 **Boundary/evidence review:** comparison creation and case linking are intentionally non-atomic.
 The case stores identifiers and timeline metadata only—never retained input, variation prose,

@@ -130,7 +130,16 @@ export function CaseExperimentForm({
         </button>
       </div>
       {message ? (
-        <p role="status" className={result ? "form-success" : "form-error"}>
+        <p
+          role="status"
+          className={
+            result?.kind === "comparison_created_link_failed" && !recovered
+              ? "form-warning"
+              : result
+                ? "form-success"
+                : "form-error"
+          }
+        >
           {message}
         </p>
       ) : null}

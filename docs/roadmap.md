@@ -174,7 +174,9 @@ public-safe report.
 The established fifth movement, **Case-Driven Policy Experiments**, lets a saved case launch one
 ordinary controlled comparison from linked replay-capable execution evidence and return the
 comparison to the case without manual identifier choreography. A created comparison whose
-automatic evidence link fails remains explicit and recoverable through a link-only action.
+automatic evidence link fails remains explicit after reload and recoverable through a link-only
+action. Recovery links the existing comparison and records durable lifecycle completion; it never
+creates a second experiment.
 
 **Established bounded workflow signals.**
 
@@ -188,12 +190,17 @@ from recorded failure through bounded investigation, controlled policy experimen
 evidence, and supported human conclusion using the product interfaces, while unavailable evidence
 and prototype limits remain explicit. This is an internal heuristic walkthrough backed by the
 workflow tests, not empirical usability research or a production-readiness claim.
+The closure evidence and explicit non-claims are summarized in
+[Horizon 5 Closure basics](reliability-lab-horizon-5-closure-basics.md).
 
 A broader scenario catalog, explicitly configured external trace/log correlation, statistical
 campaigns, universal provider health, and generic recovery remain later candidates rather than
 implicit prerequisites or missing Horizon 5 checkboxes.
 
 ### Horizon 6: A tenant-safe service
+
+**Status: not implemented.** Naming this next horizon does not begin or imply its identity,
+authorization, or isolation guarantees.
 
 **Desired outcome.** Prototype routing context becomes an enforceable security model.
 

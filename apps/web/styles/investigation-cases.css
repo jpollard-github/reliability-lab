@@ -407,3 +407,36 @@
   border-radius: 8px;
   background: var(--surface-raised);
 }
+.case-comparison-recovery {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--warning) 55%, var(--border));
+  border-left: 3px solid var(--warning);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+}
+.case-comparison-recovery h3,
+.case-comparison-recovery p {
+  margin: 0;
+}
+.case-comparison-recovery ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.case-comparison-recovery li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(14rem, auto);
+  gap: 0.75rem;
+  align-items: center;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.case-comparison-recovery li > div:first-child,
+.case-comparison-recovery-action {
+  display: grid;
+  gap: 0.3rem;
+}

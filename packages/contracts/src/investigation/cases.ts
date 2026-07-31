@@ -108,6 +108,7 @@ export const InvestigationCaseEventTypeSchema = Type.Union([
   Type.Literal("case.evidence_removed"),
   Type.Literal("case.comparison_started"),
   Type.Literal("case.comparison_link_failed"),
+  Type.Literal("case.comparison_link_recovered"),
 ]);
 export type InvestigationCaseEventType = Static<typeof InvestigationCaseEventTypeSchema>;
 

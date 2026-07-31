@@ -1,5 +1,9 @@
 # Reliability Lab: Operator Console Composition Basics
 
+> **Historical completed phase guide.** Phase 3 is established. Use
+> [Operator Console Patterns](operator-console-patterns.md) for current conventions and the
+> [codebase tour](codebase-tour.md) for current files.
+
 This document explains the third phase of the human-comprehension refactor in plain language.
 
 ## The goal in one sentence
@@ -796,8 +800,9 @@ features/investigation-cases/
 ```
 
 `app/globals.css` is now an ordered import map over feature-named style files. The former catch-all
-Playwright file is now five workflow specs covering the same eight journeys. The detailed current
-conventions are in [Operator Console Patterns](operator-console-patterns.md).
+Playwright coverage is now organized into seven focused workflow/guidance specs, including saved
+cases and case-driven experiments. The detailed current conventions are in
+[Operator Console Patterns](operator-console-patterns.md).
 
 ---
 

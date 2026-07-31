@@ -171,6 +171,174 @@ describe("investigation case review", () => {
     ).toEqual(["evidence_linked", "evidence_reviewed", "finding_present", "resolution_present"]);
   });
 
+  it("derives one durable pending comparison recovery and closes it after recovery", async () => {
+    const { cases, comparisons, caseService, reviews } = harness();
+    await comparisons.create(comparison());
+    const created = await caseService.create("tenant-a", {
+      title: "Recover comparison evidence",
+      question: "Did the comparison link complete?",
+      savedScope: { range: RANGE },
+    });
+    await caseService.recordComparisonLinkFailure("tenant-a", created.case.caseId, {
+      experimentId: "comparison-1",
+      originalExecutionId: "original",
+    });
+    await caseService.recordComparisonLinkFailure("tenant-a", created.case.caseId, {
+      experimentId: "comparison-1",
+      originalExecutionId: "original",
+    });
+
+    const pending = await reviews.get("tenant-a", created.case.caseId);
+    expect(pending.comparisonLinkRecovery).toEqual({
+      items: [
+        expect.objectContaining({
+          experimentId: "comparison-1",
+          originalExecutionId: "original",
+          availability: "available",
+          status: "completed",
+          action: "link_existing_comparison",
+        }),
+      ],
+      totalPending: 1,
+      hasMore: false,
+    });
+    expect(pending.readiness.checks).toHaveLength(5);
+
+    const linked = await caseService.addEvidence("tenant-a", created.case.caseId, {
+      type: "comparison",
+      experimentId: "comparison-1",
+    });
+    const recovered = await caseService.get("tenant-a", created.case.caseId);
+    expect(
+      recovered.timeline.filter((event) => event.type === "case.comparison_link_recovered"),
+    ).toHaveLength(1);
+    expect(
+      (await reviews.get("tenant-a", created.case.caseId)).comparisonLinkRecovery.items,
+    ).toEqual([]);
+
+    await caseService.removeEvidence("tenant-a", created.case.caseId, linked.evidence.evidenceId);
+    expect(
+      (await reviews.get("tenant-a", created.case.caseId)).comparisonLinkRecovery.items,
+    ).toEqual([]);
+    expect((await cases.get("tenant-a", created.case.caseId))?.evidence).toEqual([]);
+  });
+
+  it("keeps missing and failed recovery reads explicit without leaking diagnostic details", async () => {
+    class FailingComparisonRepository extends MemoryComparisonExperimentRepository {
+      override async findById(): Promise<ComparisonExperiment | null> {
+        const error = new Error("SECRET provider body");
+        error.name = "Unsafe<>ComparisonError";
+        throw error;
+      }
+    }
+    const diagnostics: InvestigationCaseReviewDiagnostic[] = [];
+    const cases = new MemoryInvestigationCaseRepository();
+    const executions = new MemoryExecutionRepository();
+    const comparisons = new MemoryComparisonExperimentRepository();
+    const investigations = new MemoryInvestigationReadRepository(executions);
+    const caseService = new InvestigationCaseService({ cases, executions, comparisons });
+    await comparisons.create({
+      ...comparison(),
+      tenantId: "tenant-b",
+      experimentId: "comparison-missing",
+    });
+    const created = await caseService.create("tenant-a", {
+      title: "Unavailable recovery",
+      question: "Can the existing comparison be read?",
+      savedScope: { range: RANGE },
+    });
+    await caseService.recordComparisonLinkFailure("tenant-a", created.case.caseId, {
+      experimentId: "comparison-missing",
+      originalExecutionId: "execution-secret-free",
+    });
+    const missingReviews = new InvestigationCaseReviewService({
+      cases,
+      executions,
+      comparisons,
+      investigations,
+      replayCapsules: new MemoryReplayCapsuleStore(),
+    });
+    expect(
+      (await missingReviews.get("tenant-a", created.case.caseId)).comparisonLinkRecovery.items[0],
+    ).toMatchObject({
+      availability: "missing",
+      reason: "authoritative_comparison_not_found",
+    });
+
+    const failedReviews = new InvestigationCaseReviewService({
+      cases,
+      executions,
+      comparisons: new FailingComparisonRepository(),
+      investigations,
+      replayCapsules: new MemoryReplayCapsuleStore(),
+      onDiagnostic: (diagnostic) => diagnostics.push(diagnostic),
+    });
+    const failed = await failedReviews.get("tenant-a", created.case.caseId);
+    expect(failed.comparisonLinkRecovery.items[0]).toMatchObject({
+      availability: "unavailable",
+      reason: "current_read_unavailable",
+    });
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        caseId: created.case.caseId,
+        evidenceType: "comparison",
+        operation: "read_comparison_link_recovery",
+        errorName: "UnsafeComparisonError",
+      }),
+    ]);
+    expect(JSON.stringify(diagnostics)).not.toContain("SECRET");
+  });
+
+  it("bounds pending recovery projection size and comparison-read concurrency", async () => {
+    let activeReads = 0;
+    let maximumReads = 0;
+    let totalReads = 0;
+    class CountingComparisonRepository extends MemoryComparisonExperimentRepository {
+      override async findById(): Promise<ComparisonExperiment | null> {
+        totalReads += 1;
+        activeReads += 1;
+        maximumReads = Math.max(maximumReads, activeReads);
+        await Promise.resolve();
+        activeReads -= 1;
+        return null;
+      }
+    }
+    const cases = new MemoryInvestigationCaseRepository();
+    const executions = new MemoryExecutionRepository();
+    const comparisons = new CountingComparisonRepository();
+    const investigations = new MemoryInvestigationReadRepository(executions);
+    const item = caseRecord({ title: "Bounded recovery" });
+    await cases.create(item, createdEvent(item.caseId));
+    for (let index = 0; index < 51; index += 1) {
+      await cases.appendEvent("tenant-a", {
+        eventId: `failure-${index}`,
+        caseId: item.caseId,
+        type: "case.comparison_link_failed",
+        occurredAt: new Date(Date.parse(RANGE.from) + index).toISOString(),
+        metadata: {
+          experimentId: `comparison-${index}`,
+          originalExecutionId: `execution-${index}`,
+          linkState: "unlinked",
+        },
+      });
+    }
+    const review = await new InvestigationCaseReviewService({
+      cases,
+      executions,
+      comparisons,
+      investigations,
+      replayCapsules: new MemoryReplayCapsuleStore(),
+    }).get("tenant-a", item.caseId);
+
+    expect(review.comparisonLinkRecovery).toMatchObject({
+      totalPending: 51,
+      hasMore: true,
+    });
+    expect(review.comparisonLinkRecovery.items).toHaveLength(50);
+    expect(totalReads).toBe(50);
+    expect(maximumReads).toBeLessThanOrEqual(5);
+  });
+
   it("reports metadata-only diagnostics for unexpected reads and preserves unavailable evidence", async () => {
     const diagnostics: InvestigationCaseReviewDiagnostic[] = [];
     class FailingExecutionRepository extends MemoryExecutionRepository {
@@ -242,6 +410,34 @@ describe("investigation case review", () => {
     expect(first).toContain("from=2026-07-01T00%3A00%3A00.000Z");
     expect(first).not.toContain("%253A");
     expect(caseReviewPacketFilename("../unsafe case")).toBe("reliability-case-..-unsafe-case.md");
+  });
+
+  it("includes pending recovery in the packet and removes it after the existing link succeeds", async () => {
+    const { comparisons, caseService, reviews } = harness();
+    await comparisons.create(comparison());
+    const created = await caseService.create("tenant-a", {
+      title: "Packet recovery",
+      question: "Is comparison evidence linked?",
+      savedScope: { range: RANGE },
+    });
+    await caseService.recordComparisonLinkFailure("tenant-a", created.case.caseId, {
+      experimentId: "comparison-1",
+      originalExecutionId: "original",
+    });
+    const pendingPacket = renderInvestigationCaseReviewPacket(
+      await reviews.get("tenant-a", created.case.caseId),
+    );
+    expect(pendingPacket).toContain("## Pending comparison link recovery");
+    expect(pendingPacket).toContain("comparison\\-1");
+    expect(pendingPacket).not.toContain("SECRET");
+
+    await caseService.addEvidence("tenant-a", created.case.caseId, {
+      type: "comparison",
+      experimentId: "comparison-1",
+    });
+    expect(
+      renderInvestigationCaseReviewPacket(await reviews.get("tenant-a", created.case.caseId)),
+    ).not.toContain("## Pending comparison link recovery");
   });
 });
 

@@ -247,6 +247,60 @@ export const CaseEvidenceReviewItemSchema = Type.Union([
 ]);
 export type CaseEvidenceReviewItem = Static<typeof CaseEvidenceReviewItemSchema>;
 
+const ComparisonLinkRecoveryBaseProperties = {
+  experimentId: Type.String(),
+  originalExecutionId: Type.String(),
+  failureRecordedAt: Type.String({ format: "date-time" }),
+  sourceUrl: Type.String(),
+};
+
+export const CaseComparisonLinkRecoverySchema = Type.Union([
+  Type.Object(
+    {
+      ...ComparisonLinkRecoveryBaseProperties,
+      availability: Type.Literal("available"),
+      status: Type.Union([
+        Type.Literal("running"),
+        Type.Literal("completed"),
+        Type.Literal("unavailable"),
+      ]),
+      action: Type.Literal("link_existing_comparison"),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      ...ComparisonLinkRecoveryBaseProperties,
+      availability: Type.Literal("missing"),
+      reason: Type.Literal("authoritative_comparison_not_found"),
+      explanation: Type.String(),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      ...ComparisonLinkRecoveryBaseProperties,
+      availability: Type.Literal("unavailable"),
+      reason: Type.Literal("current_read_unavailable"),
+      explanation: Type.String(),
+    },
+    { additionalProperties: false },
+  ),
+]);
+export type CaseComparisonLinkRecovery = Static<typeof CaseComparisonLinkRecoverySchema>;
+
+export const CaseComparisonLinkRecoveryProjectionSchema = Type.Object(
+  {
+    items: Type.Array(CaseComparisonLinkRecoverySchema, { maxItems: 50 }),
+    totalPending: Type.Integer({ minimum: 0 }),
+    hasMore: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+export type CaseComparisonLinkRecoveryProjection = Static<
+  typeof CaseComparisonLinkRecoveryProjectionSchema
+>;
+
 export const InvestigationCaseReviewSchema = Type.Object(
   {
     schemaVersion: Type.Literal(1),
@@ -255,6 +309,7 @@ export const InvestigationCaseReviewSchema = Type.Object(
     scope: SavedInvestigationScopeSchema,
     noteCount: Type.Integer({ minimum: 0 }),
     evidence: Type.Array(CaseEvidenceReviewItemSchema),
+    comparisonLinkRecovery: CaseComparisonLinkRecoveryProjectionSchema,
     readiness: ConclusionReadinessSchema,
     links: Type.Object(
       {

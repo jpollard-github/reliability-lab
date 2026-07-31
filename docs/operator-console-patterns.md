@@ -202,8 +202,11 @@ evidence ID plus `ReplayVariation`. A ref-backed in-flight guard and disabled re
 ordinary duplicate clicks. They do not establish cross-client or transport idempotency.
 
 The client displays the ordinary comparison link for both orchestration results. If automatic case
-linking fails, its only recovery action calls `addInvestigationCaseEvidence` with the existing
-experiment ID. It never repeats comparison creation. A router refresh brings the linked comparison
+linking fails, the immediate result uses the same link-only mutation, while
+`CasePolicyExperiments` also renders the authoritative pending projection from the server review
+after reload. `case-comparison-link-recovery.tsx` is the focused mutation island. It calls
+`addInvestigationCaseEvidence` with the existing experiment ID and never repeats comparison
+creation. A router refresh removes the completed pending item and brings the linked comparison
 through the normal server review and packet path.
 
 ## Operator guidance

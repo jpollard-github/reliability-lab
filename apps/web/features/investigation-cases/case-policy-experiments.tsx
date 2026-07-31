@@ -6,6 +6,7 @@ import type {
 } from "@reliability-lab/contracts";
 import { CaseExperimentForm } from "./case-experiment-form";
 import type { CaseExperimentCandidate } from "./case-experiment-model";
+import { CaseComparisonLinkRecovery } from "./case-comparison-link-recovery";
 
 /**
  * Server-rendered case experiment eligibility; the focused form is the only client island.
@@ -55,6 +56,61 @@ export function CasePolicyExperiments({
         bounded provider, model, retry, fallback, and budget conditions below may change. One
         submission creates one ordinary comparison and attempts to link it back to this case.
       </p>
+      {review.comparisonLinkRecovery.totalPending ? (
+        <section
+          className="case-comparison-recovery"
+          aria-labelledby="case-comparison-recovery-heading"
+        >
+          <div>
+            <p className="eyebrow">Partial result</p>
+            <h3 id="case-comparison-recovery-heading">Comparison link recovery required</h3>
+          </div>
+          <p>
+            The comparison was created, but its evidence link did not complete. Open and link the
+            existing comparison; starting another comparison would duplicate the experiment.
+          </p>
+          <ul>
+            {review.comparisonLinkRecovery.items.map((recovery) => (
+              <li key={recovery.experimentId}>
+                <div>
+                  <Link href={recovery.sourceUrl} className="mono">
+                    {recovery.experimentId}
+                  </Link>
+                  <span>
+                    Original {recovery.originalExecutionId} · failure recorded{" "}
+                    <time dateTime={recovery.failureRecordedAt}>
+                      {new Date(recovery.failureRecordedAt).toLocaleString("en-US", {
+                        timeZone: "UTC",
+                      })}{" "}
+                      UTC
+                    </time>
+                  </span>
+                </div>
+                {recovery.availability === "available" ? (
+                  <>
+                    <span>Comparison {recovery.status}</span>
+                    <CaseComparisonLinkRecovery
+                      caseId={caseId}
+                      experimentId={recovery.experimentId}
+                    />
+                  </>
+                ) : (
+                  <p>
+                    {recovery.availability}: {recovery.explanation}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+          {review.comparisonLinkRecovery.hasMore ? (
+            <p className="form-warning">
+              {review.comparisonLinkRecovery.totalPending -
+                review.comparisonLinkRecovery.items.length}{" "}
+              older pending recoveries remain outside this bounded view.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       {linkedExecutions.length ? (
         <ul className="case-experiment-eligibility">
           {linkedExecutions.map((item) => (

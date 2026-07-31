@@ -26,6 +26,7 @@ import type {
 } from "./repository.js";
 import { canonicalizeSavedScope } from "./saved-scope.js";
 import { exactRange, plainText } from "./validation.js";
+import { pendingComparisonLinkRecoveries } from "./comparison-link-recovery.js";
 
 const CASE_PAGE_DEFAULT = 25;
 const CASE_PAGE_MAX = 100;
@@ -196,6 +197,20 @@ export class InvestigationCaseService {
       ...canonical,
     };
     const events: InvestigationCaseTimelineEvent[] = [];
+    const pendingRecovery =
+      canonical.type === "comparison"
+        ? pendingComparisonLinkRecoveries(detail.timeline, []).find(
+            (item) => item.experimentId === canonical.experimentId,
+          )
+        : undefined;
+    const recoveryEvent =
+      canonical.type === "comparison" && pendingRecovery
+        ? this.#event(caseId, "case.comparison_link_recovered", addedAt, {
+            experimentId: canonical.experimentId,
+            originalExecutionId: pendingRecovery.originalExecutionId,
+            linkState: "linked",
+          })
+        : undefined;
     if (options.comparisonStarted) {
       events.push(
         this.#event(caseId, "case.comparison_started", addedAt, {
@@ -211,7 +226,14 @@ export class InvestigationCaseService {
         evidenceType: evidence.type,
       }),
     );
-    return this.#cases.addEvidence(tenantId, evidence, identity, events);
+    if (recoveryEvent) events.push(recoveryEvent);
+    return this.#cases.addEvidence(
+      tenantId,
+      evidence,
+      identity,
+      events,
+      recoveryEvent ? [recoveryEvent] : [],
+    );
   }
 
   async recordComparisonLinkFailure(

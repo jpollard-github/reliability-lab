@@ -435,6 +435,41 @@ describe("API saved investigation cases", () => {
         })
       ).statusCode,
     ).toBe(200);
+    const pendingReview = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${partial.caseId}/review`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(pendingReview.statusCode).toBe(200);
+    expect(pendingReview.json().comparisonLinkRecovery).toEqual({
+      items: [
+        expect.objectContaining({
+          experimentId,
+          originalExecutionId: partial.executionId,
+          availability: "available",
+          action: "link_existing_comparison",
+        }),
+      ],
+      totalPending: 1,
+      hasMore: false,
+    });
+    expect(pendingReview.body).not.toContain("SECRET_CASE_EXPERIMENT_INPUT");
+    const pendingPacket = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${partial.caseId}/review-packet`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(pendingPacket.body).toContain("## Pending comparison link recovery");
+    expect(pendingPacket.body).not.toContain("SECRET_CASE_EXPERIMENT_INPUT");
+    expect(
+      (
+        await app.inject({
+          method: "GET",
+          url: `/v1/investigation-cases/${partial.caseId}/review`,
+          headers: { "x-tenant-id": "tenant-b" },
+        })
+      ).statusCode,
+    ).toBe(404);
     const recovery = partialResponse.json().links.manualEvidenceLink as {
       href: string;
       body: { type: "comparison"; experimentId: string };
@@ -456,6 +491,37 @@ describe("API saved investigation cases", () => {
       added: false,
       evidence: { evidenceId: firstRecovery.json().evidence.evidenceId },
     });
+    const recoveredReview = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${partial.caseId}/review`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(recoveredReview.json().comparisonLinkRecovery).toEqual({
+      items: [],
+      totalPending: 0,
+      hasMore: false,
+    });
+    const recoveredDetail = await app.inject({
+      method: "GET",
+      url: `/v1/investigation-cases/${partial.caseId}`,
+      headers: { "x-tenant-id": "tenant-a" },
+    });
+    expect(
+      recoveredDetail
+        .json()
+        .timeline.filter(
+          (event: { type: string }) => event.type === "case.comparison_link_recovered",
+        ),
+    ).toHaveLength(1);
+    expect(
+      (
+        await app.inject({
+          method: "GET",
+          url: `/v1/investigation-cases/${partial.caseId}/review-packet`,
+          headers: { "x-tenant-id": "tenant-a" },
+        })
+      ).body,
+    ).not.toContain("## Pending comparison link recovery");
   });
 });
 

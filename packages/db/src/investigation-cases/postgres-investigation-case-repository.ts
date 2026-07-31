@@ -64,8 +64,16 @@ export class PostgresInvestigationCaseRepository implements InvestigationCaseRep
     evidence: InvestigationCaseEvidence,
     identity: string,
     events: InvestigationCaseTimelineEvent[],
+    eventsWhenAlreadyPresent: InvestigationCaseTimelineEvent[] = [],
   ) {
-    return addInvestigationCaseEvidence(this.#db, tenantId, evidence, identity, events);
+    return addInvestigationCaseEvidence(
+      this.#db,
+      tenantId,
+      evidence,
+      identity,
+      events,
+      eventsWhenAlreadyPresent,
+    );
   }
 
   removeEvidence(

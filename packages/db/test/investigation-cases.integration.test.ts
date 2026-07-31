@@ -117,9 +117,34 @@ describe("Postgres saved investigation cases", () => {
     });
     await caseExperiment.completion;
     expect(caseExperiment.result.kind).toBe("comparison_linked");
-    await caseService.addEvidence(tenantId, created.case.caseId, {
+    await caseService.recordComparisonLinkFailure(tenantId, created.case.caseId, {
+      experimentId: comparison.experiment.experimentId,
+      originalExecutionId: original.executionId,
+    });
+    const pendingReview = await new InvestigationCaseReviewService({
+      cases: repository,
+      executions: executionRepository,
+      comparisons: comparisonRepository,
+      investigations: new PostgresInvestigationReadRepository(connection.db),
+      replayCapsules,
+    }).get(tenantId, created.case.caseId);
+    expect(pendingReview.comparisonLinkRecovery.items).toEqual([
+      expect.objectContaining({
+        experimentId: comparison.experiment.experimentId,
+        availability: "available",
+      }),
+    ]);
+    const recoveredComparisonLink = await caseService.addEvidence(tenantId, created.case.caseId, {
       type: "comparison",
       experimentId: comparison.experiment.experimentId,
+    });
+    const repeatedRecovery = await caseService.addEvidence(tenantId, created.case.caseId, {
+      type: "comparison",
+      experimentId: comparison.experiment.experimentId,
+    });
+    expect(repeatedRecovery).toEqual({
+      evidence: recoveredComparisonLink.evidence,
+      added: false,
     });
     await caseService.addEvidence(tenantId, created.case.caseId, {
       type: "provider_observation",
@@ -166,6 +191,9 @@ describe("Postgres saved investigation cases", () => {
         }),
       }),
     );
+    expect(
+      detail.timeline.filter((event) => event.type === "case.comparison_link_recovered"),
+    ).toHaveLength(1);
     expect(JSON.stringify(detail.timeline)).not.toContain("Second attempt recovered");
     expect(JSON.stringify(detail.timeline)).not.toContain("The selected retry recovered");
     const review = await new InvestigationCaseReviewService({
@@ -188,6 +216,11 @@ describe("Postgres saved investigation cases", () => {
       },
     });
     expect(review.readiness.ready).toBe(true);
+    expect(review.comparisonLinkRecovery).toEqual({
+      items: [],
+      totalPending: 0,
+      hasMore: false,
+    });
     expect(JSON.stringify(review)).not.toContain(promptMarker);
     await expect(
       new InvestigationCaseReviewService({
@@ -235,6 +268,22 @@ describe("Postgres saved investigation cases", () => {
       created.case.caseId,
       executionLink.evidence.evidenceId,
     );
+    await reconstructed.removeEvidence(
+      tenantId,
+      created.case.caseId,
+      recoveredComparisonLink.evidence.evidenceId,
+    );
+    expect(
+      (
+        await new InvestigationCaseReviewService({
+          cases: new PostgresInvestigationCaseRepository(connection.db),
+          executions: new PostgresExecutionRepository(connection.db),
+          comparisons: new PostgresComparisonExperimentRepository(connection.db),
+          investigations: new PostgresInvestigationReadRepository(connection.db),
+          replayCapsules,
+        }).get(tenantId, created.case.caseId)
+      ).comparisonLinkRecovery.items,
+    ).toEqual([]);
     expect(await executionRepository.findById(tenantId, original.executionId)).not.toBeNull();
     const archived = await reconstructed.update(tenantId, created.case.caseId, {
       status: "archived",

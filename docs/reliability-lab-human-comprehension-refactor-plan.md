@@ -1,5 +1,9 @@
 # Reliability Lab Human-Comprehension Refactor Plan
 
+> **Historical completed plan.** All four phases were completed before the later Horizon 5
+> movements. Current ownership rules live in `AGENTS.md`, the codebase tour, pattern guides, and
+> change recipes; current product status lives in the roadmap and Horizon 5 closure basics.
+>
 > This is a staged engineering plan, not a new product horizon. Feature expansion pauses while the repository is reorganized into software its owner can explain, defend, and modify.
 
 ## Current stable baseline
@@ -209,11 +213,12 @@ typed browser mutations, controls, evidence, notes, timeline, overview, creation
 state.
 
 `app/globals.css` is an ordered import map over feature-named styles whose concatenated,
-whitespace-normalized content matches the former stylesheet. The catch-all dashboard spec has been replaced by five workflow-named specs
-that preserve all eight established journeys, use unique idempotency keys, and explicitly drain
-worker-produced evidence. The web structural audit enforces production/test ceilings, required
-feature boundaries, the CSS import map, client/server imports, and detectable same-feature runtime
-cycles.
+whitespace-normalized content matches the former stylesheet. At this phase's close, the catch-all
+dashboard spec had been replaced by five workflow-named specs that preserved the eight then-current
+journeys, used unique idempotency keys, and explicitly drained worker-produced evidence. Later
+Horizon 5 work expanded that suite; current names live in Operator Console Patterns. The web
+structural audit enforces production/test ceilings, required feature boundaries, the CSS import
+map, client/server imports, and detectable same-feature runtime cycles.
 
 The exact final source map and locate-by-name drill are in [the codebase tour](codebase-tour.md).
 Web conventions are explained in [Operator Console Patterns](operator-console-patterns.md).
@@ -242,8 +247,9 @@ Completion signal:
 > The repository itself teaches a new engineer how to understand, evaluate, and safely modify it.
 
 All four phases are established. The Human-Comprehension and Ownership Pass is complete as a
-cross-cutting interlude, not a product horizon. Horizon 5 remains incomplete; future Product Tour
-and Operator Guidance is next.
+cross-cutting interlude, not a product horizon. This sentence closes the historical plan; Product
+Tour and Operator Guidance and the later Horizon 5 movements are now established. See
+[`roadmap.md`](roadmap.md) for current status.
 
 ## Structural conventions
 

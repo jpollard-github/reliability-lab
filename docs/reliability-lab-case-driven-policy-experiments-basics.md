@@ -60,6 +60,13 @@ When automatic linking fails, the response and UI preserve the experiment identi
 the existing comparison. Recovery calls the established case evidence-link endpoint with that
 identifier. It does not submit another comparison.
 
+The recovery state is not browser memory. `InvestigationCaseReviewService` derives pending items
+from metadata-only failure/completion events, current case evidence, and current tenant-scoped
+comparison reads. The case page renders those items on the server after reload and distinguishes an
+available comparison from a missing or temporarily unavailable read. Successful linking records
+`case.comparison_link_recovered`; that completion prevents a historical failure from reappearing
+after later intentional evidence removal. See [ADR 0012](adr/0012-derived-case-comparison-link-recovery.md).
+
 The browser disables repeat submission while a request is active and after an experiment result is
 returned. This prevents ordinary accidental double clicks, but comparison-create idempotency is not
 established across independent clients or retried HTTP requests.
@@ -71,7 +78,8 @@ it through the authoritative comparison repository, applies the normal available
 projection, includes it in deterministic conclusion readiness, and renders it through the existing
 Markdown packet. There is no experiment-specific packet renderer or shadow result copy.
 
-Metadata-only timeline events record a successful comparison start or an automatic-link failure.
+Metadata-only timeline events record a successful comparison start, an automatic-link failure, or
+link recovery completion.
 They may name case, evidence, execution, experiment, operation, and link state, but contain no
 variation prose, prompt content, output, provider body, credentials, headers, or cookies.
 
@@ -93,4 +101,6 @@ comparison-and-case persistence.
 - [Saved Investigation Cases basics](reliability-lab-saved-investigation-cases-basics.md)
 - [Evidence-Backed Case Conclusions basics](reliability-lab-evidence-backed-case-conclusions-basics.md)
 - [ADR 0011](adr/0011-case-driven-policy-experiments.md)
+- [ADR 0012](adr/0012-derived-case-comparison-link-recovery.md)
+- [Horizon 5 Closure basics](reliability-lab-horizon-5-closure-basics.md)
 - [System flows](system-flows.md#6b-case-driven-policy-experiment)

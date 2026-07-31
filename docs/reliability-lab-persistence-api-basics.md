@@ -1,5 +1,9 @@
 # Reliability Lab: Persistence and API Composition Basics
 
+> **Historical completed phase guide.** Phase 2 is established. Use
+> [Persistence and API Patterns](persistence-and-api-patterns.md), the
+> [codebase tour](codebase-tour.md), and [system flows](system-flows.md) for current owners.
+
 This document explains the second phase of the human-comprehension refactor in plain language.
 
 ## The goal in one sentence

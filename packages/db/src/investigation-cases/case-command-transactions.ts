@@ -2,7 +2,7 @@
  * Owns saved-case atomic command boundaries: current state, append-only notes/evidence,
  * and their metadata-only timeline events.
  */
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type {
   InvestigationCase,
   InvestigationCaseEvidence,
@@ -101,6 +101,7 @@ export async function addInvestigationCaseEvidence(
   evidence: InvestigationCaseEvidence,
   identity: string,
   events: InvestigationCaseTimelineEvent[],
+  eventsWhenAlreadyPresent: InvestigationCaseTimelineEvent[] = [],
 ) {
   return db.transaction(async (transaction) => {
     const reference = referenceFromEvidence(evidence);
@@ -130,6 +131,48 @@ export async function addInvestigationCaseEvidence(
         )
         .limit(1);
       if (!existing) throw new Error("Investigation evidence conflict could not be resolved");
+      const newEvents: InvestigationCaseTimelineEvent[] = [];
+      for (const event of eventsWhenAlreadyPresent) {
+        if (event.type !== "case.comparison_link_recovered") {
+          newEvents.push(event);
+          continue;
+        }
+        const [latest] = await transaction
+          .select({ type: investigationCaseEvents.type })
+          .from(investigationCaseEvents)
+          .where(
+            and(
+              eq(investigationCaseEvents.tenantId, tenantId),
+              eq(investigationCaseEvents.caseId, evidence.caseId),
+              inArray(investigationCaseEvents.type, [
+                "case.comparison_link_failed",
+                "case.comparison_link_recovered",
+              ]),
+              sql`${investigationCaseEvents.metadata} ->> 'experimentId' = ${String(
+                event.metadata.experimentId,
+              )}`,
+            ),
+          )
+          .orderBy(desc(investigationCaseEvents.ordinal))
+          .limit(1);
+        if (latest?.type !== "case.comparison_link_recovered") newEvents.push(event);
+      }
+      if (newEvents.length) {
+        await transaction
+          .insert(investigationCaseEvents)
+          .values(newEvents.map((event) => eventInsert(tenantId, event)));
+        await transaction
+          .update(investigationCases)
+          .set({
+            updatedAt: new Date(newEvents.at(-1)!.occurredAt),
+          })
+          .where(
+            and(
+              eq(investigationCases.tenantId, tenantId),
+              eq(investigationCases.id, evidence.caseId),
+            ),
+          );
+      }
       return {
         evidence: evidenceFromReference({
           evidenceId: existing.id,

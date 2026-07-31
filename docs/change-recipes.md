@@ -360,26 +360,29 @@ comparison system.
   `packages/core/src/investigation-cases/case-experiment-service.ts`; case route in
   `apps/api/src/routes/investigation-cases.ts`.
 - **Adjacent modules:** `ExecutionService.createComparison`, `InvestigationCaseService.addEvidence`,
-  the case repository event boundary, shared comparison draft/preset/field components, and derived
-  case review.
+  `comparison-link-recovery.ts`, the case repository event boundary, shared comparison
+  draft/preset/field components, and derived case review.
 - **Contract implications:** accept the persisted execution evidence ID and bounded
   `ReplayVariation`. Keep successful link and created-but-unlinked results distinct. Responses may
   expose safe internal identifiers and links, never retained input or provider content.
 - **Persistence implications:** use `ComparisonExperiment` as the authoritative experiment and the
   case evidence row as the association. Add no experiment-suite table or copied result. Keep
-  timeline payloads metadata-only and backward-readable.
+  timeline payloads metadata-only and backward-readable. Persist explicit recovery completion in
+  the same transaction as a new evidence link, and handle an already-linked completion idempotently.
 - **API implications:** preserve tenant-scoped missing behavior and delegate replay eligibility and
   comparison semantics to the ordinary service. A created-but-unlinked result must retain the
   experiment ID and link-only recovery action rather than becoming a generic 500.
-- **Web implications:** eligibility remains server-rendered from case review. Reuse
+- **Web implications:** eligibility and pending recovery remain server-rendered from case review. Reuse
   `ComparisonDraft`, presets, and `ComparisonVariationFields`. Disable repeat submission while
   active and after a result; recovery links the existing comparison and never resubmits it.
-- **Tests:** cover same-case/type/tenant eligibility, unavailable comparisons, automatic link,
-  partial link, recovery without a second experiment, safe diagnostics/timeline, API links,
-  server-rendered no-JavaScript content, busy state, desktop/390 px fit, and packet inclusion.
-- **Documentation:** update the case experiment basics, ADR 0011 only when the durable decision
-  changes, system flow, architecture, operator patterns, Guide/tour, roadmap, and codebase find-it
-  drill.
+- **Tests:** cover same-case/type/tenant eligibility, unavailable/missing comparisons, automatic
+  link, repeated failure dedupe, reload/re-instantiation, idempotent recovery without a second
+  experiment, post-removal non-resurrection, safe diagnostics/timeline, API links,
+  server-rendered no-JavaScript content, busy state, desktop/390 px fit, and packet appearance and
+  removal.
+- **Documentation:** update the case experiment basics, ADR 0011 for orchestration decisions, ADR
+  0012 for durable recovery decisions, system flow, architecture, operator patterns, Guide/tour,
+  roadmap, and codebase find-it drill.
 - **Invariant:** retained input stays fixed; ordinary comparison semantics keep one owner; a valid
   comparison survives a separate case-link failure.
 - **Avoid:** free execution IDs, endpoint-to-endpoint core calls, copied envelopes, batch campaigns,

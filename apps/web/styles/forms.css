@@ -32,3 +32,13 @@ input {
   margin: 0;
   font-size: 0.82rem;
 }
+.form-warning {
+  color: var(--warning);
+  margin: 0;
+  font-size: 0.82rem;
+}
+.form-success {
+  color: var(--accent);
+  margin: 0;
+  font-size: 0.82rem;
+}

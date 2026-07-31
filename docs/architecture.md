@@ -133,9 +133,11 @@ configuration required by the established variation controls.
 
 Comparison creation and evidence linking are separate transactions. If linking fails, the
 comparison is retained and the result exposes its safe ID plus a link-only recovery action. The
-case timeline records metadata-only success/failure events. There is no experiment-suite table,
-copied comparison result, batch campaign, exactly-once submission guarantee, or statistical
-conclusion.
+case timeline records metadata-only start, link-failure, and link-recovered events. The review
+derives a bounded pending projection from those events, current evidence, and tenant-scoped
+comparison reads; there is no recovery table. Explicit completion prevents an old failure from
+resurfacing after intentional evidence removal. There is no experiment-suite table, copied
+comparison result, batch campaign, exactly-once submission guarantee, or statistical conclusion.
 
 ## Derived case review boundary
 
@@ -220,17 +222,17 @@ share replay capabilities.
 
 ## Failure and consistency boundaries
 
-| Guarantee                                                          | Evidence                                                                          | Non-guarantee                                       | Reason                                                                  |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
-| Atomic durable acceptance in PostgreSQL worker mode                | `PostgresDurableExecutionStore.acceptExecution` and its rollback integration test | In-process acceptance survives API loss             | In-process continuation deliberately remains process-local              |
-| Current-claim heartbeat, finish, and cleanup are fenced            | `JobClaim.claimVersion`, exact PostgreSQL predicates, lease tests                 | Exactly-once provider calls                         | PostgreSQL and a remote provider share no transaction                   |
-| Execution decisions are append-only evidence                       | `ExecutionEventRecorder`, repository/event tests                                  | Universal event/projection/outbox atomicity         | Continuation writes retain explicit consistency boundaries              |
-| PostgreSQL replay capsules are encrypted at rest                   | `encryptReplayCapsule`, replay crypto and vault tests                             | Production KMS or physical backup erasure           | Environment keyrings and tombstones are prototype boundaries            |
-| Repository reads and evidence references are tenant scoped         | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
-| Investigation reads are tenant/range bounded                       | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
-| Saved notes append and evidence remains referenced                 | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |
-| Case comparison returns to typed evidence or explicit recovery     | Case experiment coordinator and unit/API/browser tests                            | Atomic or exactly-once comparison-and-link workflow | Comparison creation and case linking use separate bounded mutations     |
-| Case reviews represent every link and resolved state is meaningful | Review service/invariant and unit/API/integration/browser tests                   | Correctness, causation, or conclusion truth         | Readiness is workflow completeness over bounded current evidence        |
+| Guarantee                                                              | Evidence                                                                          | Non-guarantee                                       | Reason                                                                  |
+| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------- |
+| Atomic durable acceptance in PostgreSQL worker mode                    | `PostgresDurableExecutionStore.acceptExecution` and its rollback integration test | In-process acceptance survives API loss             | In-process continuation deliberately remains process-local              |
+| Current-claim heartbeat, finish, and cleanup are fenced                | `JobClaim.claimVersion`, exact PostgreSQL predicates, lease tests                 | Exactly-once provider calls                         | PostgreSQL and a remote provider share no transaction                   |
+| Execution decisions are append-only evidence                           | `ExecutionEventRecorder`, repository/event tests                                  | Universal event/projection/outbox atomicity         | Continuation writes retain explicit consistency boundaries              |
+| PostgreSQL replay capsules are encrypted at rest                       | `encryptReplayCapsule`, replay crypto and vault tests                             | Production KMS or physical backup erasure           | Environment keyrings and tombstones are prototype boundaries            |
+| Repository reads and evidence references are tenant scoped             | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
+| Investigation reads are tenant/range bounded                           | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
+| Saved notes append and evidence remains referenced                     | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |
+| Case comparison returns to typed evidence or durable explicit recovery | Coordinator, derived review, completion event, and unit/API/DB/browser tests      | Atomic or exactly-once comparison-and-link workflow | Comparison creation and case linking use separate bounded mutations     |
+| Case reviews represent every link and resolved state is meaningful     | Review service/invariant and unit/API/integration/browser tests                   | Correctness, causation, or conclusion truth         | Readiness is workflow completeness over bounded current evidence        |
 
 Worker mode makes acceptance durable, including comparison variants and concurrency-safe
 idempotency. Claim fencing prevents an older claim from extending, finishing, or deleting the

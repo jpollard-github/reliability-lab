@@ -35,6 +35,8 @@ Choose the path that matches the question you are trying to answer.
    production entrypoints.
 6. [Case-Driven Policy Experiments basics](docs/reliability-lab-case-driven-policy-experiments-basics.md)
    explains how a case launches and recovers one bounded comparison.
+7. [Horizon 5 Closure basics](docs/reliability-lab-horizon-5-closure-basics.md) records the bounded
+   completion signal, durable partial-result recovery, and explicit non-claims.
 
 **Modify the system**
 
@@ -80,7 +82,8 @@ Implemented now:
   readiness, a resolved-state finding/resolution invariant, and tenant-aware Markdown review packets
 - case-driven policy experiments that select linked replay-capable execution evidence, reuse
   ordinary Comparative Replay, automatically link the result, and expose link-only recovery when
-  the non-atomic case association fails
+  the non-atomic case association fails; pending recovery survives reload and records durable
+  completion without recreating the comparison
 - server-rendered product Guide, native contextual concept help, and stateless on-demand tours for
   all six established operator route families
 - tenant-scoped, versioned comparison experiments persisted in memory or PostgreSQL, with requested
@@ -427,10 +430,10 @@ and conservative dimension-level comparison. PostgreSQL integration proves atomi
 ciphertext-only command persistence, concurrent idempotency, lease exclusivity/reclaim, ambiguity
 without a duplicate call, command cleanup, key rotation, tenant isolation, replay lifecycle
 independence, and atomic comparison variants. Playwright starts separate API and worker processes.
-Five workflow-named specs preserve eight operator journeys across durable execution, Live Machine,
-Comparative Replay, Investigation Workbench, and Saved Investigation Cases. Unique idempotency keys
-and explicit terminal drains keep the workflows independent. There are deliberately no broad
-snapshots.
+Seven focused workflow/guidance specs cover durable execution, Live Machine, Comparative Replay,
+Investigation Workbench, Saved Investigation Cases, case-driven experiments, and operator guidance.
+Unique idempotency keys and explicit terminal drains keep the workflows independent. There are
+deliberately no broad snapshots.
 Saved-case tests cover canonical exact scopes, status/resolved-time behavior, append-only notes,
 idempotent tenant-owned evidence links, empty terminal cursor totals, PostgreSQL restart reads,
 metadata-only timelines, and the browser save/reopen/update workflow.
@@ -474,7 +477,8 @@ finding, and resolution text. Tenant routing still cannot establish authorship.
 - Variant acceptance and experiment persistence are atomic only in PostgreSQL worker mode.
   In-process mode deliberately keeps the simpler two-operation boundary.
 - Case-driven comparison creation and its following case evidence link are not atomic. A link
-  failure preserves the comparison and returns an explicit link-only recovery action.
+  failure preserves the comparison and returns an explicit link-only recovery action. The case
+  review derives that action after reload and records explicit completion when linking succeeds.
 
 ## Production-hardening direction
 

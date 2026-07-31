@@ -5,6 +5,7 @@ import { createRetryExecution, waitForExecution } from "./support/executions";
 import { resolvedTestRange } from "./support/ranges";
 
 test("runs a case-driven comparison and recovers a forced partial link without duplication", async ({
+  browser,
   page,
   request,
 }) => {
@@ -118,56 +119,13 @@ test("runs a case-driven comparison and recovers a forced partial link without d
     execution.executionId,
     `Partial policy experiment ${Date.now()}`,
   );
+  const removableEvidenceId = await fillCaseEvidenceCapacity(request, partialCase.caseId);
   const partialRoute = `**/v1/investigation-cases/${partialCase.caseId}/comparisons`;
   let partialCreateRequests = 0;
-  await page.route(partialRoute, async (route) => {
-    partialCreateRequests += 1;
-    const submitted = route.request().postDataJSON() as { variation: Record<string, unknown> };
-    const created = await request.post(
-      `${apiBaseUrl}/v1/executions/${execution.executionId}/comparisons`,
-      {
-        headers: tenantHeaders,
-        data: { variation: submitted.variation },
-      },
-    );
-    expect(created.status()).toBe(202);
-    const body = (await created.json()) as {
-      experiment: {
-        experimentId: string;
-        originalExecutionId: string;
-        variantExecutionId?: string;
-      };
-    };
-    await route.fulfill({
-      status: 202,
-      contentType: "application/json",
-      body: JSON.stringify({
-        result: {
-          kind: "comparison_created_link_failed",
-          experiment: body.experiment,
-          recovery: {
-            kind: "link_existing_comparison",
-            experimentId: body.experiment.experimentId,
-          },
-        },
-        links: {
-          case: `/v1/investigation-cases/${partialCase.caseId}`,
-          comparison: `/v1/comparisons/${body.experiment.experimentId}`,
-          originalExecution: `/v1/executions/${body.experiment.originalExecutionId}`,
-          ...(body.experiment.variantExecutionId
-            ? { variantExecution: `/v1/executions/${body.experiment.variantExecutionId}` }
-            : {}),
-          manualEvidenceLink: {
-            href: `/v1/investigation-cases/${partialCase.caseId}/evidence`,
-            method: "POST",
-            body: {
-              type: "comparison",
-              experimentId: body.experiment.experimentId,
-            },
-          },
-        },
-      }),
-    });
+  page.on("request", (submitted) => {
+    if (submitted.method() === "POST" && submitted.url().endsWith(partialRoute.slice(3))) {
+      partialCreateRequests += 1;
+    }
   });
 
   await page.goto(`/investigation-cases/${partialCase.caseId}`);
@@ -187,15 +145,62 @@ test("runs a case-driven comparison and recovers a forced partial link without d
     ).status(),
   ).toBe(200);
 
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Comparison link recovery required" }),
+  ).toBeVisible();
+  await expect(page.getByText(partialExperimentId!, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: partialExperimentId! }).first()).toHaveAttribute(
+    "href",
+    `/comparisons/${partialExperimentId}`,
+  );
+  await expect(
+    page.getByText("The comparison exists, but its case evidence link still needs recovery."),
+  ).toBeHidden();
+
+  const noJavaScriptContext = await browser.newContext({
+    baseURL: new URL(page.url()).origin,
+    javaScriptEnabled: false,
+  });
+  const noJavaScriptPage = await noJavaScriptContext.newPage();
+  await noJavaScriptPage.goto(`/investigation-cases/${partialCase.caseId}`);
+  await expect(
+    noJavaScriptPage.getByRole("heading", { name: "Comparison link recovery required" }),
+  ).toBeVisible();
+  await expect(noJavaScriptPage.getByRole("link", { name: partialExperimentId! })).toBeVisible();
+  await noJavaScriptContext.close();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Comparison link recovery required" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const makeRoom = await request.delete(
+    `${apiBaseUrl}/v1/investigation-cases/${partialCase.caseId}/evidence/${removableEvidenceId}`,
+    { headers: tenantHeaders },
+  );
+  expect(makeRoom.status()).toBe(200);
   await page.getByRole("button", { name: "Link existing comparison to case" }).click();
   await expect(
-    page.getByText("Existing comparison linked to this case. No second comparison was created."),
-  ).toBeVisible();
-  await expect(page.getByText("Linked to case")).toBeVisible();
-  expect(partialCreateRequests).toBe(1);
+    page.getByRole("heading", { name: "Comparison link recovery required" }),
+  ).toBeHidden();
   await expect(
     page.locator(".case-review-item-heading").getByText(partialExperimentId!, { exact: true }),
   ).toBeVisible();
+  expect(partialCreateRequests).toBe(1);
+
+  const recoveredPacketDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download review packet" }).click();
+  const recoveredPacket = await recoveredPacketDownload;
+  const recoveredPacketPath = await recoveredPacket.path();
+  expect(recoveredPacketPath).not.toBeNull();
+  const recoveredPacketBody = await readFile(recoveredPacketPath!, "utf8");
+  expect(recoveredPacketBody).toContain(partialExperimentId!);
+  expect(recoveredPacketBody).not.toContain("## Pending comparison link recovery");
+  expect(recoveredPacketBody).not.toContain("Case-driven experiment retained input");
 
   expect(consoleErrors).toEqual([]);
   expect(failedRequests).toEqual([]);
@@ -224,6 +229,30 @@ async function createCaseWithExecution(
   const evidenceId = ((await linked.json()) as { evidence: { evidenceId: string } }).evidence
     .evidenceId;
   return { caseId, evidenceId };
+}
+
+async function fillCaseEvidenceCapacity(
+  request: APIRequestContext,
+  caseId: string,
+): Promise<string> {
+  let removableEvidenceId = "";
+  for (let index = 0; index < 49; index += 1) {
+    const linked = await request.post(`${apiBaseUrl}/v1/investigation-cases/${caseId}/evidence`, {
+      headers: tenantHeaders,
+      data: {
+        type: "provider_observation",
+        provider: "capacity-test-provider",
+        model: `capacity-test-model-${index}`,
+        range: resolvedTestRange(),
+      },
+    });
+    expect(linked.status()).toBe(200);
+    if (index === 0) {
+      removableEvidenceId = ((await linked.json()) as { evidence: { evidenceId: string } }).evidence
+        .evidenceId;
+    }
+  }
+  return removableEvidenceId;
 }
 
 async function waitForComparison(request: APIRequestContext, experimentId: string) {

@@ -19,7 +19,8 @@ as a deterministic Markdown review packet.
 
 The important boundaries are equally explicit: this prototype does not establish factual answer
 correctness, exactly-once provider effects, authenticated tenancy, RBAC, row-level security,
-production KMS, universal provider health, or full Horizon 5 completion. Those limits are visible in
+production KMS, universal provider health, empirical usability, or production readiness. The
+bounded Horizon 5 workflow signal is established; those limits are visible in
 [architecture](architecture.md#trust-boundaries) and [the roadmap](roadmap.md#roadmap-horizons).
 
 ## The five-minute architectural explanation
@@ -260,7 +261,10 @@ case and tenant, delegates one ordinary comparison to `ExecutionService`, and th
 experiment through `InvestigationCaseService`. Replay availability and variation semantics are not
 reimplemented. A separate link failure preserves the comparison, returns
 `comparison_created_link_failed`, and offers evidence-link recovery with the existing experiment
-ID. `case.comparison_started` and `case.comparison_link_failed` carry metadata only.
+ID. The derived review rebuilds pending recovery after reload from timeline events, current case
+evidence, and tenant-scoped comparison reads. Linking records
+`case.comparison_link_recovered`, so later intentional evidence removal does not resurrect the old
+failure. All three lifecycle events carry metadata only.
 
 Proof is in `packages/core/test/investigation-cases.test.ts`,
 `packages/core/test/investigation-case-review.test.ts`,

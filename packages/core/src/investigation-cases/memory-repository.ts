@@ -120,10 +120,27 @@ export class MemoryInvestigationCaseRepository implements InvestigationCaseRepos
     evidence: InvestigationCaseEvidence,
     identity: string,
     events: InvestigationCaseTimelineEvent[],
+    eventsWhenAlreadyPresent: InvestigationCaseTimelineEvent[] = [],
   ) {
     const record = this.#tenantRecord(tenantId, evidence.caseId);
     const existing = record.evidence.find((item) => item.identity === identity);
-    if (existing) return { evidence: structuredClone(existing.value), added: false };
+    if (existing) {
+      const newEvents = eventsWhenAlreadyPresent.filter((event) => {
+        if (event.type !== "case.comparison_link_recovered") return true;
+        const latest = record.timeline.findLast(
+          (existingEvent) =>
+            (existingEvent.type === "case.comparison_link_failed" ||
+              existingEvent.type === "case.comparison_link_recovered") &&
+            existingEvent.metadata.experimentId === event.metadata.experimentId,
+        );
+        return latest?.type !== "case.comparison_link_recovered";
+      });
+      record.timeline.push(...structuredClone(newEvents));
+      if (newEvents.length) {
+        record.investigationCase.updatedAt = newEvents.at(-1)!.occurredAt;
+      }
+      return { evidence: structuredClone(existing.value), added: false };
+    }
     record.evidence.push({ value: structuredClone(evidence), identity });
     record.timeline.push(...structuredClone(events));
     record.investigationCase.updatedAt = evidence.addedAt;

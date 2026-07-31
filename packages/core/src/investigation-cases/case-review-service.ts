@@ -18,6 +18,7 @@ import type { InvestigationReadRepository } from "../investigation/read-reposito
 import type { ReplayCapsuleStore } from "../replay/replay-store.js";
 import { InvestigationCaseNotFoundError } from "./errors.js";
 import type { InvestigationCaseRepository } from "./repository.js";
+import { projectComparisonLinkRecovery } from "./comparison-link-recovery.js";
 
 const EVIDENCE_READ_CONCURRENCY = 5;
 
@@ -26,7 +27,10 @@ export interface InvestigationCaseReviewDiagnostic {
   evidenceId: string;
   evidenceType: InvestigationCaseEvidence["type"];
   operation:
-    "read_execution_evidence" | "read_comparison_evidence" | "read_provider_observation_evidence";
+    | "read_execution_evidence"
+    | "read_comparison_evidence"
+    | "read_provider_observation_evidence"
+    | "read_comparison_link_recovery";
   errorName: string;
 }
 
@@ -69,6 +73,14 @@ export class InvestigationCaseReviewService {
       const batch = detail.evidence.slice(index, index + EVIDENCE_READ_CONCURRENCY);
       evidence.push(...(await Promise.all(batch.map((item) => this.#resolve(tenantId, item)))));
     }
+    const comparisonLinkRecovery = await projectComparisonLinkRecovery({
+      tenantId,
+      caseId,
+      timeline: detail.timeline,
+      evidence: detail.evidence,
+      comparisons: this.#comparisons,
+      ...(this.#onDiagnostic ? { onDiagnostic: this.#onDiagnostic } : {}),
+    });
     return {
       schemaVersion: 1,
       generatedAt: this.#now().toISOString(),
@@ -76,6 +88,7 @@ export class InvestigationCaseReviewService {
       scope: detail.case.savedScope,
       noteCount: detail.notes.length,
       evidence,
+      comparisonLinkRecovery,
       readiness: projectConclusionReadiness(detail.case, evidence),
       links: {
         self: `/v1/investigation-cases/${encodeURIComponent(caseId)}/review`,

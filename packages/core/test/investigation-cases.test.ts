@@ -210,6 +210,37 @@ describe("InvestigationCaseService", () => {
     ).rejects.toBeInstanceOf(InvestigationCaseNotFoundError);
   });
 
+  it("closes a recorded comparison-link failure when the comparison is already linked", async () => {
+    const { service, comparisons } = harness();
+    await comparisons.create(comparison("tenant-a", "comparison-a"));
+    const created = await service.create("tenant-a", baseCreate());
+    const linked = await service.addEvidence("tenant-a", created.case.caseId, {
+      type: "comparison",
+      experimentId: "comparison-a",
+    });
+    await service.recordComparisonLinkFailure("tenant-a", created.case.caseId, {
+      experimentId: "comparison-a",
+      originalExecutionId: "execution-a",
+    });
+
+    const recovered = await service.addEvidence("tenant-a", created.case.caseId, {
+      type: "comparison",
+      experimentId: "comparison-a",
+    });
+    const repeated = await service.addEvidence("tenant-a", created.case.caseId, {
+      type: "comparison",
+      experimentId: "comparison-a",
+    });
+    const detail = await service.get("tenant-a", created.case.caseId);
+
+    expect(recovered).toEqual({ evidence: linked.evidence, added: false });
+    expect(repeated).toEqual({ evidence: linked.evidence, added: false });
+    expect(detail.evidence).toHaveLength(1);
+    expect(
+      detail.timeline.filter((event) => event.type === "case.comparison_link_recovered"),
+    ).toHaveLength(1);
+  });
+
   it("removes only the association and leaves a lifecycle event", async () => {
     const { service, executions } = harness();
     await executions.create(execution("tenant-a", "execution-a"));

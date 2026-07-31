@@ -44,6 +44,37 @@ export function renderInvestigationCaseReviewPacket(review: InvestigationCaseRev
       `- [${check.satisfied ? "x" : " "}] ${escapeMarkdown(check.label)} — ${escapeMarkdown(check.explanation)}`,
     ]),
     "",
+    ...(review.comparisonLinkRecovery.totalPending
+      ? [
+          "## Pending comparison link recovery",
+          "",
+          "These comparisons already exist. Link the existing comparison to the case; do not create a second comparison.",
+          "",
+          ...review.comparisonLinkRecovery.items.flatMap((recovery) => [
+            `- Experiment: ${escapeMarkdown(recovery.experimentId)}`,
+            `  - Original execution: ${escapeMarkdown(recovery.originalExecutionId)}`,
+            `  - Failure recorded: ${escapeMarkdown(recovery.failureRecordedAt)}`,
+            `  - Availability: ${escapeMarkdown(recovery.availability)}`,
+            ...(recovery.availability === "available"
+              ? [
+                  `  - Status: ${escapeMarkdown(recovery.status)}`,
+                  `  - Action: link existing comparison`,
+                ]
+              : [
+                  `  - Reason: ${escapeMarkdown(recovery.reason)}`,
+                  `  - Explanation: ${escapeMarkdown(recovery.explanation)}`,
+                ]),
+            `  - Source: ${internalMarkdownLink("Open existing comparison", recovery.sourceUrl)}`,
+          ]),
+          ...(review.comparisonLinkRecovery.hasMore
+            ? [
+                "",
+                `${review.comparisonLinkRecovery.totalPending - review.comparisonLinkRecovery.items.length} additional pending recoveries are outside this bounded projection.`,
+              ]
+            : []),
+          "",
+        ]
+      : []),
     "## Linked evidence review",
     "",
     ...(review.evidence.length
