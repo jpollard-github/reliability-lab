@@ -41,6 +41,13 @@ pnpm --filter @reliability-lab/api start
 pnpm --filter @reliability-lab/worker start
 ```
 
+Those direct package production entrypoints use injected environment variables only. Root local
+development commands (`pnpm dev`, `dev:api`, `dev:worker`, and `dev:web`) register
+`scripts/register-local-environment.mjs` through Node's supported `--import` option. The loader
+skips local files for an explicit production `NODE_ENV`; otherwise it loads only repository-root
+`.env.local` then `.env` without overwriting exported values. This keeps local processes consistent
+without making a local file mandatory or changing deployment secret injection.
+
 The API check exercises health, readiness, OpenAPI, Swagger UI and one asset, plus a tenant-scoped
 read. The worker check uses migrated local PostgreSQL, explicit worker mode, separate example
 command/replay keyrings, and its health endpoint.

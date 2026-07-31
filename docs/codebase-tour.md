@@ -300,6 +300,10 @@ stateless guidance client island.
   `packages/testkit/src/index.ts` are their package entrypoints.
 - `packages/providers/src/provider-runtime.ts` constructs the same adapter set for API and worker;
   `openai-compatible-http-provider.ts` owns the bounded generic Chat Completions wire boundary.
+- `scripts/local-environment.mjs` owns repository-root local-file precedence;
+  `register-local-environment.mjs` passes that environment to root web/API/worker commands and the
+  explicit verifier through Node's supported `--import` option. `live-provider-verifier.mjs` owns
+  opt-in, success-only exit semantics, and safe output.
 - Each package `package.json` selects TypeScript source only under Node's `development` condition
   and emitted `dist/index.js` by default. Each package `tsconfig.build.json` owns its runtime emit.
 - `apps/api/src/server.ts` selects memory or PostgreSQL adapters and constructs `ExecutionService`,

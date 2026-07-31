@@ -42,6 +42,13 @@ URL, query strings, headers, raw environment configuration, and provider respons
 construction owner. This prevents the two processes from silently selecting different adapters or
 models.
 
+Root development commands first register `scripts/register-local-environment.mjs` through Node's
+supported `--import` option. Its loader reads only repository-root `.env.local` and `.env`; exported
+process variables win, `.env.local` wins over `.env`, and `.env.example` is never loaded. The same
+inherited environment reaches Next.js, API, and worker processes. An explicit production
+`NODE_ENV` bypasses local-file loading, and direct package production entrypoints continue to
+prefer injected deployment variables.
+
 ## Live execution bounds
 
 The home page always renders **Deterministic lab scenarios**. It renders **Live provider execution**
@@ -104,13 +111,31 @@ loopback wire-compatible provider, starts the built API in memory mode, reads `/
 submits one ordinary execution, and proves exactly one mock provider request plus default-deny replay
 retention.
 
-`pnpm verify:live-provider` is external and guarded. Unless
-`RUN_LIVE_PROVIDER_VERIFY=true` and `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_API_KEY`, and
-`OPENAI_MODEL` are all present, it exits successfully with an explicit **not run; no request was
-made** message. When enabled, it starts the built API, submits one small uniquely identified
-non-sensitive execution with one attempt and a bounded timeout, and prints only safe normalized
-metadata. It never prints the key, endpoint, input, output, or provider body. Replay is not part of
-this command.
+`pnpm verify:live-provider` is external and guarded. Without
+`RUN_LIVE_PROVIDER_VERIFY=true`, it exits successfully with an explicit **not run; no request was
+made** message. If execution is explicitly requested but URL, key, or model configuration is
+missing, it makes no request, names only the missing setting names, and exits nonzero.
+
+When enabled, it starts the built API, submits one small uniquely identified non-sensitive
+execution with one attempt and a bounded timeout, and succeeds only when the normalized execution
+status is exactly `succeeded`. Failed, rejected, timed-out, cancelled, degraded, unknown, malformed,
+or wait-timeout results exit nonzero and are never described as passed. Success output is limited to
+provider ID, configured model, normalized status, bounded total/provider latency and token counts
+when available, and the known external request count. It never prints the key, endpoint, input,
+output, authorization, cookie, or provider body. Replay is not part of this command, and one success
+proves only one connectivity/execution path.
+
+For a concise local setup:
+
+```bash
+cp .env.example .env
+# Add the real OPENAI_API_KEY only to this ignored file, then restart pnpm dev.
+```
+
+The template uses `https://api.openai.com/v1` and `gpt-4.1-mini` as editable operator examples.
+After restart, `/v1/providers` should mark the live provider configured and operator eligible while
+excluding both the API key and base URL. Shell exports remain available for ephemeral configuration
+and override local file values.
 
 Normal unit, integration, build, and Playwright workflows never make a paid external request.
 Playwright uses a loopback mock provider only.

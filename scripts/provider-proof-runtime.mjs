@@ -68,17 +68,33 @@ export async function runBuiltApiProviderProof(options) {
       throw new Error(`Execution submission failed with HTTP ${submitResponse.status}`);
     }
     const submission = await submitResponse.json();
+    if (!submission || typeof submission.executionId !== "string") {
+      throw new Error("Execution submission response was malformed");
+    }
     const execution = await waitForTerminal(apiBaseUrl, submission.executionId);
     if (execution.attempts?.length !== 1) {
       throw new Error("The proof did not produce exactly one provider attempt");
     }
+    if (execution.status !== "succeeded") {
+      throw new Error("The proof execution did not succeed");
+    }
+    const attempt = execution.attempts[0];
+    const inputTokens = boundedMetric(attempt?.usage?.inputTokens, true);
+    const outputTokens = boundedMetric(attempt?.usage?.outputTokens, true);
     return {
       providerId: liveProvider.id,
       modelLabel: liveProvider.modelLabel,
       executionId: execution.executionId,
       status: execution.status,
-      attemptCount: execution.attempts.length,
+      externalRequestCount: execution.attempts.length,
       replayState: execution.replayCapability?.state,
+      ...metric("totalLatencyMs", boundedMetric(execution.durationMs, false)),
+      ...metric("providerLatencyMs", boundedMetric(attempt?.durationMs, false)),
+      ...metric("inputTokens", inputTokens),
+      ...metric("outputTokens", outputTokens),
+      ...(inputTokens !== undefined && outputTokens !== undefined
+        ? { totalTokens: inputTokens + outputTokens }
+        : {}),
     };
   } finally {
     await stopChild(child);
@@ -122,8 +138,18 @@ async function waitForTerminal(apiBaseUrl, executionId) {
     });
     if (!response.ok) throw new Error("Execution detail read failed");
     const execution = await response.json();
-    if (["succeeded", "degraded", "failed", "cancelled"].includes(execution.status)) {
+    if (!execution || typeof execution !== "object" || typeof execution.status !== "string") {
+      throw new Error("Execution detail response was malformed");
+    }
+    if (
+      ["succeeded", "degraded", "failed", "cancelled", "rejected", "timed_out"].includes(
+        execution.status,
+      )
+    ) {
       return execution;
+    }
+    if (!["queued", "running"].includes(execution.status)) {
+      throw new Error("Execution detail response had an unknown status");
     }
     await delay(50);
   }
@@ -143,4 +169,22 @@ async function stopChild(child) {
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function boundedMetric(value, integer) {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > 1_000_000_000 ||
+    (integer && !Number.isInteger(value))
+  ) {
+    throw new Error("Execution metric was malformed");
+  }
+  return value;
+}
+
+function metric(name, value) {
+  return value === undefined ? {} : { [name]: value };
 }

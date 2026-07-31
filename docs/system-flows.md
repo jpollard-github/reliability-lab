@@ -5,20 +5,23 @@ gives transport routes, persistence adapters, queries, mapping, and transactions
 
 ## 0. Provider capability and configured live execution
 
-1. `buildProviderRuntime` constructs deterministic adapters and, only from complete valid server
+1. Root development commands register `register-local-environment.mjs` through Node's supported
+   `--import` option so exported values, `.env.local`, and `.env` reach web, API, and worker with one
+   documented precedence. Production package entrypoints remain injection-only.
+2. `buildProviderRuntime` constructs deterministic adapters and, only from complete valid server
    configuration, one OpenAI-compatible live adapter. API and worker call the same owner.
-2. `providerRoutes` exposes `GET /v1/providers` under the tenant-routing header. It returns safe
+3. `providerRoutes` exposes `GET /v1/providers` under the tenant-routing header. It returns safe
    capabilities and performs no provider call; configuration is not health.
-3. The home-page Server Component reads those capabilities through `getProviderCapabilities`.
+4. The home-page Server Component reads those capabilities through `getProviderCapabilities`.
    Deterministic lab scenarios always render. `LiveExecutionForm` renders only for an eligible live
    capability.
-4. The focused form sends the safe provider ID/model label, one bounded non-sensitive input, one
+5. The focused form sends the safe provider ID/model label, one bounded non-sensitive input, one
    attempt, no fallback, and a bounded latency budget through ordinary `POST /v1/executions`.
-5. The route and `validateLiveProviderRequest` reject browser-selected models, failure injection,
+6. The route and `validateLiveProviderRequest` reject browser-selected models, failure injection,
    oversized input/schema, and out-of-bounds policy/budget values.
-6. `OpenAICompatibleHttpProvider` rechecks model/failure controls, sends one Chat Completions
+7. `OpenAICompatibleHttpProvider` rechecks model/failure controls, sends one Chat Completions
    request with `store: false`, bounds the response, and emits only normalized result evidence.
-7. The same envelope, attempts, events, detail, Timeline playback, Workbench, case, experiment,
+8. The same envelope, attempts, events, detail, Timeline playback, Workbench, case, experiment,
    review, and packet surfaces consume the resulting ordinary execution.
 
 **Boundary/evidence review:** capabilities exclude key, endpoint, raw configuration, headers, query

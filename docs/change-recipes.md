@@ -423,7 +423,9 @@ behavior without exposing configuration or creating a second execution engine.
   reason. Never add endpoint, key, query, header, raw config, body, or health claims.
 - **Runtime implications:** API and worker must use the same construction owner. Live model
   identity and bounded input/schema/policy/budget stay server enforced. Failure injection must stop
-  before fetch.
+  before fetch. Root web/API/worker development and the explicit live verifier inherit one
+  repository-local environment through `scripts/register-local-environment.mjs`; exported values
+  win and production package entrypoints remain injection-only.
 - **Retention implications:** Timeline playback uses recorded events only. Replay remains a new
   execution gated by separately configured retained input; do not enable retention to make the
   live form work.
@@ -431,7 +433,9 @@ behavior without exposing configuration or creating a second execution engine.
   core request bounds, one built loopback wire drill, and loopback-only Playwright/no-JavaScript
   coverage. Normal verification must make no paid request.
 - **External proof:** keep `pnpm verify:live-provider` explicitly opt-in, one request, one attempt,
-  bounded, non-sensitive, and safe-output-only.
+  bounded, non-sensitive, and safe-output-only. Only normalized `succeeded` exits zero; missing
+  requested configuration, non-success terminal state, timeout, or malformed evidence exits
+  nonzero.
 - **Documentation:** Live Provider Proof basics, ADR 0013 if the transport decision changes,
   architecture, flows, codebase tour, Guide/tours, security, README, and roadmap.
 - **Avoid:** browser provider config, selectable arbitrary live models, raw error bodies, health

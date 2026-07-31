@@ -237,10 +237,17 @@ Requirements: Node 24 LTS, pnpm 11.17.0 via Corepack, Docker with Compose for th
 corepack enable
 pnpm install
 cp .env.example .env
+# Edit .env; keep real keys only in this ignored local file or injected deployment secrets.
 pnpm dev:infra
 pnpm db:migrate
 ENABLE_FAILURE_INJECTION=true pnpm dev
 ```
+
+Root development commands load only repository-root `.env.local` and `.env` before starting web,
+API, or worker processes. Already-exported variables win; `.env.local` fills remaining values before
+`.env`; `.env.example` is never loaded. Restart the services after changing local environment
+configuration. Package-level production entrypoints continue to use injected variables and do not
+load repository files through the root development bootstrap.
 
 The development tenant is the transparent header value `demo-tenant`; no tenant row is seeded.
 Without `DATABASE_URL` and `REDIS_URL`, the API runs with process-local execution and replay storage
@@ -268,7 +275,19 @@ port 3000. Durable mode fails closed rather than falling back to in-process cont
 `GET /v1/providers` returns configuration evidence only; it does not call or health-check a
 provider. With a valid `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_API_KEY`, and `OPENAI_MODEL`, the home
 page adds a separate **Live provider execution** section. The browser receives the provider ID and
-safe model label, never the endpoint or key. Live input retention remains off by default.
+safe model label, never the endpoint or key. The route should report the live provider as
+`configured` and `operatorEligible`; its response must not contain the API key or base URL. Live
+input retention remains off by default.
+
+For ephemeral configuration, export the three provider variables in the shell before a root
+development command. Exported values take precedence over ignored local files:
+
+```bash
+export OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
+export OPENAI_MODEL=gpt-4.1-mini
+export OPENAI_API_KEY=your-local-key
+pnpm dev
+```
 
 ## Demo requests
 
@@ -416,8 +435,8 @@ KMS.
 
 | Command                                          | Purpose                                                 |
 | ------------------------------------------------ | ------------------------------------------------------- |
-| `pnpm dev`, `dev:api`, `dev:web`                 | Run infrastructure-free mode or one app                 |
-| `pnpm dev:durable`, `dev:worker`, `start:worker` | Run durable local mode or the separate worker           |
+| `pnpm dev`, `dev:api`, `dev:web`                 | Run local mode with shared root environment loading     |
+| `pnpm dev:durable`, `dev:worker`, `start:worker` | Run durable local mode with the same environment        |
 | `pnpm dev:infra`                                 | Start healthy Postgres and Redis services               |
 | `pnpm build`                                     | Build every workspace package                           |
 | `pnpm lint`, `format:check`, `typecheck`         | Static checks                                           |
