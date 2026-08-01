@@ -1,4 +1,6 @@
-# Reliability Lab
+# Discontinued due to poor design and complexity
+
+## Previous
 
 Reliability Lab is a serious prototype for putting policy, observability, and deterministic
 execution replay between an application and OpenAI-compatible LLM providers. Its working slice accepts a
