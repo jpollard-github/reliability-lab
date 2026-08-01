@@ -157,6 +157,64 @@ describe("comparative replay", () => {
     });
   });
 
+  it("retains bounded live policy variants independently and rejects arbitrary live targets", async () => {
+    let providerCalls = 0;
+    const liveProvider: LlmProvider = {
+      id: "live-provider",
+      kind: "live",
+      execute: async (request) => {
+        providerCalls += 1;
+        return {
+          ok: true,
+          response: {
+            provider: "live-provider",
+            model: request.model,
+            outputText: "live result",
+            usage: { inputTokens: 1, outputTokens: 1 },
+            latencyMs: 1,
+          },
+        };
+      },
+    };
+    const capsules = new MemoryReplayCapsuleStore();
+    const service = new ExecutionService({
+      repository: new MemoryExecutionRepository(),
+      replayCapsules: capsules,
+      providers: new MapProviderRegistry([
+        liveProvider,
+        new DeterministicFakeProvider({ id: "fake-primary", seed: 17 }),
+      ]),
+      allowLivePromptRetention: true,
+    });
+    const original = await service.execute({
+      tenantId: "tenant-a",
+      body: {
+        provider: "live-provider",
+        model: "fixed-model",
+        input: "retained live input",
+        replayRetention: "encrypted",
+        policy: { maxAttempts: 2, baseBackoffMs: 0, maxBackoffMs: 0, jitterRatio: 0 },
+      },
+    });
+    const comparison = await service.createComparison("tenant-a", original.executionId, {
+      policy: { maxAttempts: 1 },
+    });
+    const variant = await comparison.completion;
+    expect(variant?.executionId).not.toBe(original.executionId);
+    expect(variant?.replayCapability.state).toBe("available");
+    expect((await capsules.inspect("tenant-a", variant!.executionId)).available).toBe(true);
+    expect((await service.get("tenant-a", original.executionId)).policy.maxAttempts).toBe(2);
+    expect(providerCalls).toBe(2);
+
+    await expect(
+      service.createComparison("tenant-a", original.executionId, { provider: "fake-primary" }),
+    ).rejects.toThrow("must inherit the configured provider");
+    await expect(
+      service.createComparison("tenant-a", original.executionId, { model: "arbitrary-model" }),
+    ).rejects.toThrow("must inherit the configured provider");
+    expect(providerCalls).toBe(2);
+  });
+
   it("treats missing usage and cost as unavailable rather than zero", async () => {
     const { service } = harness();
     const original = await service.execute({

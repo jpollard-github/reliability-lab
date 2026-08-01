@@ -10,6 +10,8 @@ const durableEnvironment = {
     "e2e-v1": Buffer.alloc(32, 21).toString("base64"),
   }),
   REPLAY_CAPSULE_STORE: "postgres",
+  ALLOW_LIVE_PROMPT_RETENTION: "true",
+  REPLAY_CAPSULE_RETENTION_HOURS: "24",
   REPLAY_CAPSULE_ACTIVE_KEY_VERSION: "e2e-v1",
   REPLAY_CAPSULE_KEYS_JSON: JSON.stringify({
     "e2e-v1": Buffer.alloc(32, 22).toString("base64"),

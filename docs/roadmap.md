@@ -210,6 +210,15 @@ price, quota, exactly-once effects, production credentials, universal provider c
 6 identity, or production readiness. Timeline playback remains recorded presentation only; replay
 remains a separate new execution requiring current retained input.
 
+**Bounded post-Horizon-5 encrypted live replay — established without reopening the horizon.** A
+deployment may permit the existing PostgreSQL encrypted Replay Vault while every live form still
+defaults retention off. One explicit per-execution choice persists before the provider effect;
+Replay and a live-safe policy/budget variant each create a distinct external call and fresh capsule.
+Deletion, expiry, missing keys, unreadable rows, and wrong-tenant routing prevent new effects while
+normalized evidence remains. This is still prototype routing and environment key management, not
+Horizon 6 replay authorization, RLS, managed KMS, or production isolation. See
+[Encrypted Live Replay basics](reliability-lab-encrypted-live-replay-basics.md).
+
 ### Horizon 6: A tenant-safe service
 
 **Status: not implemented.** Naming this next horizon does not begin or imply its identity,
@@ -275,3 +284,5 @@ Cancellation, Redis coordination, generic outbox tooling, resumable workflow mac
 infrastructure are not retroactive prerequisites for this horizon signal.
 The bounded live-provider proof is a post-closure validation of the existing ordinary execution
 path; it does not add another roadmap horizon or begin Horizon 6.
+Encrypted Live Replay is another bounded post-closure capability and likewise does not reopen
+Horizon 5 or begin Horizon 6.

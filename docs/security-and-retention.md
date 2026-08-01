@@ -50,9 +50,17 @@ must define ciphertext purge, backups, replicas, and legal holds.
 Fake-provider capsules may use process-local memory when no durable store is selected and therefore
 disappear on restart. Live-provider retention defaults off. Setting
 `ALLOW_LIVE_PROMPT_RETENTION=true` fails startup unless the PostgreSQL replay store, database URL,
-active key, and valid keyring are configured. A live provider is not called if its required durable
-capsule write fails. Optional fake execution can continue after a capsule-write failure but is
-reported as non-replayable.
+active key, and valid keyring are configured, but remains deployment permission only. Every live
+request separately defaults to `replayRetention: "disabled"`; only explicit `encrypted` consent
+requires a capsule. An unavailable requested gate is rejected without a provider effect. A required
+capsule write completes before a provider attempt, and failure never silently downgrades to an
+unretained call. Optional fake execution can continue after a capsule-write failure but is reported
+as non-replayable.
+
+Replay and comparison children created from retained input inherit encrypted retention, but not
+ciphertext. Each receives a fresh expiry, random nonce, authenticated row, and write-current key.
+Deleting or expiring the source blocks future source-based effects while an already-retained child
+and all normalized evidence remain available.
 
 ## Audit and redaction
 
@@ -70,9 +78,10 @@ local volumes are ignored or refused by export tooling.
 
 `GET /v1/providers` is a server-derived configuration projection, not a provider probe or health
 endpoint. It exposes provider ID, deterministic/live kind, safe model label, transport family,
-configured/failure-injection/operator flags, and a fixed unavailable reason. It excludes API keys,
-base URLs, query strings, authorization, cookies, raw environment objects, request bodies, and
-provider response bodies.
+configured/failure-injection/operator flags, and fixed unavailable reasons. For live retention it
+adds only availability, a safe label, configured hours, and the required per-execution opt-in. It
+excludes API keys, base URLs, database URLs, store modes, key versions/keyrings, query strings,
+authorization, cookies, raw environment objects, request bodies, and provider response bodies.
 
 API and worker construct providers through the same runtime owner. Live execution requires the
 server-configured model, rejects failure injection, and bounds input/messages, structured schema,
@@ -81,16 +90,18 @@ provider endpoint or credential. The generic adapter sends `store: false`, never
 failed provider body, and normalizes HTTP, network, abort, timeout, malformed, and oversized
 responses.
 
-Normal tests and automatic proof use loopback providers only. The external proof command makes no
-request unless its explicit opt-in and complete URL/key/model configuration are present, limits the
-ordinary execution to one attempt, and prints no endpoint, key, input, output, or provider body.
-Live request retention remains default-deny. Timeline playback uses recorded evidence only; replay
-is a separately authorized new execution using retained input.
+Normal tests and automatic proof use loopback providers only. The external one-call provider proof
+and separate two-call retained Replay proof make no request without their own explicit opt-ins and
+complete configuration. Both print bounded metadata only. Live request retention remains
+default-deny. Timeline playback uses recorded evidence only; Replay and Compare are separately
+requested new provider executions using retained input and may incur cost.
 
 ## Comparative replay
 
 The comparison API cannot accept messages, input, or a replacement prompt. It can only request
-bounded provider/model, retry/fallback, and budget changes. Omitted values inherit; explicit `null`
+bounded provider/model, retry/fallback, and budget changes. For a live original, provider/model and
+fallback targets must match the server-configured eligible target; the current single-target UI
+renders them as fixed and offers only live-safe policy/budget changes. Omitted values inherit; explicit `null`
 removes supported fallback or cost settings. Provider identifiers are checked against the
 configured registry, numeric bounds are validated, and unchanged conditions require an explicit
 reproducibility check.

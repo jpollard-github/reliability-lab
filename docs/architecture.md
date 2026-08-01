@@ -52,6 +52,12 @@ the ordinary tenant-routing header without calling a provider. Configuration is 
 health. Keys, endpoints, query strings, headers, and raw environment objects never enter the
 contract or browser.
 
+API composition enriches each live capability with a bounded encrypted-retention projection derived
+from the already-validated replay runtime configuration: availability, safe label, hours,
+per-execution opt-in, and constrained unavailable reason. It omits database/store identity,
+key/version material, and raw configuration. `/readyz` separately performs database/table checks;
+the capability is permission evidence rather than a health probe.
+
 The home-page Server Component reads capabilities through `lib/server-api.ts`. Deterministic
 scenarios remain the always-present fake-provider lab. A focused client form appears only for an
 eligible configured live provider and submits the provider ID and safe server-owned model label
@@ -61,8 +67,10 @@ Core validates live model identity, input/message size, structured-schema size, 
 policy, latency/cost budget, and failure-injection exclusion before provider work. The adapter
 rechecks model and failure injection, bounds the response body, sends `store: false`, and normalizes
 errors without reading or returning raw failure bodies. Live request retention remains default-deny
-and independent from Timeline playback. Replay, when durable retention is explicitly enabled,
-creates another ordinary provider execution.
+and independent from Timeline playback. The deployment flag only permits retention; the typed live
+request must also select `encrypted`. The runner persists the required encrypted capsule before
+provider work and never silently downgrades after a failed write. Replay, when current retained
+input is available, creates another ordinary provider execution.
 
 The generic adapter retains the Chat Completions wire family for current cross-provider
 compatibility. A future OpenAI-specific Responses adapter is a separate elected boundary; see
@@ -77,7 +85,10 @@ decrypts the command, and invokes the same core continuation operation used by i
 Replay asks the tenant-scoped capsule port for a current capability, decrypts only inside the
 PostgreSQL adapter when replay is requested, and invokes the normal acceptance path. Comparative
 replay accepts only provider, model, policy, and budget variation—not replacement input. It resolves
-omitted values against original conditions. In worker mode the variant, linkage events, encrypted
+omitted values against original conditions. A live original can vary only policy/budget within live
+bounds unless an eligible target is server-exposed; the current single live target is inherited.
+Replay and variant commands explicitly inherit encrypted retention and receive fresh independent
+capsules before their provider effects. In worker mode the variant, linkage events, encrypted
 job, and experiment definition commit in one transaction. The original and variant remain ordinary
 execution envelopes; comparison is a pure read projection, not a second event system or a winner
 score.
@@ -225,6 +236,11 @@ and key version. Audit rows contain identity and lifecycle metadata only. Memory
 remains process-local. PostgreSQL worker mode requires the PostgreSQL replay store so API and worker
 share replay capabilities.
 
+The deployment and per-execution gates and child-inheritance rule are durable decisions in
+[ADR 0014](adr/0014-explicit-encrypted-live-replay-consent-and-inheritance.md). Source ciphertext is
+never reused; each child gets a fresh nonce, expiry, and write-current key. Source deletion blocks
+future source-based effects without mutating existing execution/comparison evidence.
+
 ## Trust boundaries
 
 - **Caller to API:** bodies, headers, tenant IDs, idempotency keys, and JSON Schemas are untrusted.
@@ -254,6 +270,7 @@ share replay capabilities.
 | Current-claim heartbeat, finish, and cleanup are fenced                | `JobClaim.claimVersion`, exact PostgreSQL predicates, lease tests                 | Exactly-once provider calls                         | PostgreSQL and a remote provider share no transaction                   |
 | Execution decisions are append-only evidence                           | `ExecutionEventRecorder`, repository/event tests                                  | Universal event/projection/outbox atomicity         | Continuation writes retain explicit consistency boundaries              |
 | PostgreSQL replay capsules are encrypted at rest                       | `encryptReplayCapsule`, replay crypto and vault tests                             | Production KMS or physical backup erasure           | Environment keyrings and tombstones are prototype boundaries            |
+| Opted-in live capsule persists before provider work                    | runner ordering tests and PostgreSQL loopback three-call proof                    | Transaction with an external provider               | Vault and provider cannot share one transaction                         |
 | Repository reads and evidence references are tenant scoped             | Port/adapter predicates and cross-tenant tests                                    | Authenticated identity, RBAC, or row-level security | `X-Tenant-Id` is routing context supplied by the caller                 |
 | Investigation reads are tenant/range bounded                           | Named query modules and fixed-query integration tests                             | SLA, causal, or universal provider-health claims    | Results summarize only selected recorded evidence                       |
 | Saved notes append and evidence remains referenced                     | Case transactions and service/integration tests                                   | Authenticated authorship or copied source evidence  | The prototype has no people identity and avoids a shadow evidence store |

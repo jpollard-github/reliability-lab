@@ -10,9 +10,11 @@ import { ComparisonVariationFields } from "./comparison-variation-fields";
 export function ComparisonBuilder({
   execution,
   capability,
+  fixedTarget = false,
 }: {
   execution: ExecutionEnvelope;
   capability: ReplayCapability;
+  fixedTarget?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -68,13 +70,21 @@ export function ComparisonBuilder({
           <div className="comparison-form-heading">
             <div>
               <strong>Variant conditions</strong>
-              <p>The retained input is fixed. Blank controls inherit the original.</p>
+              <p>
+                The retained input is fixed. This creates another provider request and may incur
+                cost. Blank controls inherit the original.
+              </p>
             </div>
             <button type="button" className="quiet-button" onClick={() => setOpen(false)}>
               Close
             </button>
           </div>
-          <ComparisonVariationFields baseline={execution} draft={draft} onChange={setDraft} />
+          <ComparisonVariationFields
+            baseline={execution}
+            draft={draft}
+            onChange={setDraft}
+            fixedTarget={fixedTarget}
+          />
           <div className="comparison-submit">
             <span>
               {draft.reproducibilityCheck

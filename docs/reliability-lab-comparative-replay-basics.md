@@ -154,6 +154,13 @@ The system requires this to be explicit so an accidental no-op is not presented 
 A reproducibility check may still produce different model output when a live model is nondeterministic. That difference is evidence, not automatically a failure.
 It is therefore still a new provider execution, unlike Timeline playback.
 
+For a retained live original, the current runtime exposes one server-configured provider/model
+target. The UI therefore renders that target as fixed instead of accepting arbitrary strings.
+Operators may choose only live-safe policy/budget changes or this explicit reproducibility check.
+The API rejects target or fallback changes that are not server-exposed. Every live comparison is one
+additional external request that may incur cost, and its variant receives a fresh independently
+encrypted capsule and expiry.
+
 ---
 
 ## What does the comparison measure?
@@ -341,6 +348,7 @@ It does not yet provide:
 - authenticated users or authorization;
 - production KMS;
 - aggregate provider-health analysis;
+- a broad live model catalog or arbitrary browser-selected live provider/model targets; or
 - automatic policy recommendations.
 
 Those are separate horizons.

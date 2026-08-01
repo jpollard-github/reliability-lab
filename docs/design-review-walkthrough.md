@@ -91,7 +91,9 @@ failure. Core bounds live input, messages, schema, policy, and budget; the adapt
 server model, sends `store: false`, normalizes failures, and caps response bytes.
 
 Timeline playback is presentation of recorded evidence only. Replay is a new linked execution using
-retained input and therefore another provider call. Live retention stays default-deny. The generic
+retained input and therefore another provider call. Live retention stays default-deny: deployment
+permission and explicit per-execution encrypted consent are separate, required storage precedes the
+provider call, and retained Replay/variant children get independent capsules. The generic
 adapter keeps Chat Completions compatibility; ADR 0013 reserves an OpenAI-specific Responses adapter
 as a separate future decision.
 

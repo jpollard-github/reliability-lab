@@ -3,6 +3,12 @@ import { MessageSchema } from "./provider.js";
 import { ExecutionBudgetSchema, ExecutionPolicySchema } from "./policy.js";
 import { FailureModeSchema } from "./status.js";
 
+export const ReplayRetentionIntentSchema = Type.Union([
+  Type.Literal("disabled"),
+  Type.Literal("encrypted"),
+]);
+export type ReplayRetentionIntent = Static<typeof ReplayRetentionIntentSchema>;
+
 /**
  * Runtime-validated execution creation input.
  * It composes execution contracts without owning execution behavior.
@@ -17,6 +23,11 @@ export const CreateExecutionBodySchema = Type.Object(
     policy: Type.Optional(Type.Partial(ExecutionPolicySchema)),
     budget: Type.Optional(Type.Partial(ExecutionBudgetSchema)),
     failureMode: Type.Optional(FailureModeSchema),
+    replayRetention: Type.Optional(
+      Type.Union([Type.Literal("disabled"), Type.Literal("encrypted")], {
+        default: "disabled",
+      }),
+    ),
   },
   { additionalProperties: false },
 );

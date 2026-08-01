@@ -71,6 +71,13 @@ describe("provider capability routes", () => {
         configured: true,
         supportsFailureInjection: false,
         operatorEligible: true,
+        liveReplayRetention: {
+          available: false,
+          modeLabel: "Encrypted replay retention",
+          retentionHours: 24,
+          perExecutionOptInRequired: true,
+          unavailableReason: "encrypted_vault_not_configured",
+        },
       });
       expect(capabilities.body).not.toContain("never-visible-secret");
       expect(capabilities.body).not.toContain("provider.example");
@@ -97,6 +104,76 @@ describe("provider capability routes", () => {
         expect(response.statusCode).toBe(400);
         expect(response.json().error).toBe("live_provider_request_not_allowed");
       }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("projects only bounded deployment retention capability and rejects unavailable opt-in", async () => {
+    const { app } = await buildTestApp({
+      providerEnvironment: {
+        OPENAI_COMPATIBLE_BASE_URL: "https://provider.example/v1",
+        OPENAI_API_KEY: "never-visible-secret",
+        OPENAI_MODEL: "server-model",
+      },
+    });
+    try {
+      const capabilities = await app.inject({
+        method: "GET",
+        url: "/v1/providers",
+        headers: { "x-tenant-id": "tenant-a" },
+      });
+      expect(
+        capabilities.json().data.find((item: { kind: string }) => item.kind === "live"),
+      ).toMatchObject({
+        liveReplayRetention: {
+          available: false,
+          modeLabel: "Encrypted replay retention",
+          retentionHours: 24,
+          perExecutionOptInRequired: true,
+          unavailableReason: "encrypted_vault_not_configured",
+        },
+      });
+      expect(capabilities.body).not.toMatch(
+        /never-visible-secret|provider\.example|keyring|database/i,
+      );
+      const rejected = await app.inject({
+        method: "POST",
+        url: "/v1/executions",
+        headers: { "x-tenant-id": "tenant-a" },
+        payload: {
+          provider: "openai-compatible",
+          model: "server-model",
+          input: "safe",
+          replayRetention: "encrypted",
+        },
+      });
+      expect(rejected).toMatchObject({ statusCode: 400 });
+      expect(rejected.json()).toMatchObject({ error: "live_replay_retention_unavailable" });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("projects available retention as per-execution consent without secret configuration", async () => {
+    const { app } = await buildTestApp({ allowLivePromptRetention: true });
+    try {
+      const response = await app.inject({
+        method: "GET",
+        url: "/v1/providers",
+        headers: { "x-tenant-id": "tenant-a" },
+      });
+      expect(
+        response.json().data.find((item: { kind: string }) => item.kind === "live"),
+      ).toMatchObject({
+        liveReplayRetention: {
+          available: true,
+          modeLabel: "Encrypted replay retention",
+          retentionHours: 24,
+          perExecutionOptInRequired: true,
+        },
+      });
+      expect(response.body).not.toMatch(/database|keyring|keyVersion|storeMode/i);
     } finally {
       await app.close();
     }

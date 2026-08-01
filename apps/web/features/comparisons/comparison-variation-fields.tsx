@@ -13,11 +13,16 @@ export function ComparisonVariationFields({
   baseline,
   draft,
   onChange,
+  fixedTarget = false,
 }: {
   baseline: ComparisonBaseline;
   draft: ComparisonDraft;
   onChange: (draft: ComparisonDraft) => void;
+  fixedTarget?: boolean;
 }) {
+  const visiblePresets = fixedTarget
+    ? comparisonPresets.filter((preset) => preset.value !== "fallback")
+    : comparisonPresets;
   return (
     <>
       <label>
@@ -32,26 +37,36 @@ export function ComparisonVariationFields({
           <option value="" disabled>
             Choose a preset
           </option>
-          {comparisonPresets.map((preset) => (
+          {visiblePresets.map((preset) => (
             <option key={preset.value} value={preset.value}>
               {preset.label}
             </option>
           ))}
         </select>
       </label>
+      {fixedTarget ? (
+        <p className="form-warning">
+          Live target fixed by the server: {baseline.provider} / {baseline.model}. Only bounded
+          policy and budget changes are eligible.
+        </p>
+      ) : null}
       <div className="comparison-fields">
-        <TextField
-          label="Provider"
-          value={draft.provider}
-          inherited={baseline.provider}
-          onChange={(provider) => onChange({ ...draft, provider, reproducibilityCheck: false })}
-        />
-        <TextField
-          label="Model"
-          value={draft.model}
-          inherited={baseline.model}
-          onChange={(model) => onChange({ ...draft, model, reproducibilityCheck: false })}
-        />
+        {fixedTarget ? null : (
+          <>
+            <TextField
+              label="Provider"
+              value={draft.provider}
+              inherited={baseline.provider}
+              onChange={(provider) => onChange({ ...draft, provider, reproducibilityCheck: false })}
+            />
+            <TextField
+              label="Model"
+              value={draft.model}
+              inherited={baseline.model}
+              onChange={(model) => onChange({ ...draft, model, reproducibilityCheck: false })}
+            />
+          </>
+        )}
         <NumberField
           label="Max attempts"
           value={draft.maxAttempts}
@@ -93,33 +108,37 @@ export function ComparisonVariationFields({
             onChange({ ...draft, jitterRatio, reproducibilityCheck: false })
           }
         />
-        <label>
-          Fallback
-          <select
-            aria-label="Fallback provider"
-            value={draft.fallbackProvider}
-            onChange={(event) =>
-              onChange({
-                ...draft,
-                fallbackProvider: event.target.value,
-                reproducibilityCheck: false,
-              })
-            }
-          >
-            <option value="">Inherit ({baseline.policy.fallbackProvider ?? "none"})</option>
-            <option value="_remove">Remove fallback</option>
-            <option value="fake-fallback">fake-fallback</option>
-            <option value="fake-primary">fake-primary</option>
-          </select>
-        </label>
-        <TextField
-          label="Fallback model"
-          value={draft.fallbackModel}
-          inherited={baseline.policy.fallbackModel ?? baseline.model}
-          onChange={(fallbackModel) =>
-            onChange({ ...draft, fallbackModel, reproducibilityCheck: false })
-          }
-        />
+        {fixedTarget ? null : (
+          <>
+            <label>
+              Fallback
+              <select
+                aria-label="Fallback provider"
+                value={draft.fallbackProvider}
+                onChange={(event) =>
+                  onChange({
+                    ...draft,
+                    fallbackProvider: event.target.value,
+                    reproducibilityCheck: false,
+                  })
+                }
+              >
+                <option value="">Inherit ({baseline.policy.fallbackProvider ?? "none"})</option>
+                <option value="_remove">Remove fallback</option>
+                <option value="fake-fallback">fake-fallback</option>
+                <option value="fake-primary">fake-primary</option>
+              </select>
+            </label>
+            <TextField
+              label="Fallback model"
+              value={draft.fallbackModel}
+              inherited={baseline.policy.fallbackModel ?? baseline.model}
+              onChange={(fallbackModel) =>
+                onChange({ ...draft, fallbackModel, reproducibilityCheck: false })
+              }
+            />
+          </>
+        )}
         <NumberField
           label="Max latency (ms)"
           value={draft.maxLatencyMs}

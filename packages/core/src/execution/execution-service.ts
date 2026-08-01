@@ -20,6 +20,7 @@ import {
   inferSafeOriginalConfiguration,
   resolveReplayVariation,
 } from "../comparison/variation-resolution.js";
+import { InvalidComparisonVariationError } from "../comparison/errors.js";
 import {
   unrestrictedContinuationGuard,
   type ExecutionContinuationGuard,
@@ -61,6 +62,7 @@ import {
 import { ExecutionEventRecorder } from "./execution-events.js";
 import { ExecutionRunner } from "./execution-runner.js";
 import { isTerminalStatus } from "./execution-state.js";
+import { validateLiveProviderRequest } from "./live-provider-request.js";
 import type { ExecutionRepository } from "./ports.js";
 
 /**
@@ -290,6 +292,7 @@ export class ExecutionService {
         ...(request.failureMode ? { failureMode: request.failureMode } : {}),
         policy: original.policy,
         budget: original.budget,
+        replayRetention: "encrypted",
       },
     });
     if (!replaySubmission.completion) {
@@ -371,7 +374,42 @@ export class ExecutionService {
       ...(request.failureMode ? { failureMode: request.failureMode } : {}),
       policy: resolvedVariant.policy,
       budget: resolvedVariant.budget,
+      replayRetention: "encrypted",
     };
+    const originalProvider = original.attempts[0]?.provider ?? original.provider;
+    const originalModel = original.attempts[0]?.model ?? original.model;
+    const originalRuntimeProvider = this.#providers.resolve(originalProvider);
+    if (originalRuntimeProvider?.kind === "live") {
+      if (
+        resolvedVariant.provider !== originalProvider ||
+        resolvedVariant.model !== originalModel ||
+        resolvedVariant.policy.fallbackProvider !== original.policy.fallbackProvider ||
+        resolvedVariant.policy.fallbackModel !== original.policy.fallbackModel
+      ) {
+        throw new InvalidComparisonVariationError(
+          "Live comparisons must inherit the configured provider, model, and fallback target",
+        );
+      }
+      const validationError = validateLiveProviderRequest({
+        body: variantBody,
+        policy: resolvedVariant.policy,
+        budget: resolvedVariant.budget,
+        capability: originalRuntimeProvider.capability ?? {
+          id: originalRuntimeProvider.id,
+          kind: "live",
+          modelLabel: originalModel,
+          transportFamily: "openai_compatible_chat_completions",
+          configured: true,
+          supportsFailureInjection: false,
+          operatorEligible: true,
+        },
+      });
+      if (validationError) {
+        throw new InvalidComparisonVariationError(
+          `Live comparison variation is outside the allowed bounds (${validationError.code})`,
+        );
+      }
+    }
     if (this.#durableAcceptance) {
       if (!(await this.#rateLimiter.consume(tenantId))) throw new RateLimitRejectedError();
       const requestHash = hashCanonical(variantBody);

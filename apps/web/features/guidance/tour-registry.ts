@@ -50,7 +50,7 @@ export const pageTours = {
       {
         anchor: "replay-capability",
         title: "Replay capability",
-        body: "Current capability determines whether replay and comparison controls are available.",
+        body: "Current capability determines whether Replay and Compare are available. Each action creates a new provider request; encrypted live children receive fresh retention rather than reused ciphertext.",
         optional: true,
       },
       {

@@ -280,6 +280,31 @@ export class ExecutionRunner {
     });
     if (liveRequestError) return this.#failures.fail(execution, liveRequestError, guard);
 
+    const liveRetentionIntent = body.replayRetention ?? "disabled";
+    if (
+      primary.kind === "live" &&
+      liveRetentionIntent === "encrypted" &&
+      !this.#allowLivePromptRetention
+    ) {
+      this.#setCapability(
+        execution,
+        unavailableCapability(
+          "retention_disabled",
+          "Encrypted live replay retention is unavailable",
+        ),
+      );
+      return this.#failures.fail(
+        execution,
+        {
+          category: "invalid_request",
+          code: "live_replay_retention_unavailable",
+          message: "Encrypted live replay retention is unavailable for this deployment",
+          retryable: false,
+        },
+        guard,
+      );
+    }
+
     const capsule: ReplayCapsule = {
       providerRequest: {
         tenantId: execution.tenantId,
@@ -293,7 +318,10 @@ export class ExecutionRunner {
         ...(body.failureMode ? { failureMode: body.failureMode } : {}),
       },
     };
-    if (primary.kind === "fake" || this.#allowLivePromptRetention) {
+    const shouldRetain =
+      primary.kind === "fake" ||
+      (liveRetentionIntent === "encrypted" && this.#allowLivePromptRetention);
+    if (shouldRetain) {
       const expiresAt = new Date(
         this.#clock.now().getTime() + this.#replayRetentionMs,
       ).toISOString();
@@ -311,7 +339,7 @@ export class ExecutionRunner {
           execution,
           unavailableCapability("missing", "Replay capsule persistence failed"),
         );
-        if (primary.kind === "live") {
+        if (primary.kind === "live" && liveRetentionIntent === "encrypted") {
           return this.#failures.fail(
             execution,
             {

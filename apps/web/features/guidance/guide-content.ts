@@ -52,16 +52,18 @@ export const operatorWorkflow: WorkflowStage[] = [
   },
   {
     name: "Replay",
-    action: "Re-run eligible retained input under current replay capability.",
+    action: "Re-run eligible retained input as a new provider call that may incur cost.",
     evidence: "Replay state, reason, lineage, and the new execution envelope.",
     href: "/",
     control: "Replay execution on an eligible execution detail page",
-    conclusion: "A new execution was derived from retained replay input.",
+    conclusion:
+      "A new execution was derived from retained replay input and, for encrypted live replay, received independent retention.",
     nonConclusion: "Replay is always available or reproduces external provider effects exactly.",
   },
   {
     name: "Compare",
-    action: "Change a bounded variation while retaining the original input.",
+    action:
+      "Create one new potentially billable execution with a bounded variation and fixed input.",
     evidence: "Resolved configurations, two machines, and named comparison dimensions.",
     href: "/",
     control: "Compare with variant on an eligible execution detail page",

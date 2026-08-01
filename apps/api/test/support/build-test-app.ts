@@ -11,12 +11,17 @@ import {
   MemoryReplayCapsuleStore,
 } from "@reliability-lab/core";
 import { buildProviderRuntime } from "@reliability-lab/providers";
+import type { LlmProvider } from "@reliability-lab/providers";
+import type { ProviderCapability } from "@reliability-lab/contracts";
 import { buildApp } from "../../src/app.js";
+import { withLiveReplayRetentionCapability } from "../../src/provider-capabilities.js";
 
 export async function buildTestApp(
   options: {
     failNextCaseComparisonLink?: boolean;
     providerEnvironment?: NodeJS.ProcessEnv;
+    allowLivePromptRetention?: boolean;
+    providerRuntime?: { providers: LlmProvider[]; capabilities: ProviderCapability[] };
   } = {},
 ) {
   const repository = new MemoryExecutionRepository();
@@ -35,12 +40,14 @@ export async function buildTestApp(
   }
   const investigations = new MemoryInvestigationReadRepository(repository);
   const replayCapsules = new MemoryReplayCapsuleStore();
-  const providerRuntime = buildProviderRuntime(options.providerEnvironment ?? {});
+  const providerRuntime =
+    options.providerRuntime ?? buildProviderRuntime(options.providerEnvironment ?? {});
   const service = new ExecutionService({
     repository,
     comparisons,
     replayCapsules,
     providers: new MapProviderRegistry(providerRuntime.providers),
+    allowLivePromptRetention: options.allowLivePromptRetention ?? false,
   });
   const investigationCases = new InvestigationCaseService({
     cases,
@@ -60,7 +67,11 @@ export async function buildTestApp(
   });
   const app = await buildApp({
     service,
-    providerCapabilities: providerRuntime.capabilities,
+    providerCapabilities: withLiveReplayRetentionCapability(providerRuntime.capabilities, {
+      storeMode: options.allowLivePromptRetention ? "postgres" : "memory",
+      allowLivePromptRetention: options.allowLivePromptRetention ?? false,
+      retentionMs: 24 * 60 * 60 * 1_000,
+    }),
     investigationCases,
     investigationCaseReviews,
     investigationCaseExperiments,
@@ -78,6 +89,7 @@ export async function buildTestApp(
     investigationCases,
     investigationCaseReviews,
     investigationCaseExperiments,
+    replayCapsules,
   };
 }
 

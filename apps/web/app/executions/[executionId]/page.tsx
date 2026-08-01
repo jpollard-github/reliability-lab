@@ -5,7 +5,7 @@ import { ReplayControls } from "@/features/executions/replay-controls";
 import { StatusBadge } from "@/components/status-badge";
 import { AddToCase } from "@/features/investigation-cases/add-to-case";
 import { ConceptHelp } from "@/features/guidance/concept-help";
-import { getExecution, getInvestigationCases } from "@/lib/server-api";
+import { getExecution, getInvestigationCases, getProviderCapabilities } from "@/lib/server-api";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +24,10 @@ export default async function ExecutionDetailPage({
   const recentCaseParams = new URLSearchParams({ limit: "10" });
   recentCaseParams.append("status", "open");
   recentCaseParams.append("status", "investigating");
-  const [execution, recentCases] = await Promise.all([
+  const [execution, recentCases, providerCapabilities] = await Promise.all([
     getExecution(executionId),
     getInvestigationCases(recentCaseParams),
+    getProviderCapabilities(),
   ]);
   if (!execution) notFound();
   const signals = executionSignals(execution);
@@ -61,6 +62,9 @@ export default async function ExecutionDetailPage({
           executionId={execution.executionId}
           execution={execution}
           capability={execution.replayCapability}
+          fixedComparisonTarget={providerCapabilities.data.some(
+            (capability) => capability.kind === "live" && capability.id === execution.provider,
+          )}
         />
       </section>
       <ConceptHelp

@@ -398,12 +398,117 @@ describe("ExecutionService replay", () => {
 
     const execution = await service.execute({
       tenantId: "tenant-a",
-      body: { ...baseBody, provider: "live" },
+      body: { ...baseBody, provider: "live", replayRetention: "encrypted" },
     });
     expect(execution.status).toBe("failed");
     expect(execution.error?.code).toBe("replay_retention_failed");
     expect(execution.replayable).toBe(false);
     expect(providerCalls).toBe(0);
+  });
+
+  it("keeps live retention default-deny even when the deployment permits it", async () => {
+    let providerCalls = 0;
+    const liveProvider: LlmProvider = {
+      id: "live",
+      kind: "live",
+      execute: async (request) => {
+        providerCalls += 1;
+        return {
+          ok: true,
+          response: {
+            provider: "live",
+            model: request.model,
+            outputText: "safe result",
+            usage: { inputTokens: 1, outputTokens: 1 },
+            latencyMs: 1,
+          },
+        };
+      },
+    };
+    const service = new ExecutionService({
+      repository: new MemoryExecutionRepository(),
+      replayCapsules: new MemoryReplayCapsuleStore(),
+      providers: new MapProviderRegistry([liveProvider]),
+      allowLivePromptRetention: true,
+    });
+
+    const execution = await service.execute({
+      tenantId: "tenant-a",
+      body: { ...baseBody, provider: "live" },
+    });
+    expect(execution).toMatchObject({
+      status: "succeeded",
+      replayCapability: { state: "retention_disabled", available: false },
+    });
+    expect(providerCalls).toBe(1);
+  });
+
+  it("rejects requested encrypted live retention before the provider when deployment permission is off", async () => {
+    let providerCalls = 0;
+    const liveProvider: LlmProvider = {
+      id: "live",
+      kind: "live",
+      execute: async () => {
+        providerCalls += 1;
+        throw new Error("provider must not be called");
+      },
+    };
+    const service = new ExecutionService({
+      repository: new MemoryExecutionRepository(),
+      replayCapsules: new MemoryReplayCapsuleStore(),
+      providers: new MapProviderRegistry([liveProvider]),
+    });
+    const execution = await service.execute({
+      tenantId: "tenant-a",
+      body: { ...baseBody, provider: "live", replayRetention: "encrypted" },
+    });
+    expect(execution).toMatchObject({
+      status: "failed",
+      error: { code: "live_replay_retention_unavailable" },
+    });
+    expect(providerCalls).toBe(0);
+  });
+
+  it("gives retained live replays a fresh independent capsule before a second provider call", async () => {
+    let providerCalls = 0;
+    const liveProvider: LlmProvider = {
+      id: "live",
+      kind: "live",
+      execute: async (request) => {
+        providerCalls += 1;
+        return {
+          ok: true,
+          response: {
+            provider: "live",
+            model: request.model,
+            outputText: "safe result",
+            usage: { inputTokens: 1, outputTokens: 1 },
+            latencyMs: 1,
+          },
+        };
+      },
+    };
+    const capsules = new MemoryReplayCapsuleStore();
+    const service = new ExecutionService({
+      repository: new MemoryExecutionRepository(),
+      replayCapsules: capsules,
+      providers: new MapProviderRegistry([liveProvider]),
+      allowLivePromptRetention: true,
+    });
+    const original = await service.execute({
+      tenantId: "tenant-a",
+      body: { ...baseBody, provider: "live", replayRetention: "encrypted" },
+    });
+    const replay = await service.replay("tenant-a", original.executionId);
+    expect(replay.replayable).toBe(true);
+    if (!replay.replayable) return;
+    expect(replay.replayExecution.executionId).not.toBe(original.executionId);
+    expect(replay.replayExecution.replayCapability.state).toBe("available");
+    expect((await capsules.inspect("tenant-a", original.executionId)).available).toBe(true);
+    expect((await capsules.inspect("tenant-a", replay.replayExecution.executionId)).available).toBe(
+      true,
+    );
+    expect(providerCalls).toBe(2);
   });
 
   it("enforces tenant scope at the replay capsule boundary", async () => {

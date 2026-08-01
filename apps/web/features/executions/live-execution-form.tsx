@@ -12,6 +12,7 @@ interface SubmissionResponse {
 export function LiveExecutionForm({ provider }: { provider: ProviderCapability }) {
   const router = useRouter();
   const [input, setInput] = useState("");
+  const [retainEncrypted, setRetainEncrypted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,7 @@ export function LiveExecutionForm({ provider }: { provider: ProviderCapability }
             jitterRatio: 0,
           },
           budget: { maxLatencyMs: 20_000 },
+          replayRetention: retainEncrypted ? "encrypted" : "disabled",
         }),
       });
       router.push(`/executions/${result.executionId}`);
@@ -69,10 +71,31 @@ export function LiveExecutionForm({ provider }: { provider: ProviderCapability }
           {submitting ? "Running live execution…" : "Run one live execution"}
         </button>
       </div>
-      <p className="form-warning">
-        Live request input is not retained for replay by default. Replay requires separately enabled
-        durable encrypted retention.
-      </p>
+      {provider.liveReplayRetention?.available ? (
+        <div className="live-retention-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={retainEncrypted}
+              onChange={(event) => setRetainEncrypted(event.target.checked)}
+            />
+            Retain this request with encrypted replay storage for{" "}
+            {provider.liveReplayRetention.retentionHours} hours
+          </label>
+          <p className="form-warning">
+            Reliability Lab encrypts and stores the request body for this execution only. Replay and
+            Compare each create another external request and may incur cost. The original stays
+            immutable; deletion or expiry removes future replay capability. This cannot be enabled
+            retroactively.
+          </p>
+        </div>
+      ) : (
+        <p className="form-warning">
+          Live-provider request retention is disabled. This execution remains usable, but its input
+          cannot be retained or recovered retroactively; Timeline playback is recorded evidence, not
+          Replay.
+        </p>
+      )}
       {error ? (
         <p className="form-error" role="alert">
           {error}

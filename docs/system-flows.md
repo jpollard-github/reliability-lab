@@ -14,9 +14,11 @@ gives transport routes, persistence adapters, queries, mapping, and transactions
    capabilities and performs no provider call; configuration is not health.
 4. The home-page Server Component reads those capabilities through `getProviderCapabilities`.
    Deterministic lab scenarios always render. `LiveExecutionForm` renders only for an eligible live
-   capability.
+   capability. API composition adds only safe encrypted-retention availability, label, hours,
+   per-execution opt-in, and a constrained unavailable reason.
 5. The focused form sends the safe provider ID/model label, one bounded non-sensitive input, one
-   attempt, no fallback, and a bounded latency budget through ordinary `POST /v1/executions`.
+   attempt, no fallback, a bounded latency budget, and explicit `disabled` or `encrypted` retention
+   intent through ordinary `POST /v1/executions`. The checkbox defaults unchecked.
 6. The route and `validateLiveProviderRequest` reject browser-selected models, failure injection,
    oversized input/schema, and out-of-bounds policy/budget values.
 7. `OpenAICompatibleHttpProvider` rechecks model/failure controls, sends one Chat Completions
@@ -25,9 +27,10 @@ gives transport routes, persistence adapters, queries, mapping, and transactions
    review, and packet surfaces consume the resulting ordinary execution.
 
 **Boundary/evidence review:** capabilities exclude key, endpoint, raw configuration, headers, query
-strings, request bodies, and provider bodies. Live retention remains default-deny. Timeline
-playback is recorded presentation only; replay is a separate new provider execution requiring
-current retained input. Adapter proof lives in `packages/providers/test/`, route proof in
+strings, request bodies, and provider bodies. The API rejects unavailable encrypted intent before
+submission; there is no silent downgrade. Live retention remains default-deny. Timeline playback is
+recorded presentation only; replay is a separate new provider execution requiring current retained
+input. Adapter proof lives in `packages/providers/test/`, route proof in
 `apps/api/test/providers.test.ts`, built loopback proof in `scripts/verify-local-provider-wire.mjs`,
 and browser proof in `apps/web/tests/live-provider-execution.spec.ts`.
 
@@ -42,7 +45,8 @@ and browser proof in `apps/web/tests/live-provider-execution.spec.ts`.
 4. The facade persists the accepted envelope, then delegates to
    `ExecutionRunner.continueNewExecution`.
 5. `packages/core/src/execution/execution-runner.ts` retains replay material when allowed and runs
-   `#runPolicy`.
+   `#runPolicy`. Fake work keeps established retention. Live work requires both gates; a required
+   encrypted write completes before `attempt.started` and any provider call.
 6. The runner checks circuit and latency budgets, records `attempt.started`, calls the provider,
    validates structured output, and chooses retry, fallback, success, or failure.
 7. `calculateRetryDelay` preserves capped exponential backoff and jitter.
@@ -91,7 +95,9 @@ current claim version. Relevant tests are `packages/core/test/lease-safety.test.
 3. If unavailable, replay returns the current explicit capability reason.
 4. If available, the facade submits an ordinary linked execution through the normal acceptance and
    runner path.
-5. Completion records `replay.completed`; replay evidence is not a second execution engine.
+5. The child command inherits encrypted retention, creating a fresh row/expiry before its provider
+   effect rather than copying source ciphertext.
+6. Completion records `replay.completed`; replay evidence is not a second execution engine.
 
 Durable execution commands and replay capsules are separate concepts: commands are transient worker
 inputs, while replay capsules are governed retention capabilities.
@@ -112,8 +118,11 @@ result rather than a fabricated run. Relevant tests are the replay section of
    safe original configuration and rejects no-op variation unless reproducibility was explicit.
 3. The facade submits the variant through the normal execution path and stores the experiment
    definition through `ComparisonExperimentRepository`.
-4. `ExecutionService.getComparison` reads both ordinary envelopes.
-5. `projectComparison` in `comparison/comparison-projection.ts` produces conservative dimensions.
+4. A live original inherits its server-configured provider/model/fallback target and accepts only
+   live-safe policy/budget changes or an explicit reproducibility check. The child gets independent
+   encrypted retention before its provider call.
+5. `ExecutionService.getComparison` reads both ordinary envelopes.
+6. `projectComparison` in `comparison/comparison-projection.ts` produces conservative dimensions.
    Token changes and route changes remain tradeoffs; unavailable evidence stays unavailable.
 
 **Boundary/evidence review:** `comparisonRoutes` calls `ExecutionService.createComparison`; core

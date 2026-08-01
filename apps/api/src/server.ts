@@ -27,6 +27,7 @@ import { OpenTelemetryExecutionTracer, startTelemetry } from "@reliability-lab/o
 import { buildProviderRuntime } from "@reliability-lab/providers";
 import { buildApp } from "./app.js";
 import { readExecutionRuntimeConfig, readReplayRuntimeConfig } from "./config.js";
+import { withLiveReplayRetentionCapability } from "./provider-capabilities.js";
 
 if (process.env.RELIABILITY_LAB_RUNTIME_IMPORT_SMOKE === "true") {
   process.stdout.write("api built-runtime imports resolved\n");
@@ -43,6 +44,10 @@ const telemetry = startTelemetry({
 });
 
 const providerRuntime = buildProviderRuntime(process.env);
+const providerCapabilities = withLiveReplayRetentionCapability(
+  providerRuntime.capabilities,
+  replayConfig,
+);
 
 let closeDatabase: (() => Promise<void>) | undefined;
 let databasePool: ReturnType<typeof createDatabase>["pool"] | undefined;
@@ -153,7 +158,7 @@ const investigationCaseExperiments = new InvestigationCaseExperimentService({
 
 const app = await buildApp({
   service,
-  providerCapabilities: providerRuntime.capabilities,
+  providerCapabilities,
   investigationCases,
   investigationCaseReviews,
   investigationCaseExperiments,
@@ -165,6 +170,9 @@ const app = await buildApp({
       execution_mode: executionConfig.mode,
       execution_jobs: durableStore ? "postgres:ok" : "not_configured",
       replay_store: `${replayConfig.storeMode}:ok`,
+      live_replay_retention: replayConfig.allowLivePromptRetention
+        ? "per_execution_opt_in"
+        : "not_permitted",
       redis: redis ? ((await redis.ping()) === "PONG" ? "ok" : "unexpected") : "not_configured",
     };
     if (databasePool) {

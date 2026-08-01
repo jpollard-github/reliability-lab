@@ -43,12 +43,12 @@ packages/contracts/src/
     policy.ts                  retry/fallback policy and budgets
     events.ts                  explicit payloads, metadata, and stored-event union
     envelope.ts                attempts and execution envelope
-    create-execution.ts        TypeBox creation schema
+    create-execution.ts        TypeBox creation schema and replay-retention intent
   replay/
     capability.ts              current replay capability states
     replay.ts                  replay result and controlled variation
   provider/
-    capabilities.ts            public-safe configured-provider projection
+    capabilities.ts            public-safe provider and live-retention projection
   comparison/
     experiment.ts              experiment and projection contracts
   investigation/
@@ -174,6 +174,7 @@ packages/db/src/
 apps/api/src/
   app.ts                       Fastify composition root
   app-options.ts               typed composed dependencies
+  provider-capabilities.ts     deployment-owned safe live-retention enrichment
   plugins/platform.ts          CORS, Swagger, and Swagger UI
   http/
     error-mapper.ts            safe shared error translation
@@ -302,8 +303,9 @@ stateless guidance client island.
   `openai-compatible-http-provider.ts` owns the bounded generic Chat Completions wire boundary.
 - `scripts/local-environment.mjs` owns repository-root local-file precedence;
   `register-local-environment.mjs` passes that environment to root web/API/worker commands and the
-  explicit verifier through Node's supported `--import` option. `live-provider-verifier.mjs` owns
-  opt-in, success-only exit semantics, and safe output.
+  explicit verifiers through Node's supported `--import` option. `live-provider-verifier.mjs` and
+  `live-replay-verifier.mjs` own separate opt-ins, success-only exit semantics, and safe output;
+  `replay-keygen.mjs` prints local key material without writing files.
 - Each package `package.json` selects TypeScript source only under Node's `development` condition
   and emitted `dist/index.js` by default. Each package `tsconfig.build.json` owns its runtime emit.
 - `apps/api/src/server.ts` selects memory or PostgreSQL adapters and constructs `ExecutionService`,
@@ -325,6 +327,7 @@ stateless guidance client island.
 | Provider attempt loop              | `packages/core/src/execution/execution-runner.ts` — `ExecutionRunner.#runPolicy`                                                                               |
 | Live request bounds                | `packages/core/src/execution/live-provider-request.ts` — `validateLiveProviderRequest`                                                                         |
 | Provider capability construction   | `packages/providers/src/provider-runtime.ts` — `buildProviderRuntime`                                                                                          |
+| Safe live-retention capability     | `apps/api/src/provider-capabilities.ts` — `withLiveReplayRetentionCapability`                                                                                  |
 | Generic live transport             | `packages/providers/src/openai-compatible-http-provider.ts` — `OpenAICompatibleHttpProvider`                                                                   |
 | Retry delay                        | `packages/core/src/execution/retry-backoff.ts` — `calculateRetryDelay`                                                                                         |
 | Structured-output validation       | `packages/core/src/execution/structured-output-validator.ts` — `StructuredOutputValidator`                                                                     |
@@ -410,6 +413,7 @@ stateless guidance client island.
 | 29  | Case experiment client action          | `apps/web/features/investigation-cases/case-experiment-form.tsx` — `CaseExperimentForm`                                         |
 | 30  | Configured live execution              | `apps/web/features/executions/live-execution-form.tsx` — `LiveExecutionForm`                                                    |
 | 31  | Provider capability server read        | `apps/web/lib/server-api.ts` — `getProviderCapabilities`                                                                        |
+| 32  | Encrypted live replay browser workflow | `apps/web/tests/live-provider-execution.spec.ts` — retained original, Replay, bounded variant, and delete                       |
 
 ## Operator guidance “find it” drill
 

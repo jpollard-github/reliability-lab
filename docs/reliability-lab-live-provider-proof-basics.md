@@ -61,7 +61,8 @@ The live form:
 - requires explicit submission;
 - limits browser input to 2,000 characters;
 - uses one attempt, no fallback, no failure injection, and a 20-second latency budget; and
-- tells the operator that request input is not retained for replay by default.
+- keeps encrypted retention unchecked by default and explains the separate cost/revocation choice
+  when the safe deployment capability makes it available.
 
 The browser sends no endpoint, credential, provider configuration object, or selectable live model.
 Server enforcement remains authoritative: live requests must match the configured provider/model,
@@ -71,14 +72,16 @@ The adapter independently refuses model mismatch or failure injection before `fe
 
 ## Retention and replay
 
-Live request-body retention remains default-deny. With
-`ALLOW_LIVE_PROMPT_RETENTION=false`, a successful live execution records normalized evidence but its
-replay capability is `retention_disabled`. Timeline playback still works because it reads recorded
-events and needs no replay capsule.
+Live request-body retention remains default-deny. `ALLOW_LIVE_PROMPT_RETENTION=true` is deployment
+permission, not automatic retention. A live request must also send explicit `encrypted` intent; the
+form defaults to `disabled`. A disabled execution records normalized evidence and
+`retention_disabled`. Timeline playback still works because it reads recorded events and needs no
+replay capsule.
 
-Replay is separate. Enabling it requires the existing explicit live-retention flag plus the durable
-PostgreSQL encrypted Replay Vault prerequisites. Replay then creates another ordinary execution and
-another provider call. The live proof commands do not enable replay.
+Replay is separate. Enabling it requires the deployment gate, explicit per-execution consent, and a
+successful encrypted write before the original provider call. Replay then creates another ordinary
+execution, provider call, and independent encrypted capsule. Compare creates another bounded effect
+and capsule. See [Encrypted Live Replay basics](reliability-lab-encrypted-live-replay-basics.md).
 
 ## Transport decision
 
@@ -107,9 +110,9 @@ The adapter:
 ## Proof commands
 
 `pnpm verify:local-provider-wire` is automatic and network-local. After a build, it starts a
-loopback wire-compatible provider, starts the built API in memory mode, reads `/v1/providers`,
-submits one ordinary execution, and proves exactly one mock provider request plus default-deny replay
-retention.
+loopback wire-compatible provider and the built API with the PostgreSQL Replay Vault. It proves
+exactly three mock requests—retained original, Replay, and bounded live variant—plus capsule-before-
+provider ordering, independent child capabilities, deletion blocking, and evidence preservation.
 
 `pnpm verify:live-provider` is external and guarded. Without
 `RUN_LIVE_PROVIDER_VERIFY=true`, it exits successfully with an explicit **not run; no request was
@@ -124,6 +127,11 @@ provider ID, configured model, normalized status, bounded total/provider latency
 when available, and the known external request count. It never prints the key, endpoint, input,
 output, authorization, cookie, or provider body. Replay is not part of this command, and one success
 proves only one connectivity/execution path.
+
+`pnpm verify:live-replay` has a separate `RUN_LIVE_REPLAY_VERIFY=true` opt-in and requires complete
+provider plus Replay Vault configuration. It makes exactly two requests (retained original and
+Replay), never a paid comparison, and reports only safe labels, statuses, bounded metrics, IDs, and
+request count. Without the flag it exits successfully as **not run** with zero requests.
 
 For a concise local setup:
 

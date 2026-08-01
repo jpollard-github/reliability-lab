@@ -10,10 +10,12 @@ export function ReplayControls({
   executionId,
   execution,
   capability: initialCapability,
+  fixedComparisonTarget = false,
 }: {
   executionId: string;
   execution: ExecutionEnvelope;
   capability: ReplayCapability;
+  fixedComparisonTarget?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -98,7 +100,11 @@ export function ReplayControls({
   return (
     <div className="replay-control" data-guide-anchor="replay-capability">
       <div className="replay-actions">
-        <ComparisonBuilder execution={execution} capability={capability} />
+        <ComparisonBuilder
+          execution={execution}
+          capability={capability}
+          fixedTarget={fixedComparisonTarget}
+        />
         <button
           type="button"
           onClick={() => void replay()}

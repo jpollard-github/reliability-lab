@@ -39,6 +39,8 @@ Choose the path that matches the question you are trying to answer.
    completion signal, durable partial-result recovery, and explicit non-claims.
 8. [Live Provider Proof basics](docs/reliability-lab-live-provider-proof-basics.md) explains the
    bounded post-Horizon-5 capability route, operator path, transport choice, and proof commands.
+9. [Encrypted Live Replay basics](docs/reliability-lab-encrypted-live-replay-basics.md) explains
+   two-gate consent, fail-closed storage ordering, child retention, and local setup.
 
 **Modify the system**
 
@@ -72,6 +74,8 @@ Implemented now:
   idempotency records
 - tenant-scoped PostgreSQL Replay Vault with AES-256-GCM encryption, expiry, deletion,
   metadata-only lifecycle audit, and read-old/write-current key versions
+- explicit per-execution encrypted live retention, safe deployment capability, fail-before-provider
+  persistence, and fresh independent retention for live Replay and bounded variants
 - OpenTelemetry spans with console export by default and optional OTLP export
 - Next.js operator console with a live evidence-driven machine view, incremental event timeline,
   Timeline playback, replay control, guided comparative replay variants, side-by-side
@@ -182,8 +186,11 @@ Plain-language guides:
    version, decrypts the command, and invokes the same core continuation engine. Serialized,
    observed heartbeats maintain a confirmed lease deadline.
 5. The engine retains replay material independently when policy permits, resolves the provider, and
-   records `attempt.started` before provider work. Live requests must match the server-configured
-   model and bounded operator constraints and cannot use failure injection. Failed attempts record
+   records `attempt.started` before provider work. Live retention requires deployment permission
+   plus the request's explicit `encrypted` intent; the default `disabled` intent calls the provider
+   without a capsule. Required encrypted persistence completes before any provider attempt. Live
+   requests must match the server-configured model and bounded operator constraints and cannot use
+   failure injection. Failed attempts record
    normalized evidence before retry, fallback, or stop. In worker mode a generic lease guard checks
    ownership at meaningful continuation boundaries, including immediately after a provider returns.
 6. A configured fallback runs once after primary policy exhaustion and makes a successful outcome
@@ -198,9 +205,12 @@ Plain-language guides:
 10. Tenant-scoped SSE reads events after a sequence cursor from persisted evidence, backfills
     history, sends heartbeats while following, and closes after terminal evidence.
 11. Reads hydrate current replay capability, so expiry, deletion, missing keys, or unreadable data
-    disable replay. Replay creates a linked execution and records replay start/completion events.
-12. Comparative replay resolves a bounded variation against retained input. Durable mode atomically
-    commits the variant, linkage events, job, and experiment, then compares the terminal envelopes.
+    disable replay. Replay creates a linked execution and records replay start/completion events. A
+    replay derived from retained input receives a fresh independently encrypted capsule and expiry.
+12. Comparative replay resolves a bounded variation against retained input. Live variants inherit
+    the configured provider/model target and accept only live-safe policy/budget changes. A variant
+    receives independent retention. Durable mode atomically commits the variant, linkage events,
+    job, and experiment, then compares the terminal envelopes.
 13. Investigation reads use separate memory/PostgreSQL adapters. Focused tenant-scoped endpoints
     return compact rows, bounded aggregates, and provider/model attempt observations without
     hydrating full envelopes or replay capability.
@@ -256,6 +266,16 @@ and reports those modes at `/readyz`. To exercise restart-durable replay, set
 before starting the API. The public keys in `.env.example` are intentionally unsafe examples; do not
 reuse them. The `.env` file is ignored and must never contain production credentials.
 
+For the shortest encrypted live replay setup, keep `EXECUTION_MODE=in_process` and run:
+
+```bash
+pnpm dev:infra
+pnpm db:migrate
+pnpm replay:keygen
+# Copy the printed secret into ignored .env.local or .env and add provider settings.
+pnpm dev
+```
+
 For restart-durable execution, set `EXECUTION_MODE=postgres_worker`,
 `REPLAY_CAPSULE_STORE=postgres`, and valid independent command/replay keyrings, then run:
 
@@ -277,7 +297,9 @@ provider. With a valid `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_API_KEY`, and `OPEN
 page adds a separate **Live provider execution** section. The browser receives the provider ID and
 safe model label, never the endpoint or key. The route should report the live provider as
 `configured` and `operatorEligible`; its response must not contain the API key or base URL. Live
-input retention remains off by default.
+input retention remains off per execution by default. When the PostgreSQL vault and
+`ALLOW_LIVE_PROMPT_RETENTION=true` are configured, the response adds only the safe encrypted
+retention label, hours, per-execution opt-in requirement, and bounded availability reason.
 
 For ephemeral configuration, export the three provider variables in the shell before a root
 development command. Exported values take precedence over ignored local files:
@@ -399,13 +421,17 @@ cryptographic material, provider credentials, authorization, or cookies.
 
 ## Replay configuration
 
-| Variable                            | Behavior                                                        |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `REPLAY_CAPSULE_STORE`              | `memory` (default) or explicit `postgres` durable vault         |
-| `REPLAY_CAPSULE_RETENTION_HOURS`    | Positive retention duration; defaults to 24                     |
-| `REPLAY_CAPSULE_ACTIVE_KEY_VERSION` | Key version used for new PostgreSQL capsule writes              |
-| `REPLAY_CAPSULE_KEYS_JSON`          | Prototype JSON map of versions to base64-encoded 32-byte keys   |
-| `ALLOW_LIVE_PROMPT_RETENTION`       | Defaults false; true requires a valid PostgreSQL vault at start |
+| Variable                            | Behavior                                                      |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `REPLAY_CAPSULE_STORE`              | `memory` (default) or explicit `postgres` durable vault       |
+| `REPLAY_CAPSULE_RETENTION_HOURS`    | Positive retention duration; defaults to 24                   |
+| `REPLAY_CAPSULE_ACTIVE_KEY_VERSION` | Key version used for new PostgreSQL capsule writes            |
+| `REPLAY_CAPSULE_KEYS_JSON`          | Prototype JSON map of versions to base64-encoded 32-byte keys |
+| `ALLOW_LIVE_PROMPT_RETENTION`       | Deployment permission; true requires a valid PostgreSQL vault |
+
+The deployment flag is not per-request consent. The live form remains unchecked and sends only
+`replayRetention: "disabled" | "encrypted"`; no key, version, store, endpoint, or expiry is
+browser-controlled.
 
 Old rows use their stored key version while new rows use the active version. Keep historical keys
 configured until their rows expire or are deleted. Environment-variable keys are not production KMS
@@ -447,8 +473,10 @@ KMS.
 | `pnpm verify`, `verify:full`                     | Static/unit build checks, then DB and browser checks    |
 | `pnpm audit:deps`, `audit:unused`, `audit`       | Read-only dependency/dead-code observation              |
 | `pnpm audit:runtime`                             | Built workspace export and process import smoke         |
-| `pnpm verify:local-provider-wire`                | Built API against one loopback mock provider request    |
+| `pnpm replay:keygen`                             | Print one 32-byte local Replay Vault key; write no file |
+| `pnpm verify:local-provider-wire`                | PostgreSQL live original/replay/variant loopback proof  |
 | `pnpm verify:live-provider`                      | Explicitly guarded one-request external provider proof  |
+| `pnpm verify:live-replay`                        | Guarded two-request external retained Replay proof      |
 | `pnpm db:generate`, `db:migrate`, `db:studio`    | Drizzle workflows                                       |
 | `pnpm export:repo`, `export:working`             | Guarded compressed exports                              |
 
@@ -487,7 +515,9 @@ Tenant filtering is enforced in execution and vault adapters, but the prototype 
 authentication. Authorization, cookies, API keys, messages, and input use log-redaction paths.
 PostgreSQL capsules use AES-256-GCM with tenant/execution/schema/key authenticated context; audit
 rows contain metadata only. Expiry and deletion revoke replay immediately while normalized evidence
-remains. Live retention defaults off and fails closed unless the durable encrypted path is valid.
+remains. Live retention defaults off, requires deployment permission plus per-execution selection,
+and fails before the provider call when required durable encryption cannot be established. Replay
+and variant children use new rows and fresh expiry rather than copied ciphertext.
 The environment keyring is a prototype, not managed production key infrastructure. See
 [`docs/security-and-retention.md`](docs/security-and-retention.md).
 Investigation cases can contain bounded operational prose in plaintext. They never copy prompt,

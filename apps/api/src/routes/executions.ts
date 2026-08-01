@@ -52,6 +52,17 @@ export const executionRoutes: FastifyPluginAsync<ExecutionRouteOptions> = async 
           statusCode: 400,
         });
       }
+      if (
+        capability?.kind === "live" &&
+        request.body.replayRetention === "encrypted" &&
+        capability.liveReplayRetention?.available !== true
+      ) {
+        return reply.code(400).send({
+          error: "live_replay_retention_unavailable",
+          message: "Encrypted live replay retention is unavailable for this deployment",
+          statusCode: 400,
+        });
+      }
       if (request.body.failureMode && !options.enableFailureInjection) {
         return reply.code(400).send({
           error: "failure_injection_disabled",

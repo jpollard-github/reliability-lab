@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { ExecutionService, MapProviderRegistry } from "@reliability-lab/core";
 import { DeterministicFakeProvider } from "@reliability-lab/providers";
+import type { LlmProvider } from "@reliability-lab/providers";
 import {
   PostgresExecutionRepository,
   PostgresReplayCapsuleStore,
@@ -133,5 +134,88 @@ describe("Postgres replay vault", () => {
       audits.some((audit) => audit.operation === "delete" && audit.outcome === "deleted"),
     ).toBe(true);
     expect(JSON.stringify(audits)).not.toContain(prompt);
+  });
+
+  it("stores independent encrypted capsules for an opted-in live original, replay, and variant", async () => {
+    if (!connection) return;
+    const tenantId = `live-vault-${randomUUID()}`;
+    const prompt = `live-capsule-secret-${randomUUID()}`;
+    const key = Buffer.alloc(32, 9);
+    let providerCalls = 0;
+    const liveProvider: LlmProvider = {
+      id: "live-provider",
+      kind: "live",
+      execute: async (request) => {
+        providerCalls += 1;
+        return {
+          ok: true,
+          response: {
+            provider: "live-provider",
+            model: request.model,
+            outputText: "bounded live result",
+            usage: { inputTokens: 1, outputTokens: 1 },
+            latencyMs: 1,
+          },
+        };
+      },
+    };
+    const repository = new PostgresExecutionRepository(connection.db);
+    const service = new ExecutionService({
+      repository,
+      replayCapsules: new PostgresReplayCapsuleStore(connection.db, {
+        activeVersion: "live-v1",
+        keys: new Map([["live-v1", key]]),
+      }),
+      providers: new MapProviderRegistry([liveProvider]),
+      allowLivePromptRetention: true,
+    });
+    const original = await service.execute({
+      tenantId,
+      body: {
+        provider: "live-provider",
+        model: "fixed-model",
+        input: prompt,
+        replayRetention: "encrypted",
+        policy: { maxAttempts: 2, baseBackoffMs: 0, maxBackoffMs: 0, jitterRatio: 0 },
+      },
+    });
+    const replay = await service.replay(tenantId, original.executionId);
+    expect(replay.replayable).toBe(true);
+    if (!replay.replayable) return;
+    const comparison = await service.createComparison(tenantId, original.executionId, {
+      policy: { maxAttempts: 1 },
+    });
+    const variant = await comparison.completion;
+    expect(variant).toBeDefined();
+
+    const rows = await connection.db
+      .select()
+      .from(replayCapsules)
+      .where(eq(replayCapsules.tenantId, tenantId));
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((row) => row.executionId)).size).toBe(3);
+    expect(new Set(rows.map((row) => row.nonce.toString("base64"))).size).toBe(3);
+    expect(new Set(rows.map((row) => row.ciphertext.toString("base64"))).size).toBe(3);
+    expect(rows.every((row) => row.keyVersion === "live-v1")).toBe(true);
+    expect(
+      rows.some((row) =>
+        Buffer.concat([row.ciphertext, row.nonce, row.authenticationTag]).includes(
+          Buffer.from(prompt),
+        ),
+      ),
+    ).toBe(false);
+    expect(providerCalls).toBe(3);
+
+    await service.deleteReplayCapsule(tenantId, original.executionId);
+    expect((await service.get(tenantId, original.executionId)).status).toBe("succeeded");
+    expect((await service.get(tenantId, original.executionId)).replayCapability.state).toBe(
+      "deleted",
+    );
+    expect(
+      (await service.get(tenantId, replay.replayExecution.executionId)).replayCapability.state,
+    ).toBe("available");
+    expect((await service.get(tenantId, variant!.executionId)).replayCapability.state).toBe(
+      "available",
+    );
   });
 });

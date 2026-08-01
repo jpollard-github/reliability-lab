@@ -416,8 +416,8 @@ behavior without exposing configuration or creating a second execution engine.
   `openai-compatible-http-provider.ts`; core bounds in
   `packages/core/src/execution/live-provider-request.ts`.
 - **Adjacent modules:** `apps/api/src/routes/providers.ts`, execution submission, API/worker
-  composition, `apps/web/lib/server-api.ts`, `LiveExecutionForm`, Guide/tour terminology, and the
-  local/external proof scripts.
+  composition, `apps/api/src/provider-capabilities.ts`, `apps/web/lib/server-api.ts`,
+  `LiveExecutionForm`, Guide/tour terminology, and the local/external proof scripts.
 - **Contract implications:** expose only provider ID, deterministic/live kind, safe model label,
   transport family, configured/failure-injection/operator flags, and a fixed safe unavailable
   reason. Never add endpoint, key, query, header, raw config, body, or health claims.
@@ -427,17 +427,23 @@ behavior without exposing configuration or creating a second execution engine.
   repository-local environment through `scripts/register-local-environment.mjs`; exported values
   win and production package entrypoints remain injection-only.
 - **Retention implications:** Timeline playback uses recorded events only. Replay remains a new
-  execution gated by separately configured retained input; do not enable retention to make the
-  live form work.
+  execution gated by separately configured retained input. Deployment permission and unchecked
+  per-execution consent are independent. Required capsule persistence precedes provider work;
+  Replay and variants inherit fresh encrypted retention. Never add silent downgrade or automatic
+  deployment-wide retention.
 - **Tests:** injected-fetch adapter cases, capability/config redaction, API/OpenAPI validation,
-  core request bounds, one built loopback wire drill, and loopback-only Playwright/no-JavaScript
-  coverage. Normal verification must make no paid request.
+  core request/variation bounds, PostgreSQL independent-capsule integration, the built three-call
+  loopback wire drill, and loopback-only Playwright/no-JavaScript coverage. Normal verification must
+  make no paid request.
 - **External proof:** keep `pnpm verify:live-provider` explicitly opt-in, one request, one attempt,
   bounded, non-sensitive, and safe-output-only. Only normalized `succeeded` exits zero; missing
   requested configuration, non-success terminal state, timeout, or malformed evidence exits
   nonzero.
-- **Documentation:** Live Provider Proof basics, ADR 0013 if the transport decision changes,
-  architecture, flows, codebase tour, Guide/tours, security, README, and roadmap.
+- **Retained external proof:** keep `pnpm verify:live-replay` under its separate explicit opt-in,
+  exactly two one-attempt requests (original and Replay), no comparison, and safe metadata output.
+- **Documentation:** Live Provider Proof and Encrypted Live Replay basics, ADR 0013 if transport
+  changes, ADR 0014 if consent/inheritance changes, architecture, flows, codebase tour, Guide/tours,
+  security, README, and roadmap.
 - **Avoid:** browser provider config, selectable arbitrary live models, raw error bodies, health
   inference from configuration, automatic external calls, hidden Responses/Chat Completions
   switching, or test retries that multiply cost.

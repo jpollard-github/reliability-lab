@@ -35,6 +35,8 @@
     "audit:runtime": "node scripts/check-built-runtime.mjs",
     "verify:local-provider-wire": "node scripts/verify-local-provider-wire.mjs",
     "verify:live-provider": "NODE_OPTIONS=--import=./scripts/register-local-environment.mjs node scripts/verify-live-provider.mjs",
+    "verify:live-replay": "NODE_OPTIONS=--import=./scripts/register-local-environment.mjs node scripts/verify-live-replay.mjs",
+    "replay:keygen": "node scripts/replay-keygen.mjs",
     "audit": "pnpm audit:deps && pnpm audit:unused",
     "db:generate": "pnpm --filter @reliability-lab/db db:generate",
     "db:migrate": "pnpm --filter @reliability-lab/db db:migrate",
